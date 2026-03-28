@@ -1,0 +1,222 @@
+import { Prisma, TicketPriority, TicketStatus } from "@prisma/client";
+import { db } from "@/lib/db";
+import {
+  mapTechnician,
+  mapTicket,
+  technicianSelect,
+  ticketDetailsInclude,
+} from "@/lib/data-mappers";
+import {
+  buildContains,
+  buildPagination,
+  getOrganizationContext,
+  normalizeListParams,
+  toEnumValue,
+} from "@/lib/query-utils";
+import type { ListParams, PaginatedData, Ticket } from "@/lib/types";
+
+function buildTicketWhere(
+  organizationId: string,
+  params: ReturnType<typeof normalizeListParams>,
+): Prisma.TicketWhereInput {
+  return {
+    organizationId,
+    ...(params.search
+      ? {
+          OR: [
+            { subject: buildContains(params.search) },
+            { ticketNumber: buildContains(params.search) },
+            { customer: { name: buildContains(params.search) } },
+          ],
+        }
+      : {}),
+    ...(params.status
+      ? { status: toEnumValue<TicketStatus>(params.status) }
+      : {}),
+    ...(params.type
+      ? { priority: toEnumValue<TicketPriority>(params.type) }
+      : {}),
+    ...(params.category && params.category !== "all"
+      ? { category: params.category }
+      : {}),
+  };
+}
+
+function getTicketOrderBy(
+  sortBy: string,
+  sortOrder: "asc" | "desc",
+): Prisma.TicketOrderByWithRelationInput {
+  switch (sortBy) {
+    case "ticketNumber":
+      return { ticketNumber: sortOrder };
+    case "priority":
+      return { priority: sortOrder };
+    case "status":
+      return { status: sortOrder };
+    default:
+      return { createdAt: sortOrder };
+  }
+}
+
+export async function listTicketsForOrganization(
+  organizationId: string,
+  params: ListParams = {},
+): Promise<PaginatedData<Ticket>> {
+  const normalized = normalizeListParams(params);
+  const where = buildTicketWhere(organizationId, normalized);
+  const [total, records] = await Promise.all([
+    db.ticket.count({ where }),
+    db.ticket.findMany({
+      where,
+      include: ticketDetailsInclude,
+      orderBy: getTicketOrderBy(normalized.sortBy, normalized.sortOrder),
+      skip: normalized.skip,
+      take: normalized.take,
+    }),
+  ]);
+
+  return buildPagination(
+    records.map(mapTicket),
+    total,
+    normalized.page,
+    normalized.pageSize,
+  );
+}
+
+export async function listTickets(params: ListParams = {}) {
+  const user = await getOrganizationContext();
+  return listTicketsForOrganization(user.organizationId, params);
+}
+
+export async function getTicketDetailForOrganization(organizationId: string, id: string) {
+  const ticket = await db.ticket.findFirst({
+    where: {
+      id,
+      organizationId,
+    },
+    include: ticketDetailsInclude,
+  });
+
+  if (!ticket) {
+    return null;
+  }
+
+  const availableTechnicians = await db.user.findMany({
+    where: {
+      organizationId,
+      role: "TECHNICIAN",
+      OR: [
+        { status: "available" },
+        { id: ticket.assignedToId ?? undefined },
+      ],
+    },
+    select: technicianSelect,
+    orderBy: {
+      name: "asc",
+    },
+  });
+
+  return {
+    ticket: mapTicket(ticket),
+    availableTechnicians: availableTechnicians.map(mapTechnician),
+  };
+}
+
+export async function getTicketDetail(id: string) {
+  const user = await getOrganizationContext();
+  return getTicketDetailForOrganization(user.organizationId, id);
+}
+
+export async function getTicketFormOptionsForOrganization(organizationId: string) {
+  const [customers, technicians] = await Promise.all([
+    db.customer.findMany({
+      where: {
+        organizationId,
+      },
+      orderBy: {
+        name: "asc",
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    db.user.findMany({
+      where: {
+        organizationId,
+        role: "TECHNICIAN",
+        status: {
+          not: "off_duty",
+        },
+      },
+      select: technicianSelect,
+      orderBy: {
+        name: "asc",
+      },
+    }),
+  ]);
+
+  return {
+    customers,
+    technicians: technicians.map(mapTechnician),
+  };
+}
+
+export async function getTicketFormOptions() {
+  const user = await getOrganizationContext();
+  return getTicketFormOptionsForOrganization(user.organizationId);
+}
+
+export async function getTicketStatusCountsForOrganization(organizationId: string) {
+  const [all, open, assigned, inProgress, onHold, resolved] = await Promise.all([
+    db.ticket.count({
+      where: {
+        organizationId,
+      },
+    }),
+    db.ticket.count({
+      where: {
+        organizationId,
+        status: "OPEN",
+      },
+    }),
+    db.ticket.count({
+      where: {
+        organizationId,
+        status: "ASSIGNED",
+      },
+    }),
+    db.ticket.count({
+      where: {
+        organizationId,
+        status: "IN_PROGRESS",
+      },
+    }),
+    db.ticket.count({
+      where: {
+        organizationId,
+        status: "ON_HOLD",
+      },
+    }),
+    db.ticket.count({
+      where: {
+        organizationId,
+        status: "RESOLVED",
+      },
+    }),
+  ]);
+
+  return {
+    all,
+    open,
+    assigned,
+    in_progress: inProgress,
+    on_hold: onHold,
+    resolved: resolved,
+  };
+}
+
+export async function getTicketStatusCounts() {
+  const user = await getOrganizationContext();
+  return getTicketStatusCountsForOrganization(user.organizationId);
+}

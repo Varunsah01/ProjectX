@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { PaginationControls } from "@/components/ui/PaginationControls";
 
 interface Column<T> {
   key: string;
@@ -15,7 +16,15 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void;
   className?: string;
   emptyMessage?: string;
+  page?: number;
+  pageSize?: number;
   totalCount?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  getRowId?: (item: T) => string;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 export function DataTable<T>({
@@ -24,8 +33,65 @@ export function DataTable<T>({
   onRowClick,
   className,
   emptyMessage = "No records found",
+  page,
+  pageSize,
   totalCount,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+  getRowId,
+  selectedIds = [],
+  onSelectionChange,
 }: DataTableProps<T>) {
+  const hasPagination =
+    totalCount !== undefined &&
+    page !== undefined &&
+    pageSize !== undefined &&
+    totalPages !== undefined &&
+    onPageChange !== undefined;
+  const hasSelection =
+    getRowId !== undefined && onSelectionChange !== undefined;
+  const currentRowIds = hasSelection ? data.map((item) => getRowId(item)) : [];
+  const selectedCurrentIds = hasSelection
+    ? currentRowIds.filter((id) => selectedIds.includes(id))
+    : [];
+  const allSelected =
+    hasSelection &&
+    data.length > 0 &&
+    currentRowIds.every((id) => selectedIds.includes(id));
+  const someSelected =
+    hasSelection &&
+    selectedCurrentIds.length > 0 &&
+    selectedCurrentIds.length < data.length;
+
+  const toggleRow = (id: string) => {
+    if (!hasSelection) {
+      return;
+    }
+
+    if (selectedIds.includes(id)) {
+      onSelectionChange(selectedIds.filter((itemId) => itemId !== id));
+      return;
+    }
+
+    onSelectionChange([...selectedIds, id]);
+  };
+
+  const toggleAllRows = () => {
+    if (!hasSelection) {
+      return;
+    }
+
+    if (allSelected) {
+      onSelectionChange(
+        selectedIds.filter((id) => !currentRowIds.includes(id)),
+      );
+      return;
+    }
+
+    onSelectionChange([...new Set([...selectedIds, ...currentRowIds])]);
+  };
+
   return (
     <div
       className={cn(
@@ -37,6 +103,22 @@ export function DataTable<T>({
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
+              {hasSelection ? (
+                <th className="w-12 px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(allSelected)}
+                    ref={(input) => {
+                      if (input) {
+                        input.indeterminate = Boolean(someSelected);
+                      }
+                    }}
+                    onChange={toggleAllRows}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    aria-label="Select all rows"
+                  />
+                </th>
+              ) : null}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -54,7 +136,7 @@ export function DataTable<T>({
             {data.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={columns.length + (hasSelection ? 1 : 0)}
                   className="px-4 py-16 text-center"
                 >
                   <div className="flex flex-col items-center gap-2">
@@ -75,7 +157,7 @@ export function DataTable<T>({
             ) : (
               data.map((item, i) => (
                 <tr
-                  key={i}
+                  key={hasSelection ? getRowId(item) : i}
                   onClick={() => onRowClick?.(item)}
                   className={cn(
                     "transition-colors",
@@ -83,6 +165,18 @@ export function DataTable<T>({
                       "cursor-pointer hover:bg-brand-50/40 active:bg-brand-50/60"
                   )}
                 >
+                  {hasSelection ? (
+                    <td className="px-4 py-3.5 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(getRowId(item))}
+                        onChange={() => toggleRow(getRowId(item))}
+                        onClick={(event) => event.stopPropagation()}
+                        className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                        aria-label="Select row"
+                      />
+                    </td>
+                  ) : null}
                   {columns.map((col) => (
                     <td
                       key={col.key}
@@ -100,17 +194,31 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
-      {/* Result count footer */}
-      {data.length > 0 && (
-        <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
-          <p className="text-xs text-slate-500">
-            Showing <span className="font-medium text-slate-700">{data.length}</span>
-            {totalCount !== undefined && totalCount !== data.length && (
-              <> of <span className="font-medium text-slate-700">{totalCount}</span></>
-            )}{" "}
-            result{data.length !== 1 ? "s" : ""}
-          </p>
-        </div>
+      {hasPagination ? (
+        <PaginationControls
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      ) : (
+        data.length > 0 &&
+        totalCount !== undefined && (
+          <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
+            <p className="text-xs text-slate-500">
+              Showing <span className="font-medium text-slate-700">{data.length}</span>
+              {totalCount !== data.length && (
+                <>
+                  {" "}
+                  of <span className="font-medium text-slate-700">{totalCount}</span>
+                </>
+              )}{" "}
+              result{data.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        )
       )}
     </div>
   );

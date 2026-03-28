@@ -1,0 +1,212 @@
+name: CI
+
+# Branch protection recommendations:
+# - Require these status checks before merging to main: lint, type-check, build-web, build-landing, test.
+# - Require branches to be up to date before merging.
+# - Require at least 1 approving review.
+# - Restrict direct pushes to main.
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recuring_ci?schema=public
+  NEXTAUTH_SECRET: ci-placeholder-secret
+  NEXTAUTH_URL: http://localhost:3001
+  NEXT_PUBLIC_APP_URL: http://localhost:3001
+  SMTP_HOST: smtp.example.com
+  SMTP_PORT: "587"
+  SMTP_USER: smtp-user
+  SMTP_PASSWORD: smtp-password
+  FROM_EMAIL: no-reply@example.com
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Run ESLint across workspaces
+        run: npm run lint
+
+  type-check:
+    name: type-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
+
+      - name: Type check web-app
+        run: npx tsc --noEmit -p packages/web-app/tsconfig.json --incremental false
+
+      - name: Type check landing
+        run: npx tsc --noEmit -p packages/landing/tsconfig.json --incremental false
+
+  build-web:
+    name: build-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Restore Next.js cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web-app/.next/cache
+          key: ${{ runner.os }}-web-next-cache-${{ hashFiles('package-lock.json', 'packages/web-app/**/*') }}
+          restore-keys: |
+            ${{ runner.os }}-web-next-cache-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
+
+      - name: Build web app
+        working-directory: packages/web-app
+        run: npx next build
+
+  build-landing:
+    name: build-landing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Restore Next.js cache
+        uses: actions/cache@v4
+        with:
+          path: packages/landing/.next/cache
+          key: ${{ runner.os }}-landing-next-cache-${{ hashFiles('package-lock.json', 'packages/landing/**/*') }}
+          restore-keys: |
+            ${{ runner.os }}-landing-next-cache-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Build landing app
+        working-directory: packages/landing
+        run: npx next build
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Detect test files
+        id: detect-tests
+        run: |
+          if find packages -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.spec.ts' -o -name '*.spec.tsx' -o -name '*.test.js' -o -name '*.spec.js' \) | grep -q .; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        if: steps.detect-tests.outputs.has_tests == 'true'
+        run: npm test --workspaces --if-present
+
+      - name: Skip tests
+        if: steps.detect-tests.outputs.has_tests != 'true'
+        run: echo "No tests found. Skipping."

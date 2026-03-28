@@ -1,0 +1,101 @@
+"use server";
+
+import bcrypt from "bcrypt";
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
+import { getSettingsDataForOrganization } from "@/lib/queries/settings";
+import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import {
+  createTeamMemberSchema,
+  updateBusinessProfileSchema,
+  updateTeamMemberSchema,
+} from "@/lib/validations/settings";
+
+export async function getSettingsAction() {
+  try {
+    const user = await getOrganizationContext();
+    const data = await getSettingsDataForOrganization(user.organizationId);
+    return actionSuccess(data);
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to load settings"));
+  }
+}
+
+export async function updateBusinessProfileAction(input: unknown) {
+  try {
+    const user = await getOrganizationContext();
+    const values = updateBusinessProfileSchema.parse(input);
+    await db.organization.update({
+      where: { id: user.organizationId },
+      data: {
+        name: values.businessName,
+        phone: values.phone,
+        email: values.email,
+        address: values.address,
+        city: values.city,
+        gst: values.gst || null,
+        logo: values.logo || null,
+      },
+    });
+
+    const data = await getSettingsDataForOrganization(user.organizationId);
+    revalidatePath("/settings");
+    revalidatePath("/");
+    return actionSuccess(data.businessProfile);
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to update business profile"));
+  }
+}
+
+export async function createTeamMemberAction(input: unknown) {
+  try {
+    const user = await getOrganizationContext();
+    const values = createTeamMemberSchema.parse(input);
+    const passwordHash = await bcrypt.hash(values.password, 10);
+    const member = await db.user.create({
+      data: {
+        organizationId: user.organizationId,
+        name: values.name,
+        email: values.email,
+        passwordHash,
+        role: values.role.toUpperCase() as never,
+        status: values.status,
+      },
+    });
+
+    revalidatePath("/settings");
+    return actionSuccess({ id: member.id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to create team member"));
+  }
+}
+
+export async function updateTeamMemberAction(input: unknown) {
+  try {
+    const user = await getOrganizationContext();
+    const values = updateTeamMemberSchema.parse(input);
+    const existing = await db.user.findFirst({
+      where: { id: values.id, organizationId: user.organizationId },
+    });
+
+    if (!existing) {
+      return actionFailure("Team member not found");
+    }
+
+    await db.user.update({
+      where: { id: values.id },
+      data: {
+        ...(values.name !== undefined ? { name: values.name } : {}),
+        ...(values.email !== undefined ? { email: values.email } : {}),
+        ...(values.role !== undefined ? { role: values.role.toUpperCase() as never } : {}),
+        ...(values.status !== undefined ? { status: values.status } : {}),
+        ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
+      },
+    });
+
+    revalidatePath("/settings");
+    return actionSuccess({ id: values.id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to update team member"));
+  }
+}

@@ -7,11 +7,15 @@
   ],
   "scripts": {
     "dev:landing": "npm run dev -w packages/landing",
-    "dev:web": "npm run dev -w packages/web-app",
+    "dev:web": "/bin/zsh -lc 'if [ -f .env.local ]; then set -a && source .env.local >/dev/null 2>&1 && set +a; fi; npm run dev -w packages/web-app'",
     "dev:mobile": "npm run start -w packages/mobile-app",
     "build:landing": "npm run build -w packages/landing",
-    "build:web": "npm run build -w packages/web-app",
-    "lint": "npm run lint --workspaces --if-present"
+    "build:web": "/bin/zsh -lc 'if [ -f .env.local ]; then set -a && source .env.local >/dev/null 2>&1 && set +a; fi; npm run build -w packages/web-app'",
+    "lint": "npm run lint --workspaces --if-present",
+    "docker:up": "docker compose --env-file .env.local up -d",
+    "docker:down": "docker compose --env-file .env.local down",
+    "docker:reset": "docker compose --env-file .env.local down -v && docker compose --env-file .env.local up -d",
+    "db:setup": "/bin/zsh -lc 'npm run docker:up && set -a && source .env.local >/dev/null 2>&1 && set +a && if [ -d packages/web-app/prisma/migrations ] && find packages/web-app/prisma/migrations -mindepth 1 -maxdepth 1 -type d | grep -q .; then npx prisma migrate deploy --schema packages/web-app/prisma/schema.prisma; else npm run -w packages/web-app db:migrate -- --name init; fi && npm run -w packages/web-app db:seed'"
   },
   "engines": {
     "node": ">=20.0.0"

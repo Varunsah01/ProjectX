@@ -12,6 +12,7 @@ interface FilterBarProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
+  onClearAll?: () => void;
   filters?: {
     label: string;
     value: string;
@@ -27,6 +28,7 @@ export function FilterBar({
   searchValue,
   onSearchChange,
   searchPlaceholder = "Search...",
+  onClearAll,
   filters,
   className,
 }: FilterBarProps) {
@@ -80,6 +82,11 @@ export function FilterBar({
       {hasActiveFilters && (
         <button
           onClick={() => {
+            if (onClearAll) {
+              onClearAll();
+              return;
+            }
+
             onSearchChange("");
             filters?.forEach((f) => f.onChange("all"));
           }}

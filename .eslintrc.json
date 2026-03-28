@@ -1,0 +1,12 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals"],
+  "settings": {
+    "next": {
+      "rootDir": ["packages/web-app", "packages/landing"]
+    }
+  },
+  "rules": {
+    "@next/next/no-html-link-for-pages": "off"
+  }
+}

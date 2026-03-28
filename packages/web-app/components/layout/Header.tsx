@@ -1,12 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { Search, Bell, ChevronDown, Menu } from "lucide-react";
+import { getInitials } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
 
 export function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { setMobileOpen } = useSidebar();
+  const { data: session, status } = useSession();
+  const user = session?.user;
+  const displayName = user?.name || "Workspace User";
+  const role = formatRole(user?.role);
+  const initials = getInitials(displayName);
+
+  async function handleSignOut() {
+    setShowUserMenu(false);
+    await signOut({ callbackUrl: "/login" });
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur-md px-4 sm:px-6">
@@ -48,12 +61,18 @@ export function Header() {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-100 transition-colors"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-purple-600 text-sm font-semibold text-white shadow-sm">
-              VS
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-semibold text-white shadow-sm">
+              {initials}
             </div>
             <div className="hidden text-left sm:block">
-              <p className="text-sm font-medium text-slate-900">Varun Sah</p>
-              <p className="text-xs text-slate-500">Admin</p>
+              <p className="text-sm font-medium text-slate-900">
+                {status === "loading" ? "Loading..." : displayName}
+              </p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+                  {role}
+                </span>
+              </div>
             </div>
             <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform hidden sm:block ${showUserMenu ? "rotate-180" : ""}`} />
           </button>
@@ -64,25 +83,29 @@ export function Header() {
                 onClick={() => setShowUserMenu(false)}
               />
               <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
-                <a
-                  href="#"
-                  className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Your Profile
-                </a>
-                <a
+                <div className="px-4 py-2.5">
+                  <p className="text-sm font-medium text-slate-900">
+                    {displayName}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {user?.email ?? "Signed in"}
+                  </p>
+                </div>
+                <div className="my-1 border-t border-slate-100" />
+                <Link
                   href="/settings"
+                  onClick={() => setShowUserMenu(false)}
                   className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Settings
-                </a>
-                <div className="my-1 border-t border-slate-100" />
-                <a
-                  href="#"
-                  className="block px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="block w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
                 >
                   Sign Out
-                </a>
+                </button>
               </div>
             </>
           )}
@@ -90,4 +113,16 @@ export function Header() {
       </div>
     </header>
   );
+}
+
+function formatRole(role?: string) {
+  if (!role) {
+    return "User";
+  }
+
+  return role
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
