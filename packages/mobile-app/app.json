@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Project X Mobile",
+    "slug": "project-x-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4f46e5"
+      }
+    }
+  }
+}

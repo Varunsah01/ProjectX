@@ -1,0 +1,19 @@
+{
+  "name": "project-x",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:landing": "npm run dev -w packages/landing",
+    "dev:web": "npm run dev -w packages/web-app",
+    "dev:mobile": "npm run start -w packages/mobile-app",
+    "build:landing": "npm run build -w packages/landing",
+    "build:web": "npm run build -w packages/web-app",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
