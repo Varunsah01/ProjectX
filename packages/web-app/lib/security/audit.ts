@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 const redactedKeys = /(password|secret|token|signature)/i;
@@ -85,7 +86,7 @@ export async function logAuditEvent({
       action,
       entity,
       entityId,
-      changes: diff,
+      changes: diff as Prisma.InputJsonValue,
     },
   });
 }

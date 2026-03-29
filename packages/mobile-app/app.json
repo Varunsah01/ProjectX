@@ -1,17 +1,31 @@
 {
   "expo": {
-    "name": "Project X Mobile",
-    "slug": "project-x-mobile",
+    "name": "Field Operator",
+    "slug": "field-operator",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "platforms": ["ios", "android"],
-    "ios": {
-      "supportsTablet": true
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F766E"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "platforms": ["android"],
     "android": {
+      "package": "com.projectx.fieldoperator",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#4f46e5"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F766E"
       }
     }
   }

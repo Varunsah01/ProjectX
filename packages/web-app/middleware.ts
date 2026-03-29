@@ -10,6 +10,7 @@ const { auth } = NextAuth(authConfig);
 const publicRoutes = new Set(["/login", "/signup"]);
 const csrfExemptPrefixes = [
   "/api/auth/",
+  "/api/mobile/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
 ];
@@ -45,6 +46,7 @@ export default auth((request) => {
   const isPublicRoute =
     publicRoutes.has(pathname) ||
     pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/mobile/") ||
     pathname === "/api/auth/register";
   const requestIp =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
