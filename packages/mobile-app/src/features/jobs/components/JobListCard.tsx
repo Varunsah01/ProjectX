@@ -16,45 +16,50 @@ import {
 export default function JobListCard({
   job,
   onOpenJob,
+  testIdPrefix = "jobs",
 }: {
   job: Job;
   onOpenJob: (jobId: string) => void;
+  testIdPrefix?: string;
 }) {
   const { pendingActions } = useSync();
   const pendingActionCount = countPendingActionsForJob(job.id, pendingActions);
 
   return (
-    <Card>
-      <View style={styles.header}>
-        <View style={styles.copy}>
-          <Text style={styles.customerName}>{job.customer.name}</Text>
-          <Text style={styles.jobNumber}>{job.jobNumber}</Text>
+    <View testID={`${testIdPrefix}.job-card.${job.id}`}>
+      <Card>
+        <View style={styles.header}>
+          <View style={styles.copy}>
+            <Text style={styles.customerName}>{job.customer.name}</Text>
+            <Text style={styles.jobNumber}>{job.jobNumber}</Text>
+          </View>
+          <StatusBadge value={job.operatorStatus ?? job.status} />
         </View>
-        <StatusBadge value={job.operatorStatus ?? job.status} />
-      </View>
 
-      <View style={styles.metaRow}>
-        <Text style={styles.metaLabel}>{getJobServiceLabel(job)}</Text>
-        <Text style={styles.metaDot}>•</Text>
-        <Text style={styles.metaLabel}>{getJobTimeSlot(job)}</Text>
-      </View>
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>{getJobServiceLabel(job)}</Text>
+          <Text style={styles.metaDot}>•</Text>
+          <Text style={styles.metaLabel}>{getJobTimeSlot(job)}</Text>
+        </View>
 
-      <Text style={styles.address} numberOfLines={2}>
-        {getJobAddressSnippet(job)}
-      </Text>
-
-      {pendingActionCount > 0 ? (
-        <Text style={styles.pendingSync}>
-          {pendingActionCount} pending sync update{pendingActionCount === 1 ? "" : "s"}
+        <Text style={styles.address} numberOfLines={2}>
+          {getJobAddressSnippet(job)}
         </Text>
-      ) : null}
 
-      <Button
-        label={getPrimaryJobActionLabel(job)}
-        variant={job.status === "completed" ? "ghost" : "secondary"}
-        onPress={() => onOpenJob(job.id)}
-      />
-    </Card>
+        {pendingActionCount > 0 ? (
+          <Text style={styles.pendingSync}>
+            {pendingActionCount} pending sync update{pendingActionCount === 1 ? "" : "s"}
+          </Text>
+        ) : null}
+
+        <Button
+          label={getPrimaryJobActionLabel(job)}
+          variant={job.status === "completed" ? "ghost" : "secondary"}
+          onPress={() => onOpenJob(job.id)}
+          testID={`${testIdPrefix}.job-open-button.${job.id}`}
+        />
+      </Card>
+    </View>
   );
 }
 

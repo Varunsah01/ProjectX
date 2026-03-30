@@ -16,6 +16,7 @@ import {
   type AuthenticatedRequest,
 } from "../services/api";
 import {
+  clearPendingActions as clearStoredPendingActions,
   loadPendingActions,
   removePendingAction,
   subscribePendingActions,
@@ -37,6 +38,7 @@ type SyncContextValue = {
   isSyncing: boolean;
   lastSyncError: string | null;
   replayPendingActions: () => Promise<void>;
+  clearPendingActions: () => Promise<void>;
 };
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -188,6 +190,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
   }, [request, user]);
 
+  const clearPendingActions = useCallback(async () => {
+    await clearStoredPendingActions();
+    setLastSyncError(null);
+    logTestWarning("sync", "pending-queue-cleared-manually", {
+      clearedCount: pendingActions.length,
+    });
+  }, [pendingActions.length]);
+
   useEffect(() => {
     if (!user) {
       setPendingActions([]);
@@ -239,8 +249,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       isSyncing,
       lastSyncError,
       replayPendingActions,
+      clearPendingActions,
     }),
-    [pendingActions, isSyncing, lastSyncError, replayPendingActions],
+    [clearPendingActions, pendingActions, isSyncing, lastSyncError, replayPendingActions],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

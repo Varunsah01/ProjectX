@@ -142,6 +142,10 @@ export async function removePendingAction(actionId: string) {
   await persistPendingActions(nextActions);
 }
 
+export async function clearPendingActions() {
+  await persistPendingActions([]);
+}
+
 export async function removePendingProofUpload(jobId: string, proofId: string) {
   const currentActions = await loadPendingActions();
   const nextActions = currentActions.filter((action) => {

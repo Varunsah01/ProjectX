@@ -33,6 +33,13 @@ export type SaveProofDraftsResult = {
 
 export type ProofPermissionKind = "camera" | "gallery";
 export type ProofPermissionState = "denied" | "blocked";
+export type ProofPermissionSummary = {
+  permission: ProofPermissionKind;
+  state: "granted" | ProofPermissionState;
+  canAskAgain: boolean;
+  granted: boolean;
+  message: string;
+};
 
 export class ProofPermissionError extends Error {
   permission: ProofPermissionKind;
@@ -187,6 +194,75 @@ function createPermissionError(permission: ProofPermissionKind, canAskAgain: boo
       ? "Photo access was denied. Allow media access to pick proof images, or use the camera instead."
       : "Photo access is blocked. Open Android app settings to enable media access, or use the camera instead.",
   });
+}
+
+function createGrantedPermissionSummary(
+  permission: ProofPermissionKind,
+): ProofPermissionSummary {
+  return {
+    permission,
+    state: "granted",
+    canAskAgain: true,
+    granted: true,
+    message:
+      permission === "camera"
+        ? "Camera access is ready for proof photos."
+        : "Photo access is ready for proof uploads.",
+  };
+}
+
+function mapPermissionResult(
+  permission: ProofPermissionKind,
+  input: {
+    granted: boolean;
+    canAskAgain: boolean;
+  },
+): ProofPermissionSummary {
+  if (input.granted) {
+    return createGrantedPermissionSummary(permission);
+  }
+
+  const permissionError = createPermissionError(permission, input.canAskAgain);
+
+  return {
+    permission,
+    state: permissionError.state,
+    canAskAgain: permissionError.canAskAgain,
+    granted: false,
+    message: permissionError.message,
+  };
+}
+
+export async function getProofPermissionStatus(
+  permission: ProofPermissionKind,
+): Promise<ProofPermissionSummary> {
+  const currentPermission =
+    permission === "camera"
+      ? await ImagePicker.getCameraPermissionsAsync()
+      : await ImagePicker.getMediaLibraryPermissionsAsync();
+
+  return mapPermissionResult(permission, currentPermission);
+}
+
+export async function requestProofPermission(
+  permission: ProofPermissionKind,
+): Promise<ProofPermissionSummary> {
+  try {
+    await resolveImagePickerPermission(permission);
+    return createGrantedPermissionSummary(permission);
+  } catch (error) {
+    if (error instanceof ProofPermissionError) {
+      return {
+        permission,
+        state: error.state,
+        canAskAgain: error.canAskAgain,
+        granted: false,
+        message: error.message,
+      };
+    }
+
+    throw error;
+  }
 }
 
 async function resolveImagePickerPermission(permission: ProofPermissionKind) {

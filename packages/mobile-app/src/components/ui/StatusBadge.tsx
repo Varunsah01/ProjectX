@@ -4,6 +4,8 @@ import { titleCase } from "../../utils/format";
 
 const toneMap: Record<string, { background: string; text: string; dot: string }> = {
   pending: { background: colors.warningSoft, text: colors.warning, dot: "#d97706" },
+  uploading: { background: colors.infoSoft, text: colors.info, dot: colors.info },
+  uploaded: { background: colors.successSoft, text: colors.success, dot: colors.success },
   assigned: { background: colors.brandSoft, text: colors.brand, dot: colors.brand },
   on_the_way: { background: colors.infoSoft, text: colors.info, dot: colors.info },
   en_route: { background: colors.infoSoft, text: colors.info, dot: colors.info },

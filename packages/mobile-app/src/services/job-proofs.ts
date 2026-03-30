@@ -18,6 +18,8 @@ import { createLocalJobProof } from "./jobs";
 import { cleanupManagedProofFile, ensureProofFileAvailable } from "./proof-files";
 import { logTestEvent, logTestWarning } from "./test-logger";
 
+export type SavedJobProofStatus = "pending" | "uploading" | "uploaded";
+
 type ReactNativeUploadFile = {
   uri: string;
   name: string;
@@ -40,6 +42,31 @@ function mapJobProof(dto: JobProofDto): JobProof {
     height: dto.height,
     sizeBytes: dto.sizeBytes,
   };
+}
+
+export function getSavedJobProofStatus(
+  proof: Pick<JobProof, "syncState">,
+  options: {
+    isSyncing?: boolean;
+  } = {},
+): SavedJobProofStatus {
+  if (proof.syncState === "pending") {
+    return options.isSyncing ? "uploading" : "pending";
+  }
+
+  return "uploaded";
+}
+
+export function dedupeJobProofs(proofs: JobProof[]) {
+  const dedupedProofs = new Map<string, JobProof>();
+
+  for (const proof of proofs) {
+    if (!dedupedProofs.has(proof.id)) {
+      dedupedProofs.set(proof.id, proof);
+    }
+  }
+
+  return Array.from(dedupedProofs.values());
 }
 
 async function buildUploadFormData(draft: ProofDraft) {
@@ -89,13 +116,13 @@ export async function listJobProofs(
       retry: 1,
     });
 
-    return [...response.data.map(mapJobProof), ...pendingProofs];
+    return dedupeJobProofs([...response.data.map(mapJobProof), ...pendingProofs]);
   } catch (error) {
     if (!shouldQueueOfflineMutation(error)) {
       throw error;
     }
 
-    return pendingProofs;
+    return dedupeJobProofs(pendingProofs);
   }
 }
 

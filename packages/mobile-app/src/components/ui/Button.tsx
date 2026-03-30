@@ -17,6 +17,7 @@ export default function Button({
   disabled = false,
   loading = false,
   style,
+  testID,
 }: {
   label: string;
   onPress: () => void;
@@ -24,6 +25,7 @@ export default function Button({
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   const buttonStyles = [styles.base, styles[variant], style];
   const textStyles = [styles.label, styles[`${variant}Label` as const]];
@@ -33,6 +35,7 @@ export default function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      testID={testID}
       style={({ pressed }) => [
         buttonStyles,
         isDisabled && styles.disabled,

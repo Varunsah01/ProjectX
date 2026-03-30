@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,6 +18,10 @@ import { useJobDetail } from "../../hooks/useJobDetail";
 import { getErrorMessage } from "../../services/api";
 import { saveJobNotes } from "../../services/jobs";
 import type { JobUpdate } from "../../types/domain";
+import {
+  confirmDiscardUnsavedChanges,
+  UNSAVED_CHANGES_BACK_GUARD_REASON,
+} from "../../utils/unsaved-changes";
 import JobContextCard from "./components/JobContextCard";
 import {
   buildServiceReport,
@@ -55,17 +58,6 @@ export default function AddNotesScreen({
   const initialFormSnapshotRef = useRef<string>(JSON.stringify(createEmptyServiceReportForm()));
 
   useEffect(() => {
-    onBackGuardChange?.(
-      saving,
-      saving ? "Wait for the service report save to finish before leaving this screen." : undefined,
-    );
-
-    return () => {
-      onBackGuardChange?.(false);
-    };
-  }, [onBackGuardChange, saving]);
-
-  useEffect(() => {
     if (job && initializedJobIdRef.current !== job.id) {
       const nextForm = parseServiceReport(job.serviceReport);
       setForm(nextForm);
@@ -76,6 +68,18 @@ export default function AddNotesScreen({
   }, [job]);
 
   const hasUnsavedChanges = JSON.stringify(form) !== initialFormSnapshotRef.current;
+  const isSavingUnsavedChanges = saving && hasUnsavedChanges;
+
+  useEffect(() => {
+    onBackGuardChange?.(
+      isSavingUnsavedChanges,
+      isSavingUnsavedChanges ? UNSAVED_CHANGES_BACK_GUARD_REASON : undefined,
+    );
+
+    return () => {
+      onBackGuardChange?.(false);
+    };
+  }, [isSavingUnsavedChanges, onBackGuardChange]);
 
   function updateForm(nextValues: Partial<ServiceReportFormValues>) {
     setForm((currentValues) => ({
@@ -122,7 +126,7 @@ export default function AddNotesScreen({
   }
 
   useEffect(() => {
-    if (!hasUnsavedChanges || saving) {
+    if (!hasUnsavedChanges || isSavingUnsavedChanges) {
       onBackInterceptChange?.(null);
       return () => {
         onBackInterceptChange?.(null);
@@ -130,31 +134,19 @@ export default function AddNotesScreen({
     }
 
     onBackInterceptChange?.(() => {
-      Alert.alert(
-        "Discard Service Report?",
-        "This service report has unsaved changes. Leave this screen and lose the current edits?",
-        [
-          {
-            text: "Stay",
-            style: "cancel",
-          },
-          {
-            text: "Discard",
-            style: "destructive",
-            onPress: () => {
-              onBackInterceptChange?.(null);
-              onBack();
-            },
-          },
-        ],
-      );
+      confirmDiscardUnsavedChanges({
+        onDiscard: () => {
+          onBackInterceptChange?.(null);
+          onBack();
+        },
+      });
       return true;
     });
 
     return () => {
       onBackInterceptChange?.(null);
     };
-  }, [hasUnsavedChanges, onBack, onBackInterceptChange, saving]);
+  }, [hasUnsavedChanges, isSavingUnsavedChanges, onBack, onBackInterceptChange]);
 
   if (loading) {
     return (
@@ -189,7 +181,7 @@ export default function AddNotesScreen({
         title="Service Report"
         subtitle="Capture a clean field summary and save it to the current job record."
         backLabel="Back to Job"
-        backDisabled={saving}
+        backDisabled={isSavingUnsavedChanges}
         onBack={onBack}
       />
 
@@ -200,6 +192,7 @@ export default function AddNotesScreen({
         <Input
           label="Service notes"
           value={form.serviceNotes}
+          testID="add-notes.service-notes-input"
           onChangeText={(value) => {
             updateForm({ serviceNotes: value });
             clearFieldError("serviceNotes");
@@ -226,6 +219,7 @@ export default function AddNotesScreen({
               label={option.label}
               active={form.issueType === option.value}
               disabled={saving}
+              testID={`add-notes.issue-type.${option.value}`}
               onPress={() => {
                 updateForm({ issueType: option.value });
                 clearFieldError("issueType");
@@ -244,6 +238,7 @@ export default function AddNotesScreen({
         <Input
           label="Work done"
           value={form.workDone}
+          testID="add-notes.work-done-input"
           onChangeText={(value) => {
             updateForm({ workDone: value });
             clearFieldError("workDone");
@@ -269,6 +264,7 @@ export default function AddNotesScreen({
           <ToggleButton
             value={form.followUpRequired}
             disabled={saving}
+            testID="add-notes.follow-up-toggle"
             onPress={() => {
               updateForm({ followUpRequired: !form.followUpRequired });
               setSaveError(null);
@@ -283,7 +279,12 @@ export default function AddNotesScreen({
         </Card>
       ) : null}
 
-      <Button label="Save Service Report" onPress={() => void handleSave()} loading={saving} />
+      <Button
+        label="Save Service Report"
+        onPress={() => void handleSave()}
+        loading={saving}
+        testID="add-notes.save-button"
+      />
     </ScrollView>
   );
 }
@@ -293,16 +294,19 @@ function IssueTypePill({
   active,
   disabled,
   onPress,
+  testID,
 }: {
   label: string;
   active: boolean;
   disabled?: boolean;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      testID={testID}
       style={({ pressed }) => [
         styles.optionPill,
         active && styles.optionPillActive,
@@ -321,15 +325,18 @@ function ToggleButton({
   value,
   disabled,
   onPress,
+  testID,
 }: {
   value: boolean;
   disabled?: boolean;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      testID={testID}
       style={({ pressed }) => [
         styles.toggleTrack,
         value && styles.toggleTrackActive,

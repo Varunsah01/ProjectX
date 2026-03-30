@@ -16,20 +16,20 @@ function getEmptyStateCopy(filter: FilterKey) {
   if (filter === "open") {
     return {
       title: "No Open Complaints",
-      message: "There are no open or active complaints in the current list.",
+      message: "Nothing needs action right now in this list. Pull to refresh if you expect a new complaint.",
     };
   }
 
   if (filter === "resolved") {
     return {
       title: "No Resolved Complaints",
-      message: "Resolved or closed complaints will appear here after they are completed.",
+      message: "Resolved complaints will appear here after they are closed from the field or office.",
     };
   }
 
   return {
-    title: "No Assigned Complaints",
-    message: "Pull to refresh when the connection improves to check for new complaint assignments.",
+    title: "No Complaints Yet",
+    message: "There are no complaints assigned to you right now. Pull to refresh or check again later.",
   };
 }
 
@@ -60,8 +60,8 @@ export default function ComplaintsScreen({
   if (loading && complaints.length === 0) {
     return (
       <FullscreenState
-        title="Loading complaints"
-        message="Checking the latest assigned complaints and SLA-driven field issues."
+        title="Loading Complaints"
+        message="Checking the latest complaints assigned to you."
         loading
       />
     );
@@ -76,14 +76,14 @@ export default function ComplaintsScreen({
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void reload()} />}
     >
       <ScreenHeader
-        title="Assigned Complaints"
-        subtitle="Track SLA-driven service issues from the field without leaving the mobile workflow."
+        title="Complaints"
+        subtitle="Review complaint issues assigned to you and open the one that needs action."
       />
 
       {showingCachedData && error ? (
         <NoticeCard
           tone="warning"
-          title="Showing Saved Complaint Data"
+          title="Showing Saved List"
           message={error}
           actionLabel="Retry"
           onAction={() => void reload()}
@@ -93,7 +93,7 @@ export default function ComplaintsScreen({
       {!showingCachedData && error ? (
         <NoticeCard
           tone="danger"
-          title="Unable to Load Complaints"
+          title="Can't Refresh Complaints"
           message={error}
           actionLabel="Retry"
           onAction={() => void reload()}
@@ -134,11 +134,11 @@ export default function ComplaintsScreen({
             {complaint.description}
           </Text>
           <Text style={styles.meta}>
-            Logged: {formatDateTime(complaint.createdAt)} · SLA: {formatDateTime(complaint.slaDeadline)}
+            Logged: {formatDateTime(complaint.createdAt)} · Due by: {formatDateTime(complaint.slaDeadline)}
           </Text>
 
           <Button
-            label="Open Complaint"
+            label="View Complaint"
             variant="secondary"
             onPress={() => onOpenComplaint(complaint.id)}
             disabled={loading}

@@ -156,7 +156,7 @@ function getMobileRuntimeEnvDiagnostics(rawEnv, input) {
       configError: null,
       targetNotice:
         input.platform === "android"
-          ? "This Android dev session is using 10.0.2.2, which only works in the emulator. Set EXPO_PUBLIC_API_URL before testing on a real device."
+          ? "This build is set to the Android emulator server and will not work on a physical phone. Install the correct build before you continue."
           : null,
     };
   }

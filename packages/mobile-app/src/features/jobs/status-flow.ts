@@ -22,37 +22,37 @@ export const operatorStatusMeta: Record<
 > = {
   assigned: {
     label: "Assigned",
-    helper: "The visit is queued and ready for dispatch work.",
+    helper: "This visit is ready for you to pick up.",
     actionLabel: "Assigned",
   },
   on_the_way: {
     label: "On the Way",
-    helper: "Use this when the technician has left for the customer site.",
+    helper: "Use this after you start travelling to the customer.",
     actionLabel: "Mark On the Way",
   },
   arrived: {
     label: "Arrived",
-    helper: "Use this when the technician has reached the customer location.",
+    helper: "Use this when you reach the customer location.",
     actionLabel: "Mark Arrived",
   },
   work_started: {
     label: "Work Started",
-    helper: "Use this when diagnosis or service work has started on site.",
+    helper: "Use this when inspection or service work has started.",
     actionLabel: "Start Work",
   },
   completed: {
     label: "Completed",
-    helper: "Close the visit after adding a completion note or proof reference.",
+    helper: "Use this after you finish the visit and add a note or photo.",
     actionLabel: "Mark Completed",
   },
   rescheduled: {
     label: "Rescheduled",
-    helper: "Move the visit to a new date and capture the reason.",
+    helper: "Move the visit to a new date and add the reason.",
     actionLabel: "Reschedule Job",
   },
   failed: {
     label: "Failed",
-    helper: "Use this when the visit cannot be completed and must be marked failed.",
+    helper: "Use this when the visit could not be completed.",
     actionLabel: "Mark Failed",
   },
 };
@@ -107,28 +107,28 @@ export function validateJobStatusForm(
   const trimmedScheduledDate = values.scheduledDate.trim();
 
   if (!values.nextStatus) {
-    errors.nextStatus = "Select the next job status.";
+    errors.nextStatus = "Choose the next status.";
     return errors;
   }
 
   if (!getAvailableNextStatuses(options.currentStatus).includes(values.nextStatus)) {
-    errors.nextStatus = "That transition is not allowed from the current job state.";
+    errors.nextStatus = "That status is not available from the current step.";
   }
 
   if (
     (values.nextStatus === "failed" || values.nextStatus === "rescheduled") &&
     !trimmedComment
   ) {
-    errors.comment = "Reason is required for this status update.";
+    errors.comment = "Add a reason for this change.";
   }
 
   if (values.nextStatus === "completed" && !trimmedComment && options.proofs.length === 0) {
-    errors.comment = "Add a completion note or attach proof before marking this job completed.";
+    errors.comment = "Add a completion note or proof before you finish this job.";
   }
 
   if (values.nextStatus === "rescheduled") {
     if (!trimmedScheduledDate) {
-      errors.scheduledDate = "Next scheduled date is required.";
+      errors.scheduledDate = "Enter the new visit date.";
     } else if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedScheduledDate)) {
       errors.scheduledDate = "Use YYYY-MM-DD format.";
     }

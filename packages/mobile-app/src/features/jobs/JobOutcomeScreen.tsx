@@ -10,6 +10,7 @@ import {
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
+import NoticeCard from "../../components/ui/NoticeCard";
 import ScreenHeader from "../../components/shell/ScreenHeader";
 import FullscreenState from "../../components/states/FullscreenState";
 import { colors, radius, spacing } from "../../constants/theme";
@@ -23,6 +24,10 @@ import {
   updateJobStatus,
 } from "../../services/jobs";
 import type { JobClosure, JobClosureType, JobProof } from "../../types/domain";
+import {
+  confirmDiscardUnsavedChanges,
+  UNSAVED_CHANGES_BACK_GUARD_REASON,
+} from "../../utils/unsaved-changes";
 import JobContextCard from "./components/JobContextCard";
 import {
   buildCompletedClosureNotes,
@@ -39,15 +44,19 @@ const serviceWindowOptions = listJobServiceWindowOptions();
 
 const titleByOutcome: Record<JobClosureType, string> = {
   complete: "Complete Job",
-  fail: "Fail Visit",
+  fail: "Mark Failed",
   reschedule: "Reschedule Job",
 };
 
 const subtitleByOutcome: Record<JobClosureType, string> = {
-  complete: "Close the job quickly with closure notes, customer handoff confirmation, and optional proof.",
-  fail: "Capture the failure reason clearly and attach a photo if it helps explain the failed visit.",
-  reschedule: "Record why the visit is moving and note the preferred new date and service slot.",
+  complete: "Finish the visit with notes, customer confirmation, and optional proof.",
+  fail: "Record why the visit could not be completed and add a photo if it helps.",
+  reschedule: "Record why the visit is moving and choose the next visit time.",
 };
+
+function toTestIdSegment(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
 
 export default function JobOutcomeScreen({
   jobId,
@@ -56,6 +65,8 @@ export default function JobOutcomeScreen({
   initialDraft,
   onBack,
   onBackGuardChange,
+  onBackInterceptChange,
+  onDiscardDraft,
   onDraftChange,
   onOpenUploadProof,
   onDone,
@@ -66,6 +77,8 @@ export default function JobOutcomeScreen({
   initialDraft?: JobOutcomeFormValues;
   onBack: () => void;
   onBackGuardChange?: (blocked: boolean, reason?: string) => void;
+  onBackInterceptChange?: (handler: (() => boolean) | null) => void;
+  onDiscardDraft: () => void;
   onDraftChange: (draft: JobOutcomeFormValues) => void;
   onOpenUploadProof: (jobId: string) => void;
   onDone: () => void;
@@ -79,11 +92,14 @@ export default function JobOutcomeScreen({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initializedFormKeyRef = useRef<string | null>(null);
+  const initialFormSnapshotRef = useRef<string>(
+    JSON.stringify(createJobOutcomeFormValues("")),
+  );
 
   useEffect(() => {
     onBackGuardChange?.(
       submitting,
-      submitting ? "Wait for the job outcome submission to finish before leaving this screen." : undefined,
+      submitting ? UNSAVED_CHANGES_BACK_GUARD_REASON : undefined,
     );
 
     return () => {
@@ -95,29 +111,63 @@ export default function JobOutcomeScreen({
     const nextFormKey = job ? `${job.id}:${outcome}` : null;
 
     if (job && initializedFormKeyRef.current !== nextFormKey) {
-      setForm(
-        createJobOutcomeFormValues(job.scheduledDate, {
-          closureNotes:
-            initialDraft?.closureNotes ??
-            (outcome === "complete" ? job.serviceReport ?? "" : ""),
-          failureReason: initialDraft?.failureReason,
-          rescheduleReason: initialDraft?.rescheduleReason,
-          preferredDate: initialDraft?.preferredDate,
-          preferredSlot: initialDraft?.preferredSlot,
-          customerConfirmed: initialDraft?.customerConfirmed,
-        }),
-      );
+      const cleanForm = createJobOutcomeFormValues(job.scheduledDate, {
+        closureNotes: outcome === "complete" ? job.serviceReport ?? "" : "",
+      });
+      const nextForm = createJobOutcomeFormValues(job.scheduledDate, {
+        closureNotes: initialDraft?.closureNotes ?? cleanForm.closureNotes,
+        failureReason: initialDraft?.failureReason,
+        rescheduleReason: initialDraft?.rescheduleReason,
+        preferredDate: initialDraft?.preferredDate ?? cleanForm.preferredDate,
+        preferredSlot: initialDraft?.preferredSlot,
+        customerConfirmed: initialDraft?.customerConfirmed,
+      });
+
+      setForm(nextForm);
       setFieldErrors({});
+      initialFormSnapshotRef.current = JSON.stringify(cleanForm);
       initializedFormKeyRef.current = nextFormKey;
     }
   }, [initialDraft, job, outcome]);
 
-  const proofSummary = useMemo(() => {
-    if (proofs.length === 0) {
-      return "No proof attached yet.";
+  const hasUnsavedChanges = JSON.stringify(form) !== initialFormSnapshotRef.current;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || submitting) {
+      onBackInterceptChange?.(null);
+      return () => {
+        onBackInterceptChange?.(null);
+      };
     }
 
-    return `${proofs.length} proof image${proofs.length === 1 ? "" : "s"} attached.`;
+    onBackInterceptChange?.(() => {
+      confirmDiscardUnsavedChanges({
+        onDiscard: () => {
+          onBackInterceptChange?.(null);
+          onDiscardDraft();
+          onBack();
+        },
+      });
+      return true;
+    });
+
+    return () => {
+      onBackInterceptChange?.(null);
+    };
+  }, [
+    hasUnsavedChanges,
+    onBack,
+    onBackInterceptChange,
+    onDiscardDraft,
+    submitting,
+  ]);
+
+  const proofSummary = useMemo(() => {
+    if (proofs.length === 0) {
+      return "No proof photo added yet.";
+    }
+
+    return `${proofs.length} proof photo${proofs.length === 1 ? "" : "s"} added.`;
   }, [proofs]);
 
   function updateForm(nextValues: Partial<JobOutcomeFormValues>) {
@@ -197,8 +247,8 @@ export default function JobOutcomeScreen({
   if (loading) {
     return (
       <FullscreenState
-        title="Loading outcome flow"
-        message="Fetching the latest job state before applying this workflow action."
+        title="Loading Visit Result"
+        message="Getting the latest visit details before you save this result."
         loading
       />
     );
@@ -207,9 +257,9 @@ export default function JobOutcomeScreen({
   if (!job) {
     return (
       <FullscreenState
-        title="Job unavailable"
-        message={error ?? "The selected job could not be loaded."}
-        actionLabel="Back"
+        title="Step Not Available"
+        message={error ?? "This step could not be opened. Go back and try again."}
+        actionLabel="Go Back"
         onAction={onBack}
       />
     );
@@ -236,10 +286,11 @@ export default function JobOutcomeScreen({
       {outcome === "complete" ? (
         <>
           <Card>
-            <Text style={styles.sectionTitle}>Closure Notes</Text>
+            <Text style={styles.sectionTitle}>Visit Notes</Text>
             <Input
-              label="Closure notes"
+              label="Work done"
               value={form.closureNotes}
+              testID="job-outcome.complete.notes-input"
               onChangeText={(value) => {
                 updateForm({ closureNotes: value });
                 clearFieldError("closureNotes");
@@ -248,25 +299,26 @@ export default function JobOutcomeScreen({
               editable={!submitting}
               multiline
               autoCapitalize="sentences"
-              placeholder="Summarize work completed, final checks, and customer handoff."
+              placeholder="Summarize the work done and anything the next team should know."
               error={fieldErrors.closureNotes}
-              helperText="Keep it short and operator-friendly for dispatch and service history."
+              helperText="Keep it short and clear for the office and job history."
             />
           </Card>
 
           <Card>
             <View style={styles.statusRow}>
               <View style={styles.statusCopy}>
-                <Text style={styles.sectionTitle}>Proof Attached</Text>
+                <Text style={styles.sectionTitle}>Proof Photo</Text>
                 <Text style={styles.helperText}>{proofSummary}</Text>
               </View>
               <ProofIndicator active={proofs.length > 0} />
             </View>
             <Button
-              label={proofs.length > 0 ? "Manage Proof" : "Attach Proof"}
+              label={proofs.length > 0 ? "Manage Photos" : "Add Photo"}
               variant="secondary"
               onPress={() => onOpenUploadProof(jobId)}
               disabled={submitting}
+              testID="job-outcome.complete.proof-button"
             />
           </Card>
 
@@ -282,6 +334,7 @@ export default function JobOutcomeScreen({
                 setSubmitError(null);
               }}
               disabled={submitting}
+              testID="job-outcome.complete.customer-confirmed-toggle"
               style={({ pressed }) => [
                 styles.checkboxRow,
                 submitting && styles.checkboxRowDisabled,
@@ -297,9 +350,9 @@ export default function JobOutcomeScreen({
                 {form.customerConfirmed ? <Text style={styles.checkboxTick}>✓</Text> : null}
               </View>
               <View style={styles.checkboxCopy}>
-                <Text style={styles.sectionTitle}>Customer Confirmation</Text>
+                <Text style={styles.sectionTitle}>Customer Confirmed</Text>
                 <Text style={styles.helperText}>
-                  Confirm that the customer acknowledged the completed visit.
+                  Tick this after the customer confirms the visit is complete.
                 </Text>
               </View>
             </Pressable>
@@ -313,10 +366,11 @@ export default function JobOutcomeScreen({
       {outcome === "fail" ? (
         <>
           <Card>
-            <Text style={styles.sectionTitle}>Failure Reason</Text>
+            <Text style={styles.sectionTitle}>Why the Visit Failed</Text>
             <Input
-              label="Failure reason"
+              label="Reason"
               value={form.failureReason}
+              testID="job-outcome.fail.reason-input"
               onChangeText={(value) => {
                 updateForm({ failureReason: value });
                 clearFieldError("failureReason");
@@ -325,25 +379,26 @@ export default function JobOutcomeScreen({
               editable={!submitting}
               multiline
               autoCapitalize="sentences"
-              placeholder="Explain why the visit failed and what blocked completion."
+              placeholder="Explain what stopped you from finishing the visit."
               error={fieldErrors.failureReason}
-              helperText="This reason is required and will be saved on the job history."
+              helperText="Required. This will be saved to the job history."
             />
           </Card>
 
           <Card>
             <View style={styles.statusRow}>
               <View style={styles.statusCopy}>
-                <Text style={styles.sectionTitle}>Optional Failure Photo</Text>
+                <Text style={styles.sectionTitle}>Photo</Text>
                 <Text style={styles.helperText}>{proofSummary}</Text>
               </View>
               <ProofIndicator active={proofs.length > 0} />
             </View>
             <Button
-              label={proofs.length > 0 ? "Manage Failure Photo" : "Attach Failure Photo"}
+              label={proofs.length > 0 ? "Manage Photo" : "Add Photo"}
               variant="secondary"
               onPress={() => onOpenUploadProof(jobId)}
               disabled={submitting}
+              testID="job-outcome.fail.proof-button"
             />
           </Card>
         </>
@@ -352,10 +407,11 @@ export default function JobOutcomeScreen({
       {outcome === "reschedule" ? (
         <>
           <Card>
-            <Text style={styles.sectionTitle}>Reschedule Reason</Text>
+            <Text style={styles.sectionTitle}>Why Reschedule</Text>
             <Input
               label="Reason"
               value={form.rescheduleReason}
+              testID="job-outcome.reschedule.reason-input"
               onChangeText={(value) => {
                 updateForm({ rescheduleReason: value });
                 clearFieldError("rescheduleReason");
@@ -364,17 +420,18 @@ export default function JobOutcomeScreen({
               editable={!submitting}
               multiline
               autoCapitalize="sentences"
-              placeholder="Explain why this visit needs a new appointment."
+              placeholder="Explain why this visit needs a new date."
               error={fieldErrors.rescheduleReason}
-              helperText="Keep the reason practical so dispatch can act on it immediately."
+              helperText="Keep it short so the office can rebook quickly."
             />
           </Card>
 
           <Card>
-            <Text style={styles.sectionTitle}>Preferred New Date</Text>
+            <Text style={styles.sectionTitle}>New Visit Date</Text>
             <Input
-              label="New date"
+              label="Date"
               value={form.preferredDate}
+              testID="job-outcome.reschedule.date-input"
               onChangeText={(value) => {
                 updateForm({ preferredDate: value });
                 clearFieldError("preferredDate");
@@ -383,12 +440,12 @@ export default function JobOutcomeScreen({
               editable={!submitting}
               placeholder="YYYY-MM-DD"
               error={fieldErrors.preferredDate}
-              helperText="Use the customer’s preferred revisit date in YYYY-MM-DD format."
+              helperText="Enter the customer's preferred date as YYYY-MM-DD."
             />
           </Card>
 
           <Card>
-            <Text style={styles.sectionTitle}>Preferred Slot</Text>
+            <Text style={styles.sectionTitle}>Preferred Time</Text>
             <View style={styles.slotGrid}>
               {serviceWindowOptions.map((slot) => (
                 <Pressable
@@ -399,6 +456,7 @@ export default function JobOutcomeScreen({
                     setSubmitError(null);
                   }}
                   disabled={submitting}
+                  testID={`job-outcome.reschedule.slot.${toTestIdSegment(slot)}`}
                   style={({ pressed }) => [
                     styles.slotPill,
                     form.preferredSlot === slot && styles.slotPillActive,
@@ -425,9 +483,7 @@ export default function JobOutcomeScreen({
       ) : null}
 
       {submitError ? (
-        <Card>
-          <Text style={styles.errorText}>{submitError}</Text>
-        </Card>
+        <NoticeCard tone="danger" title="Couldn't Save Result" message={submitError} />
       ) : null}
 
       <Button
@@ -435,6 +491,7 @@ export default function JobOutcomeScreen({
         onPress={() => void handleSubmit()}
         loading={submitting}
         variant={outcome === "fail" ? "danger" : "primary"}
+        testID={`job-outcome.${outcome}.submit-button`}
       />
     </ScrollView>
   );
@@ -456,7 +513,7 @@ function ProofIndicator({ active }: { active: boolean }) {
             : styles.proofIndicatorLabelInactive,
         ]}
       >
-        {active ? "Attached" : "Missing"}
+        {active ? "Added" : "Not Added"}
       </Text>
     </View>
   );

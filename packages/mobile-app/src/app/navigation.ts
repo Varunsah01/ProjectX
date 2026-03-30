@@ -7,6 +7,8 @@ export type AppRouteParams = {
   jobs: undefined;
   complaints: undefined;
   profile: undefined;
+  deviceCheck: undefined;
+  diagnostics: undefined;
   jobDetail: { jobId: string };
   complaintDetail: { complaintId: string };
   jobUpdateStatus: { jobId: string };
@@ -45,6 +47,9 @@ export function getActiveTabForRoute(route: AppRoute): MainTabRouteName {
     case "complaints":
     case "profile":
       return route.name;
+    case "deviceCheck":
+    case "diagnostics":
+      return "profile";
     case "complaintDetail":
       return "complaints";
     case "jobDetail":

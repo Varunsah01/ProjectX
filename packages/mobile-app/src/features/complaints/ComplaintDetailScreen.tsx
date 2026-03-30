@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -26,6 +25,10 @@ import {
   saveComplaintDetailCache,
 } from "../../services/complaint-cache";
 import type { ComplaintStatus } from "../../types/api";
+import {
+  confirmDiscardUnsavedChanges,
+  UNSAVED_CHANGES_BACK_GUARD_REASON,
+} from "../../utils/unsaved-changes";
 import { formatDate, formatDateTime } from "../../utils/format";
 
 type ComplaintActionStatus = Extract<ComplaintStatus, "in_progress" | "on_hold" | "resolved">;
@@ -77,7 +80,7 @@ export default function ComplaintDetailScreen({
   useEffect(() => {
     onBackGuardChange?.(
       submitting,
-      submitting ? "Wait for the complaint status update to finish before leaving this screen." : undefined,
+      submitting ? UNSAVED_CHANGES_BACK_GUARD_REASON : undefined,
     );
 
     return () => {
@@ -94,24 +97,13 @@ export default function ComplaintDetailScreen({
     }
 
     onBackInterceptChange?.(() => {
-      Alert.alert(
-        "Discard Complaint Note?",
-        "This complaint note has not been submitted yet. Leave this screen and lose the current note?",
-        [
-          {
-            text: "Stay",
-            style: "cancel",
-          },
-          {
-            text: "Discard",
-            style: "destructive",
-            onPress: () => {
-              onBackInterceptChange?.(null);
-              onBack();
-            },
-          },
-        ],
-      );
+      confirmDiscardUnsavedChanges({
+        message: "Leave this screen and lose the current complaint note?",
+        onDiscard: () => {
+          onBackInterceptChange?.(null);
+          onBack();
+        },
+      });
       return true;
     });
 
@@ -131,21 +123,11 @@ export default function ComplaintDetailScreen({
       return;
     }
 
-    Alert.alert(
-      "Discard Complaint Note?",
-      "Opening the linked job will discard the unsaved complaint note on this screen.",
-      [
-        {
-          text: "Stay",
-          style: "cancel",
-        },
-        {
-          text: "Open Job",
-          style: "destructive",
-          onPress: () => onOpenJob(jobId),
-        },
-      ],
-    );
+    confirmDiscardUnsavedChanges({
+      confirmLabel: "View Job",
+      message: "Opening the linked job will discard the current complaint note.",
+      onDiscard: () => onOpenJob(jobId),
+    });
   }
 
   async function handleUpdateStatus(status: ComplaintActionStatus) {
@@ -180,8 +162,8 @@ export default function ComplaintDetailScreen({
   if (loading && !complaint) {
     return (
       <FullscreenState
-        title="Loading complaint"
-        message="Fetching the latest complaint detail and service timeline."
+        title="Loading Complaint"
+        message="Getting the latest complaint details."
         loading
       />
     );
@@ -190,9 +172,9 @@ export default function ComplaintDetailScreen({
   if (!complaint) {
     return (
       <FullscreenState
-        title="Complaint unavailable"
-        message={error ?? "The selected complaint could not be loaded."}
-        actionLabel="Back"
+        title="Complaint Not Available"
+        message={error ?? "This complaint could not be opened. Go back and try again."}
+        actionLabel="Go Back"
         onAction={onBack}
       />
     );
@@ -207,8 +189,8 @@ export default function ComplaintDetailScreen({
       keyboardDismissMode="on-drag"
     >
       <ScreenHeader
-        title="Complaint Detail"
-        subtitle="Review the complaint context, field history, and current service state before taking action."
+        title="Complaint Details"
+        subtitle="Review the issue, linked jobs, and what to do next."
         backLabel="Back to Complaints"
         backDisabled={submitting}
         onBack={onBack}
@@ -217,7 +199,7 @@ export default function ComplaintDetailScreen({
       {showingCachedData && error ? (
         <NoticeCard
           tone="warning"
-          title="Showing Saved Complaint Data"
+          title="Showing Saved Details"
           message={error}
           actionLabel="Retry"
           onAction={() => void reload()}
@@ -227,7 +209,7 @@ export default function ComplaintDetailScreen({
       {!showingCachedData && error ? (
         <NoticeCard
           tone="danger"
-          title="Unable to Refresh Complaint"
+          title="Can't Refresh Complaint"
           message={error}
           actionLabel="Retry"
           onAction={() => void reload()}
@@ -237,7 +219,7 @@ export default function ComplaintDetailScreen({
       {submitError ? (
         <NoticeCard
           tone="danger"
-          title="Complaint Update Failed"
+          title="Couldn't Save Complaint Update"
           message={submitError}
         />
       ) : null}
@@ -257,8 +239,8 @@ export default function ComplaintDetailScreen({
         </View>
 
         <Text style={styles.bodyText}>{complaint.description}</Text>
-        <Text style={styles.metaText}>Created: {formatDateTime(complaint.createdAt)}</Text>
-        <Text style={styles.metaText}>SLA: {formatDateTime(complaint.slaDeadline)}</Text>
+        <Text style={styles.metaText}>Logged: {formatDateTime(complaint.createdAt)}</Text>
+        <Text style={styles.metaText}>Due by: {formatDateTime(complaint.slaDeadline)}</Text>
       </Card>
 
       <Card>
@@ -288,7 +270,7 @@ export default function ComplaintDetailScreen({
         <Text style={styles.sectionTitle}>Timeline</Text>
         {complaint.timeline.length === 0 ? (
           <Text style={styles.metaText}>
-            No complaint timeline entries are available yet for this issue.
+            No updates have been added to this complaint yet.
           </Text>
         ) : (
           complaint.timeline.map((entry) => (
@@ -307,7 +289,7 @@ export default function ComplaintDetailScreen({
         <Text style={styles.sectionTitle}>Linked Jobs</Text>
         {complaint.linkedJobs.length === 0 ? (
           <Text style={styles.metaText}>
-            No linked field jobs are attached to this complaint yet.
+            No jobs are linked to this complaint yet.
           </Text>
         ) : (
           complaint.linkedJobs.map((job) => (
@@ -319,7 +301,7 @@ export default function ComplaintDetailScreen({
               <View style={styles.linkedJobActions}>
                 <StatusBadge value={job.status} />
                 <Button
-                  label="Open"
+                  label="View Job"
                   variant="secondary"
                   onPress={() => void handleOpenJob(job.id)}
                   disabled={submitting}
@@ -332,9 +314,9 @@ export default function ComplaintDetailScreen({
 
       {!["resolved", "closed"].includes(complaint.status) ? (
         <Card>
-          <Text style={styles.sectionTitle}>Update Complaint</Text>
+          <Text style={styles.sectionTitle}>Add Update</Text>
           <Input
-            label="Operator note"
+            label="Update note"
             value={note}
             onChangeText={(value) => {
               setNote(value);
@@ -343,8 +325,8 @@ export default function ComplaintDetailScreen({
             editable={!submitting}
             multiline
             autoCapitalize="sentences"
-            placeholder="Add what you found, what changed, or why the issue is on hold."
-            helperText="Complaint updates still require a working connection and are not queued offline."
+            placeholder="Write what you found, what changed, or why work is paused."
+            helperText="You need a live connection to save complaint updates."
           />
           <View style={styles.actionStack}>
             {actionConfig?.canStartWork ? (
@@ -357,7 +339,7 @@ export default function ComplaintDetailScreen({
             ) : null}
             {actionConfig?.canPutOnHold ? (
               <Button
-                label="Put On Hold"
+                label="Pause Work"
                 variant="secondary"
                 onPress={() => void handleUpdateStatus("on_hold")}
                 loading={statusAction === "on_hold"}
@@ -366,7 +348,7 @@ export default function ComplaintDetailScreen({
             ) : null}
             {actionConfig?.canResolve ? (
               <Button
-                label="Resolve Complaint"
+                label="Resolve"
                 variant="danger"
                 onPress={() => void handleUpdateStatus("resolved")}
                 loading={statusAction === "resolved"}
@@ -379,8 +361,8 @@ export default function ComplaintDetailScreen({
         <Card>
           <Text style={styles.sectionTitle}>Complaint Status</Text>
           <Text style={styles.metaText}>
-            This complaint is already {complaint.status === "closed" ? "closed" : "resolved"} and
-            no further mobile status updates are available.
+            This complaint is already {complaint.status === "closed" ? "closed" : "resolved"}.
+            No more phone updates are needed.
           </Text>
         </Card>
       )}

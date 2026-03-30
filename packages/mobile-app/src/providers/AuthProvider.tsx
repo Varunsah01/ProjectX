@@ -21,6 +21,7 @@ export type AuthSessionNotice = {
 
 type AuthContextValue = {
   isLoading: boolean;
+  hasSessionToken: boolean;
   user: User | null;
   sessionNotice: AuthSessionNotice | null;
   signIn: (credentials: LoginRequest) => Promise<void>;
@@ -108,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSessionNotice({
           tone: "warning",
           message:
-            "Using the saved session from this device. Live session verification will retry when the backend is reachable.",
+            "Using the saved sign-in on this phone for now. We will check the server again when your connection is back.",
         });
         logTestWarning("auth", "refresh-fallback-cached-user", {
           userId: cachedUser.id,
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionNotice({
         tone: "danger",
         message:
-          "A saved session was found but could not be restored. Check the API connection and sign in again.",
+          "We found a saved sign-in but could not finish loading your account. Check your connection, then sign in again.",
       });
       logTestError("auth", "refresh-no-user-fallback", {
         errorMessage: error instanceof Error ? error.message : "Unknown error",
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           await clearSession();
-          throw new Error("Your session expired. Sign in again.");
+          throw new Error("Your session ended. Sign in again.");
         }
 
         throw error;
@@ -226,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       isLoading,
+      hasSessionToken: Boolean(token),
       user,
       sessionNotice,
       signIn,
@@ -233,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshSession,
       request,
     }),
-    [isLoading, user, sessionNotice, signIn, signOut, refreshSession, request],
+    [isLoading, request, refreshSession, sessionNotice, signIn, signOut, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

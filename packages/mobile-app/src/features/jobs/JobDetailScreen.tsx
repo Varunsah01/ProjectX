@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
+import NoticeCard from "../../components/ui/NoticeCard";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ScreenHeader from "../../components/shell/ScreenHeader";
 import FullscreenState from "../../components/states/FullscreenState";
@@ -18,6 +19,7 @@ import { colors, spacing } from "../../constants/theme";
 import { useJobDetail } from "../../hooks/useJobDetail";
 import { useSync } from "../../hooks/useSync";
 import { countPendingActionsForJob } from "../../services/offline-sync";
+import { getSavedJobProofStatus } from "../../services/job-proofs";
 import type { JobClosureType, JobProof } from "../../types/domain";
 import { formatDate, formatDateTime, titleCase } from "../../utils/format";
 import { getJobServiceLabel, getJobTimeSlot } from "./job-board";
@@ -42,14 +44,14 @@ export default function JobDetailScreen({
   onOpenOutcome: (jobId: string, outcome: JobClosureType) => void;
 }) {
   const { job, loading, error, reload } = useJobDetail(jobId);
-  const { pendingActions } = useSync();
+  const { isSyncing, pendingActions } = useSync();
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (loading) {
     return (
       <FullscreenState
-        title="Loading job"
-        message="Fetching the latest job details and workflow actions."
+        title="Loading Job"
+        message="Getting the latest visit details and actions."
         loading
       />
     );
@@ -58,9 +60,9 @@ export default function JobDetailScreen({
   if (!job) {
     return (
       <FullscreenState
-        title="Job unavailable"
-        message={error ?? "The selected job could not be loaded."}
-        actionLabel="Back"
+        title="Job Not Available"
+        message={error ?? "This job could not be opened. Go back and try again."}
+        actionLabel="Go Back"
         onAction={onBack}
       />
     );
@@ -73,8 +75,8 @@ export default function JobDetailScreen({
     job.complaint?.description ??
     job.complaint?.subject ??
     job.notes ??
-    "No issue summary available for this job.";
-  const internalNotes = job.notes ?? "No internal notes added yet.";
+    "No problem details have been added for this job yet.";
+  const internalNotes = job.notes ?? "No job notes have been added yet.";
   const priorityValue = job.complaint?.priority ?? "standard";
   const displayStatus = job.operatorStatus ?? job.status;
   const canUpdateStatus = job.status !== "completed" && job.status !== "cancelled";
@@ -101,19 +103,19 @@ export default function JobDetailScreen({
 
   async function handleCallCustomer() {
     if (!currentJob.customer.phone) {
-      setActionError("Customer phone number is not available for this job.");
+      setActionError("No customer phone number is listed for this job.");
       return;
     }
 
     await openExternal(
       `tel:${currentJob.customer.phone}`,
-      "Unable to open the phone dialer on this device.",
+      "Couldn't open the phone app on this phone. Call the customer manually if needed.",
     );
   }
 
   async function handleOpenInMaps() {
     if (!currentJob.customer.address) {
-      setActionError("Customer address is not available for this job.");
+      setActionError("No customer address is listed for this job.");
       return;
     }
 
@@ -123,7 +125,10 @@ export default function JobDetailScreen({
         ? `geo:0,0?q=${query}`
         : `https://www.google.com/maps/search/?api=1&query=${query}`;
 
-    await openExternal(mapsUrl, "Unable to open maps for this address.");
+    await openExternal(
+      mapsUrl,
+      "Couldn't open maps for this address. Copy the address into your map app and try again.",
+    );
   }
 
   return (
@@ -133,7 +138,7 @@ export default function JobDetailScreen({
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void reload()} />}
     >
       <ScreenHeader
-        title="Job Detail"
+        title="Job Details"
         subtitle={`${job.jobNumber} · ${formatDate(job.scheduledDate)}`}
         backLabel="Back to Jobs"
         onBack={onBack}
@@ -166,32 +171,38 @@ export default function JobDetailScreen({
 
       {pendingActionCount > 0 ? (
         <Card>
-          <Text style={styles.sectionTitle}>Pending Sync</Text>
+          <Text style={styles.sectionTitle}>
+            {isSyncing ? "Syncing Saved Updates" : "Saved Updates Waiting"}
+          </Text>
           <Text style={styles.bodyText}>
-            {pendingActionCount} field update{pendingActionCount === 1 ? "" : "s"} for this job
-            {" "}are saved on device and waiting to sync.
+            {pendingActionCount} update{pendingActionCount === 1 ? "" : "s"} for this job{" "}
+            {pendingActionCount === 1 ? "is" : "are"}{" "}
+            {isSyncing
+              ? "sending now. Keep the app open until it finishes."
+              : "saved on this phone and will send automatically when the connection is back."}
           </Text>
         </Card>
       ) : null}
 
       <Card>
-        <Text style={styles.sectionTitle}>Issue Summary</Text>
+        <Text style={styles.sectionTitle}>Problem Reported</Text>
         <Text style={styles.bodyText}>{issueSummary}</Text>
         {job.complaint ? (
           <Button
-            label="Open Complaint"
+            label="View Complaint"
             variant="ghost"
             onPress={() => onOpenComplaint(job.complaint!.id)}
+            testID="job-detail.view-complaint-button"
           />
         ) : null}
       </Card>
 
       <Card>
-        <Text style={styles.sectionTitle}>Internal Notes</Text>
+        <Text style={styles.sectionTitle}>Job Notes</Text>
         <Text style={styles.bodyText}>{internalNotes}</Text>
         {job.serviceReport ? (
           <View style={styles.savedNoteBlock}>
-            <Text style={styles.savedNoteLabel}>Technician Notes</Text>
+            <Text style={styles.savedNoteLabel}>Your Last Saved Note</Text>
             <Text style={styles.bodyText}>{job.serviceReport}</Text>
           </View>
         ) : null}
@@ -214,22 +225,19 @@ export default function JobDetailScreen({
 
       {proofs.length > 0 ? (
         <Card>
-          <Text style={styles.sectionTitle}>Uploaded Proof</Text>
+          <Text style={styles.sectionTitle}>Proof Photos</Text>
           {proofs.map((proof) => (
-            <View key={proof.id} style={styles.proofRow}>
-              {proof.uri ? <Image source={{ uri: proof.uri }} style={styles.proofImage} /> : null}
-              <Text style={styles.bodyText}>{proof.label}</Text>
-              <Text style={styles.metaText}>
-                {titleCase(proof.type)} · {formatDateTime(proof.createdAt)}
-                {proof.syncState === "pending" ? " · Pending sync" : ""}
-              </Text>
-            </View>
+            <JobProofRow
+              key={proof.id}
+              proof={proof}
+              status={getSavedJobProofStatus(proof, { isSyncing })}
+            />
           ))}
         </Card>
       ) : null}
 
       <Card>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionTitle}>Contact & Directions</Text>
         <View style={styles.actionRow}>
           <Button
             label="Call Customer"
@@ -237,6 +245,7 @@ export default function JobDetailScreen({
             onPress={() => void handleCallCustomer()}
             disabled={!job.customer.phone}
             style={styles.actionButton}
+            testID="job-detail.call-customer-button"
           />
           <Button
             label="Open in Maps"
@@ -244,62 +253,69 @@ export default function JobDetailScreen({
             onPress={() => void handleOpenInMaps()}
             disabled={!job.customer.address}
             style={styles.actionButton}
+            testID="job-detail.open-maps-button"
           />
         </View>
       </Card>
 
       <Card>
-        <Text style={styles.sectionTitle}>Job Actions</Text>
+        <Text style={styles.sectionTitle}>Next Steps</Text>
         <View style={styles.actionRow}>
           <Button
             label="Update Status"
             onPress={() => onOpenUpdateStatus(job.id)}
             disabled={!canUpdateStatus}
             style={styles.actionButton}
+            testID="job-detail.update-status-button"
           />
           <Button
-            label="Add Notes"
+            label="Add Visit Notes"
             variant="secondary"
             onPress={() => onOpenAddNotes(job.id)}
             style={styles.actionButton}
+            testID="job-detail.add-notes-button"
           />
         </View>
         <View style={styles.actionRow}>
           <Button
-            label="Upload Proof"
+            label="Add Proof"
             variant="ghost"
             onPress={() => onOpenUploadProof(job.id)}
             style={styles.actionButton}
+            testID="job-detail.add-proof-button"
           />
           <Button
-            label="Close Job"
+            label="Complete Job"
             onPress={() => onOpenOutcome(job.id, "complete")}
             disabled={!canCompleteJob}
             style={styles.actionButton}
+            testID="job-detail.complete-job-button"
           />
         </View>
         {canCloseJob && !canCompleteJob ? (
           <Text style={styles.helperText}>
-            Move the job to In Progress before closing it.
+            Start work before you complete this job.
           </Text>
         ) : null}
       </Card>
 
       {canCloseJob ? (
         <Card>
-          <Text style={styles.sectionTitle}>Other Outcomes</Text>
+          <Text style={styles.sectionTitle}>Other Options</Text>
           <View style={styles.actionRow}>
             <Button
               label="Reschedule"
               variant="secondary"
               onPress={() => onOpenOutcome(job.id, "reschedule")}
               style={styles.actionButton}
+              testID="job-detail.reschedule-button"
             />
             <Button
               label="Fail Visit"
               variant="danger"
               onPress={() => onOpenOutcome(job.id, "fail")}
               style={styles.actionButton}
+              testID="job-detail.fail-visit-button"
             />
           </View>
         </Card>
@@ -307,16 +323,22 @@ export default function JobDetailScreen({
 
       {job.completedAt ? (
         <Card>
-          <Text style={styles.sectionTitle}>Completion</Text>
+          <Text style={styles.sectionTitle}>Completed</Text>
           <Text style={styles.metaText}>Completed: {formatDateTime(job.completedAt)}</Text>
         </Card>
       ) : null}
 
       {actionError || error ? (
-        <Card>
-          <Text style={styles.errorText}>{actionError ?? error}</Text>
-          <Button label="Retry" onPress={() => void reload()} />
-        </Card>
+        <NoticeCard
+          tone="danger"
+          title={actionError ? "Action Didn't Open" : "Couldn't Refresh Job"}
+          message={
+            actionError ??
+            `${error} Pull to refresh or go back and open this job again.`
+          }
+          actionLabel={actionError ? undefined : "Try Again"}
+          onAction={actionError ? undefined : () => void reload()}
+        />
       ) : null}
     </ScrollView>
   );
@@ -333,6 +355,36 @@ function DetailLine({
     <View style={styles.detailLine}>
       <Text style={styles.detailLabel}>{label}</Text>
       <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
+function JobProofRow({
+  proof,
+  status,
+}: {
+  proof: JobProof;
+  status: "pending" | "uploading" | "uploaded";
+}) {
+  return (
+    <View style={styles.proofRow}>
+      {proof.uri ? <Image source={{ uri: proof.uri }} style={styles.proofImage} /> : null}
+      <View style={styles.proofCopy}>
+        <View style={styles.proofHeader}>
+          <Text style={styles.proofLabel}>{proof.label}</Text>
+          <StatusBadge value={status} />
+        </View>
+        <Text style={styles.metaText}>
+          {titleCase(proof.type)} · {formatDateTime(proof.createdAt)}
+        </Text>
+        <Text style={styles.metaText}>
+          {status === "pending"
+            ? "Saved on this phone and waiting to upload."
+            : status === "uploading"
+              ? "Uploading now. Keep the app open."
+              : "Uploaded to this job."}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -415,10 +467,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   proofRow: {
-    gap: 4,
+    gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: spacing.md,
+  },
+  proofCopy: {
+    gap: 4,
+  },
+  proofHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  proofLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.text,
   },
   proofImage: {
     width: "100%",

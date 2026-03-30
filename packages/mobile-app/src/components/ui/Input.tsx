@@ -19,6 +19,7 @@ export default function Input({
   helperText,
   returnKeyType,
   onSubmitEditing,
+  testID,
 }: {
   label: string;
   value: string;
@@ -37,11 +38,13 @@ export default function Input({
   helperText?: string;
   returnKeyType?: TextInputProps["returnKeyType"];
   onSubmitEditing?: TextInputProps["onSubmitEditing"];
+  testID?: string;
 }) {
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

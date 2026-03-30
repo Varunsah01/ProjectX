@@ -22,6 +22,7 @@ export default function BottomTabBar({
         <Pressable
           key={tab.route}
           onPress={() => onSelectTab(tab.route)}
+          testID={`app-tab.${tab.route}`}
           style={({ pressed }) => [
             styles.tabButton,
             activeTab === tab.route && styles.tabButtonActive,

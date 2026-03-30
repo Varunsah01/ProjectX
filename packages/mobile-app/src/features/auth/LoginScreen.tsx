@@ -90,8 +90,8 @@ export default function LoginScreen() {
 
   const identifierHelperText =
     identifierType === "employee_id"
-      ? "Recommended for the pilot rollout. Use the employee ID assigned to your operator account."
-      : "Use the phone number linked to the same operator account if needed.";
+      ? "Use the employee ID linked to your operator account."
+      : "Use the work phone number linked to your operator account.";
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -107,7 +107,7 @@ export default function LoginScreen() {
 
       lastBackPressAtRef.current = now;
       setBackNotice(
-        "Sign-in entries are not saved. Press back again within 2 seconds to close the app.",
+        "Sign-in details are not saved. Press back again within 2 seconds to close the app.",
       );
 
       if (backNoticeTimerRef.current) {
@@ -187,7 +187,7 @@ export default function LoginScreen() {
             </View>
           </View>
           <Text style={styles.subtitle}>
-            Sign in to review assigned jobs, update status on site, and finish field work quickly on Android.
+            Sign in to see your jobs, update visits, and finish work on site.
           </Text>
         </View>
 
@@ -195,18 +195,22 @@ export default function LoginScreen() {
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Sign In</Text>
             <Text style={styles.cardSubtitle}>
-              Pilot access uses employee ID or work phone with password. Your session stays on this device until you sign out.
+              Use your employee ID or work phone and password. You will stay signed in on this phone until you sign out.
             </Text>
           </View>
 
           {apiConfigError ? (
-            <NoticeCard tone="danger" title="App Configuration" message={apiConfigError} />
+            <NoticeCard
+              tone="danger"
+              title="App Setup Needed"
+              message="This build cannot sign in on this phone because its server setup is missing or invalid. Ask your lead for the correct build."
+            />
           ) : null}
 
           {!apiConfigError && apiTargetNotice ? (
             <NoticeCard
               tone="warning"
-              title="Real Device Warning"
+              title="Wrong Build for This Phone"
               message={apiTargetNotice}
             />
           ) : null}
@@ -214,17 +218,23 @@ export default function LoginScreen() {
           {sessionNotice ? (
             <NoticeCard
               tone={sessionNotice.tone}
-              title="Saved Session"
+              title="Sign-In Status"
               message={sessionNotice.message}
             />
           ) : null}
 
-          {backNotice ? <NoticeCard tone="info" title="Press Back Again to Exit" message={backNotice} /> : null}
+          {backNotice ? (
+            <NoticeCard
+              tone="info"
+              title="Press Back Again to Close"
+              message={backNotice}
+            />
+          ) : null}
 
           <NoticeCard
             tone="info"
-            title="Pilot Auth"
-            message="The pilot login path is password only. Employee ID plus password is the primary sign-in route. OTP remains disabled until backend verification is production-ready."
+            title="Sign-In Method"
+            message="Use your password to sign in. One-time codes are not available in this build."
           />
 
           <View style={styles.group}>
@@ -245,6 +255,7 @@ export default function LoginScreen() {
           <Input
             label={identifierType === "phone" ? "Phone Number" : "Employee ID"}
             value={identifier}
+            testID="login.identifier-input"
             onChangeText={(value) => {
               setIdentifier(value);
               setError(null);
@@ -262,6 +273,7 @@ export default function LoginScreen() {
           <Input
             label="Password"
             value={secret}
+            testID="login.password-input"
             onChangeText={(value) => {
               setSecret(value);
               setError(null);
@@ -273,18 +285,19 @@ export default function LoginScreen() {
             textContentType="password"
             editable={!submitting}
             error={showValidation ? secretError ?? undefined : undefined}
-            helperText="Enter the password for your operator account."
+            helperText="Enter your account password."
             returnKeyType="done"
             onSubmitEditing={() => void handleSignIn()}
           />
 
-          {error ? <NoticeCard tone="danger" message={error} /> : null}
+          {error ? <NoticeCard tone="danger" title="Can't Sign In" message={error} /> : null}
 
           <Button
             label="Sign In"
             onPress={() => void handleSignIn()}
             loading={submitting}
             disabled={!canSubmit}
+            testID="login.submit-button"
           />
         </Card>
       </ScrollView>

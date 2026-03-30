@@ -45,6 +45,7 @@ export default function JobBoard({
 }) {
   const { isSyncing, pendingCount, lastSyncError } = useSync();
   const [activeTab, setActiveTab] = useState<JobBoardTab>("today");
+  const screenKey = screenLabel.toLowerCase().replace(/\s+/g, "-");
 
   const summary = useMemo(() => getJobSummaryCounts(jobs), [jobs]);
   const visibleJobs = useMemo(() => getJobsForTab(jobs, activeTab), [activeTab, jobs]);
@@ -85,7 +86,12 @@ export default function JobBoard({
           ) : null}
         </View>
         {secondaryActionLabel && onSecondaryAction ? (
-          <Button label={secondaryActionLabel} variant="ghost" onPress={onSecondaryAction} />
+          <Button
+            label={secondaryActionLabel}
+            variant="ghost"
+            onPress={onSecondaryAction}
+            testID={`${screenKey}.secondary-action-button`}
+          />
         ) : null}
       </View>
 
@@ -105,6 +111,7 @@ export default function JobBoard({
           <Pressable
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
+            testID={`${screenKey}.jobs-tab.${tab.key}`}
             style={({ pressed }) => [
               styles.tab,
               activeTab === tab.key && styles.tabActive,
@@ -142,7 +149,12 @@ export default function JobBoard({
       ) : null}
 
       {visibleJobs.map((job) => (
-        <JobListCard key={job.id} job={job} onOpenJob={onOpenJob} />
+        <JobListCard
+          key={job.id}
+          job={job}
+          onOpenJob={onOpenJob}
+          testIdPrefix={screenKey}
+        />
       ))}
     </ScrollView>
   );

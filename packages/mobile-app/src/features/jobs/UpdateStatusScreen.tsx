@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
+import NoticeCard from "../../components/ui/NoticeCard";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ScreenHeader from "../../components/shell/ScreenHeader";
 import FullscreenState from "../../components/states/FullscreenState";
@@ -18,6 +18,10 @@ import { colors, radius, spacing } from "../../constants/theme";
 import { useAuth } from "../../hooks/useAuth";
 import { useJobDetail } from "../../hooks/useJobDetail";
 import { getErrorMessage } from "../../services/api";
+import {
+  confirmDiscardUnsavedChanges,
+  UNSAVED_CHANGES_BACK_GUARD_REASON,
+} from "../../utils/unsaved-changes";
 import {
   buildJobClosureReport,
   failJob,
@@ -62,7 +66,7 @@ export default function UpdateStatusScreen({
   useEffect(() => {
     onBackGuardChange?.(
       submitting,
-      submitting ? "Wait for the status update to finish before leaving this screen." : undefined,
+      submitting ? UNSAVED_CHANGES_BACK_GUARD_REASON : undefined,
     );
 
     return () => {
@@ -85,8 +89,8 @@ export default function UpdateStatusScreen({
   const selectedMeta = selectedStatus ? operatorStatusMeta[selectedStatus] : null;
   const proofSummary =
     proofs.length === 0
-      ? "No proof reference is attached yet."
-      : `${proofs.length} proof reference${proofs.length === 1 ? "" : "s"} attached to this job.`;
+      ? "No proof photo added yet."
+      : `${proofs.length} proof photo${proofs.length === 1 ? "" : "s"} added to this job.`;
   const hasUnsavedChanges =
     selectedStatus !== null ||
     comment.trim().length > 0 ||
@@ -187,24 +191,12 @@ export default function UpdateStatusScreen({
     }
 
     onBackInterceptChange?.(() => {
-      Alert.alert(
-        "Discard Status Update?",
-        "This status change has not been saved yet. Leave this screen and lose the current edits?",
-        [
-          {
-            text: "Stay",
-            style: "cancel",
-          },
-          {
-            text: "Discard",
-            style: "destructive",
-            onPress: () => {
-              onBackInterceptChange?.(null);
-              onBack();
-            },
-          },
-        ],
-      );
+      confirmDiscardUnsavedChanges({
+        onDiscard: () => {
+          onBackInterceptChange?.(null);
+          onBack();
+        },
+      });
       return true;
     });
 
@@ -216,8 +208,8 @@ export default function UpdateStatusScreen({
   if (loading) {
     return (
       <FullscreenState
-        title="Loading status flow"
-        message="Checking the current job state before applying an update."
+        title="Loading Status"
+        message="Checking the latest visit status before you save a change."
         loading
       />
     );
@@ -226,9 +218,9 @@ export default function UpdateStatusScreen({
   if (!job) {
     return (
       <FullscreenState
-        title="Job unavailable"
-        message={error ?? "The selected job could not be loaded."}
-        actionLabel="Back"
+        title="Status Not Available"
+        message={error ?? "This status screen could not be opened. Go back and try again."}
+        actionLabel="Go Back"
         onAction={onBack}
       />
     );
@@ -244,7 +236,7 @@ export default function UpdateStatusScreen({
     >
       <ScreenHeader
         title="Update Status"
-        subtitle="Move the visit through the technician workflow without changing the existing app structure."
+        subtitle="Choose the next step for this visit and save it to the job."
         backLabel="Back to Job"
         backDisabled={submitting}
         onBack={onBack}
@@ -253,7 +245,7 @@ export default function UpdateStatusScreen({
       <JobContextCard job={job} />
 
       <Card>
-        <Text style={styles.sectionTitle}>Current status</Text>
+        <Text style={styles.sectionTitle}>Current Status</Text>
         <View style={styles.currentStatusRow}>
           <StatusBadge value={currentStatus} />
           <Text style={styles.helperText}>{operatorStatusMeta[currentStatus].helper}</Text>
@@ -261,14 +253,14 @@ export default function UpdateStatusScreen({
       </Card>
 
       <Card>
-        <Text style={styles.sectionTitle}>Next status</Text>
+        <Text style={styles.sectionTitle}>Next Status</Text>
         <Text style={styles.helperText}>
-          Only valid transitions from the current state are shown here.
+          Choose what happened next on this visit.
         </Text>
 
         {availableOptions.length === 0 ? (
           <Text style={styles.helperText}>
-            No further status updates are available for this job.
+            No more status changes are available here for this job.
           </Text>
         ) : (
           <View style={styles.optionList}>
@@ -281,6 +273,7 @@ export default function UpdateStatusScreen({
                   key={status}
                   onPress={() => handleSelectStatus(status)}
                   disabled={submitting}
+                  testID={`update-status.status-option.${status}`}
                   style={[
                     styles.optionCard,
                     selected && styles.optionCardSelected,
@@ -306,10 +299,11 @@ export default function UpdateStatusScreen({
       </Card>
 
       <Card>
-        <Text style={styles.sectionTitle}>Comment</Text>
+        <Text style={styles.sectionTitle}>Update Note</Text>
         <Input
-          label="Comment"
+          label="Note"
           value={comment}
+          testID="update-status.note-input"
           onChangeText={(value) => {
             setComment(value);
             if (fieldErrors.comment) {
@@ -321,18 +315,18 @@ export default function UpdateStatusScreen({
           autoCapitalize="sentences"
           placeholder={
             selectedStatus === "failed" || selectedStatus === "rescheduled"
-              ? "Explain the reason for this status update."
+              ? "Explain why you are making this change."
               : selectedStatus === "completed"
-                ? "Describe the work completed or the final handoff."
-                : "Add an optional technician comment."
+                ? "Summarize the work done or final handoff."
+                : "Add an optional note."
           }
           error={fieldErrors.comment}
           helperText={
             selectedStatus === "completed"
-              ? `${proofSummary} Completion requires a note or proof.`
+              ? `${proofSummary} Add a note or proof before you finish this job.`
               : selectedStatus === "failed" || selectedStatus === "rescheduled"
-                ? "A reason is required for this selection."
-                : "Optional note that will be saved with the job."
+                ? "Add the reason for this change."
+                : "Optional note saved with this job."
           }
         />
       </Card>
@@ -340,8 +334,9 @@ export default function UpdateStatusScreen({
       {selectedStatus === "rescheduled" ? (
         <Card>
           <Input
-            label="Next scheduled date"
+            label="New visit date"
             value={scheduledDate}
+            testID="update-status.date-input"
             onChangeText={(value) => {
               setScheduledDate(value);
               if (fieldErrors.scheduledDate) {
@@ -351,23 +346,22 @@ export default function UpdateStatusScreen({
             editable={!submitting}
             placeholder="YYYY-MM-DD"
             error={fieldErrors.scheduledDate}
-            helperText="Use the new visit date in YYYY-MM-DD format."
+            helperText="Enter the next visit date as YYYY-MM-DD."
           />
         </Card>
       ) : null}
 
       {submitError ? (
-        <Card>
-          <Text style={styles.errorText}>{submitError}</Text>
-        </Card>
+        <NoticeCard tone="danger" title="Couldn't Save Status" message={submitError} />
       ) : null}
 
       <Button
-        label={selectedMeta?.actionLabel ?? "Apply Status Update"}
+        label={selectedMeta?.actionLabel ?? "Save Status"}
         onPress={() => void handleSubmit()}
         loading={submitting}
         disabled={availableOptions.length === 0 || !selectedStatus}
         variant={selectedStatus === "failed" ? "danger" : "primary"}
+        testID="update-status.submit-button"
       />
     </ScrollView>
   );

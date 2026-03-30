@@ -9,7 +9,9 @@ import {
 import LoginScreen from "../features/auth/LoginScreen";
 import ComplaintDetailScreen from "../features/complaints/ComplaintDetailScreen";
 import ComplaintsScreen from "../features/complaints/ComplaintsScreen";
+import DeviceCheckScreen from "../features/device-check/DeviceCheckScreen";
 import HomeScreen from "../features/home/HomeScreen";
+import DiagnosticsScreen from "../features/diagnostics/DiagnosticsScreen";
 import AddNotesScreen from "../features/jobs/AddNotesScreen";
 import JobDetailScreen from "../features/jobs/JobDetailScreen";
 import JobOutcomeScreen from "../features/jobs/JobOutcomeScreen";
@@ -27,6 +29,10 @@ import { useSync } from "../hooks/useSync";
 import { AuthProvider } from "../providers/AuthProvider";
 import { SyncProvider } from "../providers/SyncProvider";
 import { getApiTargetNotice } from "../services/api";
+import {
+  dismissDeviceCheck,
+  loadDeviceCheckDismissed,
+} from "../services/device-check";
 import { type AppRoute, createRoute, getActiveTabForRoute, type MainTabRouteName } from "./navigation";
 import type { JobClosureType, JobProof } from "../types/domain";
 import type { JobOutcomeFormValues } from "../features/jobs/job-outcome";
@@ -44,6 +50,12 @@ type NavigationNoticeState = {
   message: string;
 };
 
+type SyncStatusNoticeState = {
+  tone: "info" | "warning";
+  title: string;
+  message: string;
+};
+
 export default function AppRoot() {
   return (
     <AuthProvider>
@@ -56,8 +68,10 @@ export default function AppRoot() {
 
 function MobileApp() {
   const { isLoading, user, request, sessionNotice } = useAuth();
-  const { pendingActions } = useSync();
+  const { isSyncing, lastSyncError, pendingActions, pendingCount, replayPendingActions } = useSync();
   const [stack, setStack] = useState<AppRoute[]>([createRoute("home")]);
+  const [deviceCheckLoading, setDeviceCheckLoading] = useState(true);
+  const [deviceCheckDismissed, setDeviceCheckDismissed] = useState(false);
   const [jobProofs, setJobProofs] = useState<Record<string, JobProof[]>>({});
   const [jobOutcomeDrafts, setJobOutcomeDrafts] = useState<Record<string, JobOutcomeFormValues>>(
     {},
@@ -98,6 +112,27 @@ function MobileApp() {
   );
 
   useEffect(() => {
+    let active = true;
+
+    async function loadPreflightState() {
+      const dismissed = await loadDeviceCheckDismissed();
+
+      if (!active) {
+        return;
+      }
+
+      setDeviceCheckDismissed(dismissed);
+      setDeviceCheckLoading(false);
+    }
+
+    void loadPreflightState();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (navigationNoticeTimerRef.current) {
         clearTimeout(navigationNoticeTimerRef.current);
@@ -119,6 +154,39 @@ function MobileApp() {
 
   const currentRoute = stack[stack.length - 1] ?? createRoute("home");
   const activeTab = useMemo(() => getActiveTabForRoute(currentRoute), [currentRoute]);
+  const syncStatusNotice = useMemo<SyncStatusNoticeState | null>(() => {
+    if (pendingCount === 0) {
+      return null;
+    }
+
+    if (isSyncing) {
+      return {
+        tone: "info",
+        title: "Syncing Saved Updates",
+        message: `${pendingCount} saved update${pendingCount === 1 ? "" : "s"} ${
+          pendingCount === 1 ? "is" : "are"
+        } sending now. Keep the app open until ${pendingCount === 1 ? "it finishes." : "they finish."}`,
+      };
+    }
+
+    if (lastSyncError) {
+      return {
+        tone: "warning",
+        title: "Saved Updates Still Waiting",
+        message: `${pendingCount} saved update${pendingCount === 1 ? "" : "s"} ${
+          pendingCount === 1 ? "is" : "are"
+        } still saved on this phone. ${lastSyncError}`,
+      };
+    }
+
+    return {
+      tone: "info",
+      title: "Saved Updates Waiting",
+      message: `${pendingCount} saved update${pendingCount === 1 ? "" : "s"} ${
+        pendingCount === 1 ? "is" : "are"
+      } saved on this phone and will retry automatically.`,
+    };
+  }, [isSyncing, lastSyncError, pendingCount]);
 
   useEffect(() => {
     dismissNavigationNotice();
@@ -304,6 +372,10 @@ function MobileApp() {
     handleBackRequest("button");
   }, [handleBackRequest]);
 
+  const handleRetrySync = useCallback(() => {
+    void replayPendingActions();
+  }, [replayPendingActions]);
+
   const handleScreenBackGuardChange = useCallback(
     (blocked: boolean, reason?: string) => {
       setBackGuardReason(
@@ -384,13 +456,31 @@ function MobileApp() {
     });
   }
 
-  if (isLoading) {
+  const handleDismissDeviceCheck = useCallback(() => {
+    void dismissDeviceCheck().finally(() => {
+      setDeviceCheckDismissed(true);
+    });
+  }, []);
+
+  if (isLoading || deviceCheckLoading) {
     return (
       <FullscreenState
         title={APP_DISPLAY_NAME}
-        message="Restoring the saved field session before loading assigned work."
+        message="Checking your saved sign-in before loading your work."
         loading
       />
+    );
+  }
+
+  if (!deviceCheckDismissed) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.appShell}>
+          <View style={styles.content}>
+            <DeviceCheckScreen onContinue={handleDismissDeviceCheck} />
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -418,7 +508,20 @@ function MobileApp() {
         }
       />
     ) : currentRoute.name === "profile" ? (
-      <ProfileScreen />
+      <ProfileScreen
+        onOpenDeviceCheck={() => pushRoute(createRoute("deviceCheck"))}
+        onOpenDiagnostics={() => pushRoute(createRoute("diagnostics"))}
+      />
+    ) : currentRoute.name === "deviceCheck" ? (
+      <DeviceCheckScreen
+        onBack={handleBackButtonPress}
+        onContinue={handleBackButtonPress}
+      />
+    ) : currentRoute.name === "diagnostics" ? (
+      <DiagnosticsScreen
+        currentRouteName={currentRoute.name}
+        onBack={handleBackButtonPress}
+      />
     ) : currentRoute.name === "jobDetail" ? (
       <JobDetailScreen
         jobId={currentRoute.params.jobId}
@@ -484,6 +587,10 @@ function MobileApp() {
           pushRoute(createRoute("jobUploadProof", { jobId }))
         }
         onBackGuardChange={handleScreenBackGuardChange}
+        onBackInterceptChange={handleScreenBackInterceptChange}
+        onDiscardDraft={() =>
+          clearOutcomeDraft(currentRoute.params.jobId, currentRoute.params.outcome)
+        }
         onDraftChange={(draft) =>
           saveOutcomeDraft(currentRoute.params.jobId, currentRoute.params.outcome, draft)
         }
@@ -505,20 +612,29 @@ function MobileApp() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.appShell}>
-        {(apiTargetNotice || sessionNotice || navigationNotice) ? (
+        {(apiTargetNotice || sessionNotice || syncStatusNotice || navigationNotice) ? (
           <View style={styles.noticeStack}>
             {apiTargetNotice ? (
               <NoticeCard
                 tone="warning"
-                title="Device Validation Guardrail"
+                title="Build Check"
                 message={apiTargetNotice}
               />
             ) : null}
             {sessionNotice ? (
               <NoticeCard
                 tone={sessionNotice.tone}
-                title="Session Status"
+                title="Sign-In Status"
                 message={sessionNotice.message}
+              />
+            ) : null}
+            {syncStatusNotice ? (
+              <NoticeCard
+                tone={syncStatusNotice.tone}
+                title={syncStatusNotice.title}
+                message={syncStatusNotice.message}
+                actionLabel={!isSyncing ? "Retry Sync" : undefined}
+                onAction={!isSyncing ? handleRetrySync : undefined}
               />
             ) : null}
             {navigationNotice ? (

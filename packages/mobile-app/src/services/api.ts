@@ -25,10 +25,13 @@ export function getApiDiagnostics() {
   return {
     mode: runtimeEnvDiagnostics.mode,
     baseUrl: runtimeEnvDiagnostics.baseUrl,
+    configuredApiUrl: runtimeEnvDiagnostics.apiUrl,
     mobileApiBaseUrl: runtimeEnvDiagnostics.mobileApiBaseUrl,
+    apiUrlConfigured: Boolean(runtimeEnvDiagnostics.apiUrl),
     apiUrlRequired: runtimeEnvDiagnostics.apiUrlRequired,
     buildIntent: runtimeEnvDiagnostics.buildIntent,
     buildProfile: runtimeEnvDiagnostics.buildProfile,
+    isLocalhostLikeApiUrl: runtimeEnvDiagnostics.isLocalhostLikeApiUrl,
   };
 }
 
@@ -60,6 +63,12 @@ export type AuthenticatedRequest = <T>(
   path: string,
   options?: AuthenticatedApiRequestOptions,
 ) => Promise<T>;
+
+export type ApiReachabilityCheck = {
+  status: "reachable" | "unreachable" | "not_configured";
+  reachable: boolean;
+  message: string;
+};
 
 function isFormDataBody(value: unknown): value is FormData {
   return typeof FormData !== "undefined" && value instanceof FormData;
@@ -105,6 +114,55 @@ function wait(delayMs: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+export async function checkApiReachability(timeoutMs = 4000): Promise<ApiReachabilityCheck> {
+  const diagnostics = getApiDiagnostics();
+  const targetNotice = getApiTargetNotice();
+
+  if (!diagnostics.baseUrl) {
+    return {
+      status: "not_configured",
+      reachable: false,
+      message:
+        getApiConfigError() ??
+        targetNotice ??
+        "This build is missing a working server address.",
+    };
+  }
+
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => {
+        controller.abort();
+      }, timeoutMs)
+    : null;
+
+  try {
+    await fetch(diagnostics.baseUrl, {
+      method: "HEAD",
+      signal: controller?.signal,
+    });
+
+    return {
+      status: "reachable",
+      reachable: true,
+      message: "The server can be reached from this phone.",
+    };
+  } catch (error) {
+    return {
+      status: "unreachable",
+      reachable: false,
+      message:
+        targetNotice ??
+        getErrorMessage(error) ??
+        "Can't reach the server right now. Check mobile data or Wi-Fi and try again.",
+    };
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 async function runApiRequest<T>(path: string, options: ApiRequestOptions = {}) {
@@ -244,11 +302,11 @@ export function getErrorMessage(error: unknown) {
     }
 
     if (error.name === "AbortError" || message.includes("timed out") || message.includes("abort")) {
-      return "The request timed out before the server responded. Check the device connection and try again.";
+      return "This is taking longer than expected. Check your connection and try again.";
     }
 
     if (isRetryableError(error)) {
-      return "Unable to reach the field backend right now. Check Wi-Fi or mobile data and confirm the API URL is reachable from this device.";
+      return "Can't reach the server right now. Check mobile data or Wi-Fi and try again.";
     }
 
     return error.message;
