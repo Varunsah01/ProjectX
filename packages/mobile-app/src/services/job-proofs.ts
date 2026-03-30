@@ -15,6 +15,8 @@ import {
   removePendingProofUpload,
 } from "./offline-sync";
 import { createLocalJobProof } from "./jobs";
+import { cleanupManagedProofFile, ensureProofFileAvailable } from "./proof-files";
+import { logTestEvent, logTestWarning } from "./test-logger";
 
 type ReactNativeUploadFile = {
   uri: string;
@@ -40,7 +42,8 @@ function mapJobProof(dto: JobProofDto): JobProof {
   };
 }
 
-function buildUploadFormData(draft: ProofDraft) {
+async function buildUploadFormData(draft: ProofDraft) {
+  await ensureProofFileAvailable(draft.uri);
   const formData = new FormData();
   formData.append("type", draft.type);
   formData.append("label", draft.label);
@@ -102,18 +105,38 @@ export async function uploadJobProof(
   draft: ProofDraft,
 ) {
   try {
+    logTestEvent("proof", "upload-start", {
+      jobId,
+      proofId: draft.id,
+      source: draft.source,
+      type: draft.type,
+    });
     const response = await request<DetailResponse<JobProofDto>>(`/jobs/${jobId}/proofs`, {
       method: "POST",
-      body: buildUploadFormData(draft),
+      body: await buildUploadFormData(draft),
       retry: 1,
+      timeoutMs: 20000,
     });
 
-    return mapJobProof(response.data);
+    const savedProof = mapJobProof(response.data);
+    logTestEvent("proof", "upload-success", {
+      jobId,
+      proofId: draft.id,
+    });
+    return {
+      ...savedProof,
+      uri: savedProof.uri ?? draft.uri,
+    };
   } catch (error) {
     if (!shouldQueueOfflineMutation(error)) {
       throw error;
     }
 
+    logTestWarning("proof", "upload-queued", {
+      jobId,
+      proofId: draft.id,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
     await queueJobProofUpload({
       jobId,
       proofId: draft.id,
@@ -149,6 +172,7 @@ export async function deleteJobProof(
   request: AuthenticatedRequest,
   jobId: string,
   proofId: string,
+  proofUri?: string,
 ) {
   const pendingActions = await loadPendingActions();
   const hasPendingProof = pendingActions.some(
@@ -160,11 +184,14 @@ export async function deleteJobProof(
 
   if (hasPendingProof) {
     await removePendingProofUpload(jobId, proofId);
+    await cleanupManagedProofFile(proofUri);
     return;
   }
 
   await request<MutationResponse>(`/jobs/${jobId}/proofs/${proofId}`, {
     method: "DELETE",
     retry: 1,
+    timeoutMs: 12000,
   });
+  await cleanupManagedProofFile(proofUri);
 }

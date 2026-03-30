@@ -29,6 +29,7 @@ import {
   sendRescheduleJob,
 } from "../services/jobs";
 import { useAuth } from "../hooks/useAuth";
+import { logTestError, logTestEvent, logTestWarning } from "../services/test-logger";
 
 type SyncContextValue = {
   pendingActions: PendingAction[];
@@ -128,17 +129,34 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     replayInFlightRef.current = true;
     setIsSyncing(true);
     setLastSyncError(null);
+    logTestEvent("sync", "replay-start", {
+      pendingCount: actions.length,
+    });
 
     try {
       for (const action of actions) {
         try {
+          logTestEvent("sync", "replay-action-start", {
+            actionId: action.id,
+            actionType: action.type,
+            jobId: action.jobId,
+          });
           await replayPendingAction(request, action);
           await removePendingAction(action.id);
+          logTestEvent("sync", "replay-action-success", {
+            actionId: action.id,
+            actionType: action.type,
+          });
         } catch (error) {
           if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
             setLastSyncError(
               "Session needs attention. Pending field updates stay on device and will retry after sign-in is restored.",
             );
+            logTestWarning("sync", "replay-auth-blocked", {
+              actionId: action.id,
+              actionType: action.type,
+              status: error.status,
+            });
             break;
           }
 
@@ -146,16 +164,27 @@ export function SyncProvider({ children }: { children: ReactNode }) {
             setLastSyncError(
               "Pending field updates are saved on device and will sync when the connection is back.",
             );
+            logTestWarning("sync", "replay-offline-blocked", {
+              actionId: action.id,
+              actionType: action.type,
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+            });
             break;
           }
 
           setLastSyncError(getErrorMessage(error));
+          logTestError("sync", "replay-failed", {
+            actionId: action.id,
+            actionType: action.type,
+            errorMessage: error instanceof Error ? error.message : "Unknown error",
+          });
           break;
         }
       }
     } finally {
       replayInFlightRef.current = false;
       setIsSyncing(false);
+      logTestEvent("sync", "replay-finished");
     }
   }, [request, user]);
 

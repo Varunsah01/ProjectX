@@ -55,6 +55,7 @@ export default function JobOutcomeScreen({
   proofs,
   initialDraft,
   onBack,
+  onBackGuardChange,
   onDraftChange,
   onOpenUploadProof,
   onDone,
@@ -64,6 +65,7 @@ export default function JobOutcomeScreen({
   proofs: JobProof[];
   initialDraft?: JobOutcomeFormValues;
   onBack: () => void;
+  onBackGuardChange?: (blocked: boolean, reason?: string) => void;
   onDraftChange: (draft: JobOutcomeFormValues) => void;
   onOpenUploadProof: (jobId: string) => void;
   onDone: () => void;
@@ -77,6 +79,17 @@ export default function JobOutcomeScreen({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initializedFormKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    onBackGuardChange?.(
+      submitting,
+      submitting ? "Wait for the job outcome submission to finish before leaving this screen." : undefined,
+    );
+
+    return () => {
+      onBackGuardChange?.(false);
+    };
+  }, [onBackGuardChange, submitting]);
 
   useEffect(() => {
     const nextFormKey = job ? `${job.id}:${outcome}` : null;

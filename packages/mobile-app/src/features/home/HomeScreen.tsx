@@ -1,4 +1,5 @@
 import JobBoard from "../jobs/components/JobBoard";
+import { APP_OPERATOR_FALLBACK_NAME } from "../../constants/branding";
 import { useAuth } from "../../hooks/useAuth";
 import { useJobsFeed } from "../jobs/useJobsFeed";
 
@@ -17,7 +18,7 @@ export default function HomeScreen({
   return (
     <JobBoard
       screenLabel="Home"
-      operatorName={user?.name ?? "Field Operator"}
+      operatorName={user?.name ?? APP_OPERATOR_FALLBACK_NAME}
       subtitle={`Territory: ${user?.territory || "Unassigned"} · Pull to refresh for the latest assigned jobs.`}
       jobs={jobs}
       loading={loading}

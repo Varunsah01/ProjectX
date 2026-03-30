@@ -1,44 +1,45 @@
+import { useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useEffect, useMemo, useState } from "react";
-import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import NoticeCard from "../../components/ui/NoticeCard";
 import StatusBadge from "../../components/ui/StatusBadge";
+import ScreenHeader from "../../components/shell/ScreenHeader";
+import FullscreenState from "../../components/states/FullscreenState";
 import { colors, spacing } from "../../constants/theme";
-import { useAuth } from "../../hooks/useAuth";
-import type { ComplaintSummary, ListResponse } from "../../types/api";
+import { useComplaintsFeed } from "../../hooks/useComplaintsFeed";
 import { formatDateTime } from "../../utils/format";
-import { getErrorMessage } from "../../services/api";
 
 type FilterKey = "all" | "open" | "resolved";
+
+function getEmptyStateCopy(filter: FilterKey) {
+  if (filter === "open") {
+    return {
+      title: "No Open Complaints",
+      message: "There are no open or active complaints in the current list.",
+    };
+  }
+
+  if (filter === "resolved") {
+    return {
+      title: "No Resolved Complaints",
+      message: "Resolved or closed complaints will appear here after they are completed.",
+    };
+  }
+
+  return {
+    title: "No Assigned Complaints",
+    message: "Pull to refresh when the connection improves to check for new complaint assignments.",
+  };
+}
 
 export default function ComplaintsScreen({
   onOpenComplaint,
 }: {
   onOpenComplaint: (complaintId: string) => void;
 }) {
-  const { request } = useAuth();
-  const [complaints, setComplaints] = useState<ComplaintSummary[]>([]);
+  const { complaints, loading, error, reload, showingCachedData } = useComplaintsFeed();
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadComplaints = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await request<ListResponse<ComplaintSummary>>("/complaints");
-      setComplaints(response.data);
-    } catch (complaintsError) {
-      setError(getErrorMessage(complaintsError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadComplaints();
-  }, [request]);
 
   const filteredComplaints = useMemo(() => {
     if (filter === "open") {
@@ -56,18 +57,48 @@ export default function ComplaintsScreen({
     return complaints;
   }, [complaints, filter]);
 
+  if (loading && complaints.length === 0) {
+    return (
+      <FullscreenState
+        title="Loading complaints"
+        message="Checking the latest assigned complaints and SLA-driven field issues."
+        loading
+      />
+    );
+  }
+
+  const emptyState = getEmptyStateCopy(filter);
+
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={loading} onRefresh={() => void loadComplaints()} />
-      }
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void reload()} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Assigned Complaints</Text>
-        <Text style={styles.subtitle}>Track SLA-driven service issues from the field.</Text>
-      </View>
+      <ScreenHeader
+        title="Assigned Complaints"
+        subtitle="Track SLA-driven service issues from the field without leaving the mobile workflow."
+      />
+
+      {showingCachedData && error ? (
+        <NoticeCard
+          tone="warning"
+          title="Showing Saved Complaint Data"
+          message={error}
+          actionLabel="Retry"
+          onAction={() => void reload()}
+        />
+      ) : null}
+
+      {!showingCachedData && error ? (
+        <NoticeCard
+          tone="danger"
+          title="Unable to Load Complaints"
+          message={error}
+          actionLabel="Retry"
+          onAction={() => void reload()}
+        />
+      ) : null}
 
       <View style={styles.filters}>
         {(["all", "open", "resolved"] as const).map((value) => (
@@ -76,18 +107,11 @@ export default function ComplaintsScreen({
             label={value === "all" ? "All" : value === "open" ? "Open" : "Resolved"}
             variant={filter === value ? "primary" : "ghost"}
             onPress={() => setFilter(value)}
+            disabled={loading}
             style={styles.filterButton}
           />
         ))}
       </View>
-
-      {error ? (
-        <Card>
-          <Text style={styles.errorTitle}>Unable to load complaints</Text>
-          <Text style={styles.errorBody}>{error}</Text>
-          <Button label="Retry" onPress={() => void loadComplaints()} />
-        </Card>
-      ) : null}
 
       {filteredComplaints.map((complaint) => (
         <Card key={complaint.id}>
@@ -109,22 +133,23 @@ export default function ComplaintsScreen({
           <Text style={styles.description} numberOfLines={3}>
             {complaint.description}
           </Text>
-          <Text style={styles.meta}>Logged: {formatDateTime(complaint.createdAt)}</Text>
+          <Text style={styles.meta}>
+            Logged: {formatDateTime(complaint.createdAt)} · SLA: {formatDateTime(complaint.slaDeadline)}
+          </Text>
 
           <Button
             label="Open Complaint"
             variant="secondary"
             onPress={() => onOpenComplaint(complaint.id)}
+            disabled={loading}
           />
         </Card>
       ))}
 
       {!loading && filteredComplaints.length === 0 ? (
         <Card>
-          <Text style={styles.emptyTitle}>No complaints in this view</Text>
-          <Text style={styles.emptyBody}>
-            Pull down to refresh or switch filters to inspect older items.
-          </Text>
+          <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+          <Text style={styles.emptyBody}>{emptyState.message}</Text>
         </Card>
       ) : null}
     </ScrollView>
@@ -139,18 +164,6 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
-  },
-  header: {
-    gap: 4,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
   },
   filters: {
     flexDirection: "row",
@@ -175,6 +188,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 13,
+    lineHeight: 19,
     color: colors.textMuted,
   },
   badges: {
@@ -192,15 +206,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.text,
   },
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.danger,
-  },
-  errorBody: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
   emptyTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -208,6 +213,7 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     fontSize: 14,
+    lineHeight: 21,
     color: colors.textMuted,
   },
 });

@@ -74,11 +74,14 @@ This document covers the current state of the mobile field operator app only.
   - [x] local placeholder icon/splash assets added so builds do not point at missing files
 - [x] Obvious mobile debug/test copy was removed from the sign-in flow.
 - [x] Non-dev builds now require `EXPO_PUBLIC_API_URL` instead of silently falling back to localhost behavior.
+- [x] Shared mobile env validation now fails non-dev Expo/EAS config resolution when `EXPO_PUBLIC_API_URL` is missing, invalid, or localhost-like.
+- [x] Mobile env setup is documented in `packages/mobile-app/ENVIRONMENT.md` with `.env.local` and EAS build-time guidance.
+- [x] Pilot sign-in is now centered on employee ID or phone plus password, with OTP kept out of the primary tester flow.
 
 ## Incomplete Or Partially Done
 
 - [ ] OTP is still not a production-ready verification flow.
-  The app UI supports it, but it still depends on a stubbed backend path and should not be treated as final auth.
+  The pilot app no longer exposes OTP in the primary sign-in UI, and the backend rejects OTP login attempts with a temporary-unavailable message until real verification is implemented.
 - [ ] App branding assets are build-safe placeholders, not final branded release assets.
 - [ ] Scheduled time / slot display is still partly based on fallback service-window data where backend scheduling detail is limited.
 - [ ] Proof upload works in the current setup, but long-term storage strategy is not finalized from the app release perspective.

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -37,11 +38,15 @@ export default function UpdateStatusScreen({
   jobId,
   proofs,
   onBack,
+  onBackGuardChange,
+  onBackInterceptChange,
   onDone,
 }: {
   jobId: string;
   proofs: JobProof[];
   onBack: () => void;
+  onBackGuardChange?: (blocked: boolean, reason?: string) => void;
+  onBackInterceptChange?: (handler: (() => boolean) | null) => void;
   onDone: () => void;
 }) {
   const { request } = useAuth();
@@ -53,6 +58,17 @@ export default function UpdateStatusScreen({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const initializedJobIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    onBackGuardChange?.(
+      submitting,
+      submitting ? "Wait for the status update to finish before leaving this screen." : undefined,
+    );
+
+    return () => {
+      onBackGuardChange?.(false);
+    };
+  }, [onBackGuardChange, submitting]);
 
   useEffect(() => {
     if (job && initializedJobIdRef.current !== job.id) {
@@ -71,6 +87,10 @@ export default function UpdateStatusScreen({
     proofs.length === 0
       ? "No proof reference is attached yet."
       : `${proofs.length} proof reference${proofs.length === 1 ? "" : "s"} attached to this job.`;
+  const hasUnsavedChanges =
+    selectedStatus !== null ||
+    comment.trim().length > 0 ||
+    scheduledDate.trim() !== (job?.scheduledDate ?? "").trim();
 
   function updateErrors(nextErrors: Partial<JobStatusFormErrors>) {
     setFieldErrors((currentErrors) => ({
@@ -157,6 +177,41 @@ export default function UpdateStatusScreen({
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || submitting) {
+      onBackInterceptChange?.(null);
+      return () => {
+        onBackInterceptChange?.(null);
+      };
+    }
+
+    onBackInterceptChange?.(() => {
+      Alert.alert(
+        "Discard Status Update?",
+        "This status change has not been saved yet. Leave this screen and lose the current edits?",
+        [
+          {
+            text: "Stay",
+            style: "cancel",
+          },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              onBackInterceptChange?.(null);
+              onBack();
+            },
+          },
+        ],
+      );
+      return true;
+    });
+
+    return () => {
+      onBackInterceptChange?.(null);
+    };
+  }, [hasUnsavedChanges, onBack, onBackInterceptChange, submitting]);
 
   if (loading) {
     return (

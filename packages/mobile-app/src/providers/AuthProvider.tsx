@@ -9,13 +9,20 @@ import {
 } from "../services/api";
 import type { LoginRequest, LoginResponse, MeResponse } from "../types/api";
 import type { User } from "../types/domain";
+import { logTestError, logTestEvent, logTestWarning } from "../services/test-logger";
 
 const TOKEN_STORAGE_KEY = "project-x.mobile.session-token";
 const USER_STORAGE_KEY = "project-x.mobile.session-user";
 
+export type AuthSessionNotice = {
+  tone: "warning" | "danger" | "info";
+  message: string;
+};
+
 type AuthContextValue = {
   isLoading: boolean;
   user: User | null;
+  sessionNotice: AuthSessionNotice | null;
   signIn: (credentials: LoginRequest) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -28,21 +35,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<AuthSessionNotice | null>(null);
 
   const persistSession = useCallback(async (nextToken: string, nextUser: User) => {
     await Promise.all([
       SecureStore.setItemAsync(TOKEN_STORAGE_KEY, nextToken),
       SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(nextUser)),
     ]);
+    logTestEvent("auth", "session-persisted", {
+      userId: nextUser.id,
+      role: nextUser.role,
+    });
   }, []);
 
   const clearSession = useCallback(async () => {
     setToken(null);
     setUser(null);
+    setSessionNotice(null);
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
       SecureStore.deleteItemAsync(USER_STORAGE_KEY),
     ]);
+    logTestEvent("auth", "session-cleared");
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -57,24 +71,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         cachedUser = JSON.parse(storedUserValue) as User;
       } catch {
         cachedUser = null;
+        logTestWarning("auth", "stored-user-parse-failed");
       }
     }
 
     if (!storedToken) {
       setToken(null);
       setUser(null);
+      setSessionNotice(null);
+      logTestEvent("auth", "refresh-no-token");
       return;
     }
 
     try {
       const response = await apiRequest<MeResponse>("/auth/me", {
         token: storedToken,
+        timeoutMs: 12000,
       });
       setToken(storedToken);
       setUser(response.user);
+      setSessionNotice(null);
       await persistSession(storedToken, response.user);
+      logTestEvent("auth", "refresh-verified", {
+        userId: response.user.id,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
+        logTestWarning("auth", "refresh-unauthorized");
         await clearSession();
         return;
       }
@@ -82,10 +105,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cachedUser) {
         setToken(storedToken);
         setUser(cachedUser);
+        setSessionNotice({
+          tone: "warning",
+          message:
+            "Using the saved session from this device. Live session verification will retry when the backend is reachable.",
+        });
+        logTestWarning("auth", "refresh-fallback-cached-user", {
+          userId: cachedUser.id,
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+        });
         return;
       }
 
       setToken(storedToken);
+      setUser(null);
+      setSessionNotice({
+        tone: "danger",
+        message:
+          "A saved session was found but could not be restored. Check the API connection and sign in again.",
+      });
+      logTestError("auth", "refresh-no-user-fallback", {
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   }, [clearSession, persistSession, token]);
 
@@ -114,22 +155,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   const signIn = useCallback(async (credentials: LoginRequest) => {
+    logTestEvent("auth", "sign-in-start", {
+      identifierType: credentials.identifierType,
+      authMethod: credentials.authMethod,
+    });
     const response = await apiRequest<LoginResponse>("/auth/login", {
       method: "POST",
       body: credentials,
+      timeoutMs: 15000,
     });
 
     await persistSession(response.token, response.user);
     setToken(response.token);
     setUser(response.user);
+    setSessionNotice(null);
+    logTestEvent("auth", "sign-in-success", {
+      userId: response.user.id,
+      role: response.user.role,
+    });
   }, [persistSession]);
 
   const signOut = useCallback(async () => {
     try {
       if (token) {
+        logTestEvent("auth", "sign-out-start");
         await apiRequest("/auth/logout", {
           method: "POST",
           token,
+          timeoutMs: 10000,
         });
       }
     } catch {
@@ -155,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: options.headers,
           retry: options.retry,
           retryDelayMs: options.retryDelayMs,
+          timeoutMs: options.timeoutMs,
           token,
         });
       } catch (error) {
@@ -173,12 +227,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       isLoading,
       user,
+      sessionNotice,
       signIn,
       signOut,
       refreshSession,
       request,
     }),
-    [isLoading, user, signIn, signOut, refreshSession, request],
+    [isLoading, user, sessionNotice, signIn, signOut, refreshSession, request],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

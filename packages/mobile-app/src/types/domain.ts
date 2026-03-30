@@ -140,3 +140,77 @@ export interface JobClosure {
   proofs: JobProof[];
   scheduledDate?: string;
 }
+
+export interface ComplaintTimelineEntry {
+  id?: string;
+  date: string;
+  action: string;
+  by: string;
+  note?: string;
+}
+
+export interface ComplaintCustomer {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  email: string;
+}
+
+export interface ComplaintAsset {
+  id: string;
+  name: string;
+  model: string;
+  serialNumber: string;
+  category: string;
+  status: string;
+  location?: string;
+  notes?: string;
+}
+
+export interface ComplaintLinkedJob {
+  id: string;
+  jobNumber: string;
+  status: JobStatus;
+  scheduledDate: string;
+}
+
+export interface ComplaintSummary {
+  id: string;
+  ticketNumber: string;
+  customerId: string;
+  customerName: string;
+  assetId?: string;
+  assetName?: string;
+  subject: string;
+  description: string;
+  category: string;
+  priority: ComplaintPriority;
+  status: ComplaintStatus;
+  assignedTo?: string;
+  assignedTechnicianId?: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  slaDeadline: string;
+  timeline: ComplaintTimelineEntry[];
+}
+
+export interface ComplaintDetail {
+  id: string;
+  ticketNumber: string;
+  subject: string;
+  description: string;
+  category: string;
+  priority: ComplaintPriority;
+  status: ComplaintStatus;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  slaDeadline: string;
+  customer: ComplaintCustomer;
+  asset?: ComplaintAsset;
+  timeline: ComplaintTimelineEntry[];
+  linkedJobs: ComplaintLinkedJob[];
+}

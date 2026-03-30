@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticateTechnician, createMobileSession } from "@/lib/mobile/auth";
+import {
+  authenticateTechnician,
+  createMobileSession,
+  UnsupportedMobileAuthMethodError,
+} from "@/lib/mobile/auth";
 import { parseJsonBody } from "@/lib/security/api";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +23,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid technician credentials or verification code." },
+        { error: "Invalid operator credentials." },
         { status: 401 },
       );
     }
@@ -35,6 +39,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid login request." },
         { status: 400 },
+      );
+    }
+
+    if (error instanceof UnsupportedMobileAuthMethodError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
       );
     }
 

@@ -6,7 +6,6 @@ import { technicians } from "@/lib/mock-data";
 import { toDateString } from "@/lib/query-utils";
 
 const MOBILE_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
-const MOBILE_STUB_OTP_CODE = "123456";
 
 type TechnicianRecord = {
   id: string;
@@ -56,6 +55,15 @@ type MobileSessionResult = {
 
 type TechnicianIdentifierType = "phone" | "employee_id";
 type TechnicianAuthMethod = "password" | "otp";
+
+export class UnsupportedMobileAuthMethodError extends Error {
+  status: number;
+
+  constructor(message: string, status = 503) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const seededEmployeeIdToEmail = new Map(
   technicians.map((technician) => [technician.id.toUpperCase(), technician.email.toLowerCase()]),
@@ -207,13 +215,15 @@ export async function authenticateTechnician({
     return null;
   }
 
-  if (authMethod === "password") {
-    const passwordMatches = await compare(trimmedSecret, user.passwordHash);
+  if (authMethod !== "password") {
+    throw new UnsupportedMobileAuthMethodError(
+      "OTP sign-in is not enabled for the current pilot. Use your employee ID or phone number with password.",
+    );
+  }
 
-    if (!passwordMatches) {
-      return null;
-    }
-  } else if (trimmedSecret !== MOBILE_STUB_OTP_CODE) {
+  const passwordMatches = await compare(trimmedSecret, user.passwordHash);
+
+  if (!passwordMatches) {
     return null;
   }
 

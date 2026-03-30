@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,20 +12,23 @@ import {
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
+import NoticeCard from "../../components/ui/NoticeCard";
+import {
+  APP_DISPLAY_NAME,
+  APP_MONOGRAM,
+  APP_PILOT_LABEL,
+} from "../../constants/branding";
 import { colors, radius, spacing } from "../../constants/theme";
 import { useAuth } from "../../hooks/useAuth";
-import { getApiConfigError, getErrorMessage } from "../../services/api";
-import type { LoginAuthMethod, LoginIdentifierType } from "../../types/api";
+import { getApiConfigError, getApiTargetNotice, getErrorMessage } from "../../services/api";
+import type { LoginIdentifierType } from "../../types/api";
+import { logTestWarning } from "../../services/test-logger";
 
 const identifierOptions: Array<{ value: LoginIdentifierType; label: string }> = [
-  { value: "phone", label: "Phone Number" },
   { value: "employee_id", label: "Employee ID" },
+  { value: "phone", label: "Phone Number" },
 ];
-
-const authMethodOptions: Array<{ value: LoginAuthMethod; label: string }> = [
-  { value: "password", label: "Password" },
-  { value: "otp", label: "OTP Code" },
-];
+const LOGIN_EXIT_BACK_WINDOW_MS = 2000;
 
 function getIdentifierError(identifierType: LoginIdentifierType, identifier: string) {
   const trimmedIdentifier = identifier.trim();
@@ -52,55 +56,79 @@ function getIdentifierError(identifierType: LoginIdentifierType, identifier: str
   return null;
 }
 
-function getSecretError(authMethod: LoginAuthMethod, secret: string) {
+function getPasswordError(secret: string) {
   const trimmedSecret = secret.trim();
 
   if (!trimmedSecret) {
-    return authMethod === "password" ? "Password is required." : "OTP code is required.";
+    return "Password is required.";
   }
 
-  if (authMethod === "password" && trimmedSecret.length < 6) {
+  if (trimmedSecret.length < 6) {
     return "Password must be at least 6 characters.";
-  }
-
-  if (authMethod === "otp" && !/^\d{6}$/.test(trimmedSecret)) {
-    return "Enter the 6-digit OTP code.";
   }
 
   return null;
 }
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
-  const [identifierType, setIdentifierType] = useState<LoginIdentifierType>("phone");
-  const [authMethod, setAuthMethod] = useState<LoginAuthMethod>("password");
+  const { signIn, sessionNotice } = useAuth();
+  const [identifierType, setIdentifierType] = useState<LoginIdentifierType>("employee_id");
   const [identifier, setIdentifier] = useState<string>("");
   const [secret, setSecret] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backNotice, setBackNotice] = useState<string | null>(null);
   const apiConfigError = getApiConfigError();
+  const apiTargetNotice = getApiTargetNotice();
+  const lastBackPressAtRef = useRef(0);
+  const backNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const identifierError = getIdentifierError(identifierType, identifier);
-  const secretError = getSecretError(authMethod, secret);
+  const secretError = getPasswordError(secret);
   const canSubmit = !apiConfigError && !identifierError && !secretError;
 
   const identifierHelperText =
-    identifierType === "phone"
-      ? "Use the phone number linked to your field account."
-      : "Use the employee ID assigned to your operator account.";
+    identifierType === "employee_id"
+      ? "Recommended for the pilot rollout. Use the employee ID assigned to your operator account."
+      : "Use the phone number linked to the same operator account if needed.";
 
-  const secretHelperText =
-    authMethod === "password"
-      ? "Enter the password for your operator account."
-      : "Enter the 6-digit code issued for your account.";
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (submitting) {
+        return true;
+      }
 
-  const secondaryLabel = authMethod === "password" ? "Password" : "OTP Code";
+      const now = Date.now();
 
-  const secondaryPlaceholder =
-    authMethod === "password" ? "Enter password" : "Enter 6-digit code";
+      if (now - lastBackPressAtRef.current < LOGIN_EXIT_BACK_WINDOW_MS) {
+        return false;
+      }
 
-  const secondInputKeyboardType = authMethod === "password" ? "default" : "number-pad";
+      lastBackPressAtRef.current = now;
+      setBackNotice(
+        "Sign-in entries are not saved. Press back again within 2 seconds to close the app.",
+      );
+
+      if (backNoticeTimerRef.current) {
+        clearTimeout(backNoticeTimerRef.current);
+      }
+
+      backNoticeTimerRef.current = setTimeout(() => {
+        backNoticeTimerRef.current = null;
+        setBackNotice(null);
+      }, LOGIN_EXIT_BACK_WINDOW_MS);
+
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+      if (backNoticeTimerRef.current) {
+        clearTimeout(backNoticeTimerRef.current);
+      }
+    };
+  }, [submitting]);
 
   async function handleSignIn() {
     setShowValidation(true);
@@ -116,10 +144,15 @@ export default function LoginScreen() {
       await signIn({
         identifierType,
         identifier: identifier.trim(),
-        authMethod,
+        authMethod: "password",
         secret: secret.trim(),
       });
     } catch (signInError) {
+      logTestWarning("auth", "sign-in-screen-error", {
+        identifierType,
+        authMethod: "password",
+        errorMessage: signInError instanceof Error ? signInError.message : "Unknown error",
+      });
       setError(getErrorMessage(signInError));
     } finally {
       setSubmitting(false);
@@ -129,13 +162,6 @@ export default function LoginScreen() {
   function handleIdentifierTypeChange(nextType: LoginIdentifierType) {
     setIdentifierType(nextType);
     setIdentifier("");
-    setError(null);
-    setShowValidation(false);
-  }
-
-  function handleAuthMethodChange(nextMethod: LoginAuthMethod) {
-    setAuthMethod(nextMethod);
-    setSecret("");
     setError(null);
     setShowValidation(false);
   }
@@ -152,9 +178,14 @@ export default function LoginScreen() {
       >
         <View style={styles.hero}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>FO</Text>
+            <Text style={styles.logoText}>{APP_MONOGRAM}</Text>
           </View>
-          <Text style={styles.title}>Field Operator</Text>
+          <View style={styles.titleGroup}>
+            <Text style={styles.title}>{APP_DISPLAY_NAME}</Text>
+            <View style={styles.pilotBadge}>
+              <Text style={styles.pilotBadgeLabel}>{APP_PILOT_LABEL}</Text>
+            </View>
+          </View>
           <Text style={styles.subtitle}>
             Sign in to review assigned jobs, update status on site, and finish field work quickly on Android.
           </Text>
@@ -164,11 +195,37 @@ export default function LoginScreen() {
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Sign In</Text>
             <Text style={styles.cardSubtitle}>
-              Use your work phone or employee ID. Your session stays on this device until you sign out.
+              Pilot access uses employee ID or work phone with password. Your session stays on this device until you sign out.
             </Text>
           </View>
 
-          {apiConfigError ? <Text style={styles.error}>{apiConfigError}</Text> : null}
+          {apiConfigError ? (
+            <NoticeCard tone="danger" title="App Configuration" message={apiConfigError} />
+          ) : null}
+
+          {!apiConfigError && apiTargetNotice ? (
+            <NoticeCard
+              tone="warning"
+              title="Real Device Warning"
+              message={apiTargetNotice}
+            />
+          ) : null}
+
+          {sessionNotice ? (
+            <NoticeCard
+              tone={sessionNotice.tone}
+              title="Saved Session"
+              message={sessionNotice.message}
+            />
+          ) : null}
+
+          {backNotice ? <NoticeCard tone="info" title="Press Back Again to Exit" message={backNotice} /> : null}
+
+          <NoticeCard
+            tone="info"
+            title="Pilot Auth"
+            message="The pilot login path is password only. Employee ID plus password is the primary sign-in route. OTP remains disabled until backend verification is production-ready."
+          />
 
           <View style={styles.group}>
             <Text style={styles.groupLabel}>Sign in with</Text>
@@ -180,21 +237,6 @@ export default function LoginScreen() {
                   active={identifierType === option.value}
                   disabled={submitting}
                   onPress={() => handleIdentifierTypeChange(option.value)}
-                />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.group}>
-            <Text style={styles.groupLabel}>Verification mode</Text>
-            <View style={styles.optionRow}>
-              {authMethodOptions.map((option) => (
-                <OptionPill
-                  key={option.value}
-                  label={option.label}
-                  active={authMethod === option.value}
-                  disabled={submitting}
-                  onPress={() => handleAuthMethodChange(option.value)}
                 />
               ))}
             </View>
@@ -218,29 +260,28 @@ export default function LoginScreen() {
           />
 
           <Input
-            label={secondaryLabel}
+            label="Password"
             value={secret}
             onChangeText={(value) => {
               setSecret(value);
               setError(null);
             }}
-            secureTextEntry={authMethod === "password"}
-            placeholder={secondaryPlaceholder}
-            keyboardType={secondInputKeyboardType}
-            autoComplete={authMethod === "password" ? "password" : "one-time-code"}
-            textContentType={authMethod === "password" ? "password" : "oneTimeCode"}
-            maxLength={authMethod === "otp" ? 6 : undefined}
+            secureTextEntry
+            placeholder="Enter password"
+            keyboardType="default"
+            autoComplete="password"
+            textContentType="password"
             editable={!submitting}
             error={showValidation ? secretError ?? undefined : undefined}
-            helperText={secretHelperText}
+            helperText="Enter the password for your operator account."
             returnKeyType="done"
             onSubmitEditing={() => void handleSignIn()}
           />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <NoticeCard tone="danger" message={error} /> : null}
 
           <Button
-            label={authMethod === "password" ? "Sign In" : "Verify and Continue"}
+            label="Sign In"
             onPress={() => void handleSignIn()}
             loading={submitting}
             disabled={!canSubmit}
@@ -296,6 +337,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
+  titleGroup: {
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   logo: {
     width: 72,
     height: 72,
@@ -313,6 +358,19 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
     color: colors.text,
+  },
+  pilotBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+  },
+  pilotBadgeLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.brand,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   subtitle: {
     fontSize: 15,
@@ -377,10 +435,5 @@ const styles = StyleSheet.create({
   },
   optionPillTextActive: {
     color: colors.brand,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 14,
-    fontWeight: "600",
   },
 });

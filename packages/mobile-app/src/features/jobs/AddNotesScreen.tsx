@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,10 +33,14 @@ import {
 export default function AddNotesScreen({
   jobId,
   onBack,
+  onBackGuardChange,
+  onBackInterceptChange,
   onDone,
 }: {
   jobId: string;
   onBack: () => void;
+  onBackGuardChange?: (blocked: boolean, reason?: string) => void;
+  onBackInterceptChange?: (handler: (() => boolean) | null) => void;
   onDone: () => void;
 }) {
   const { request } = useAuth();
@@ -47,14 +52,30 @@ export default function AddNotesScreen({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const initializedJobIdRef = useRef<string | null>(null);
+  const initialFormSnapshotRef = useRef<string>(JSON.stringify(createEmptyServiceReportForm()));
+
+  useEffect(() => {
+    onBackGuardChange?.(
+      saving,
+      saving ? "Wait for the service report save to finish before leaving this screen." : undefined,
+    );
+
+    return () => {
+      onBackGuardChange?.(false);
+    };
+  }, [onBackGuardChange, saving]);
 
   useEffect(() => {
     if (job && initializedJobIdRef.current !== job.id) {
-      setForm(parseServiceReport(job.serviceReport));
+      const nextForm = parseServiceReport(job.serviceReport);
+      setForm(nextForm);
       setFieldErrors({});
+      initialFormSnapshotRef.current = JSON.stringify(nextForm);
       initializedJobIdRef.current = job.id;
     }
   }, [job]);
+
+  const hasUnsavedChanges = JSON.stringify(form) !== initialFormSnapshotRef.current;
 
   function updateForm(nextValues: Partial<ServiceReportFormValues>) {
     setForm((currentValues) => ({
@@ -99,6 +120,41 @@ export default function AddNotesScreen({
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || saving) {
+      onBackInterceptChange?.(null);
+      return () => {
+        onBackInterceptChange?.(null);
+      };
+    }
+
+    onBackInterceptChange?.(() => {
+      Alert.alert(
+        "Discard Service Report?",
+        "This service report has unsaved changes. Leave this screen and lose the current edits?",
+        [
+          {
+            text: "Stay",
+            style: "cancel",
+          },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              onBackInterceptChange?.(null);
+              onBack();
+            },
+          },
+        ],
+      );
+      return true;
+    });
+
+    return () => {
+      onBackInterceptChange?.(null);
+    };
+  }, [hasUnsavedChanges, onBack, onBackInterceptChange, saving]);
 
   if (loading) {
     return (

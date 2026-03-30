@@ -1,89 +1,200 @@
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
+import NoticeCard from "../../components/ui/NoticeCard";
 import StatusBadge from "../../components/ui/StatusBadge";
+import ScreenHeader from "../../components/shell/ScreenHeader";
+import FullscreenState from "../../components/states/FullscreenState";
 import { colors, spacing } from "../../constants/theme";
 import { useAuth } from "../../hooks/useAuth";
-import type { ComplaintDetail, ComplaintStatus, DetailResponse } from "../../types/api";
-import { formatDate, formatDateTime } from "../../utils/format";
+import { useComplaintDetail } from "../../hooks/useComplaintDetail";
 import { getErrorMessage } from "../../services/api";
+import {
+  fetchComplaintDetail,
+  updateComplaintStatus,
+} from "../../services/complaints";
+import {
+  saveComplaintDetailCache,
+} from "../../services/complaint-cache";
+import type { ComplaintStatus } from "../../types/api";
+import { formatDate, formatDateTime } from "../../utils/format";
+
+type ComplaintActionStatus = Extract<ComplaintStatus, "in_progress" | "on_hold" | "resolved">;
+
+function getComplaintActionConfig(status: ComplaintStatus) {
+  return {
+    canStartWork:
+      status === "assigned" ||
+      status === "open" ||
+      status === "reopened" ||
+      status === "on_hold",
+    canPutOnHold: status === "in_progress",
+    canResolve:
+      status === "assigned" ||
+      status === "in_progress" ||
+      status === "on_hold" ||
+      status === "reopened",
+  };
+}
 
 export default function ComplaintDetailScreen({
   complaintId,
   onBack,
+  onBackGuardChange,
+  onBackInterceptChange,
   onOpenJob,
 }: {
   complaintId: string;
   onBack: () => void;
+  onBackGuardChange?: (blocked: boolean, reason?: string) => void;
+  onBackInterceptChange?: (handler: (() => boolean) | null) => void;
   onOpenJob: (jobId: string) => void;
 }) {
   const { request } = useAuth();
-  const [complaint, setComplaint] = useState<ComplaintDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    complaint,
+    loading,
+    error,
+    reload,
+    setComplaint,
+    showingCachedData,
+  } = useComplaintDetail(complaintId);
   const [note, setNote] = useState("");
-
-  const loadComplaint = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await request<DetailResponse<ComplaintDetail>>(
-        `/complaints/${complaintId}`,
-      );
-      setComplaint(response.data);
-    } catch (complaintError) {
-      setError(getErrorMessage(complaintError));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [statusAction, setStatusAction] = useState<ComplaintActionStatus | null>(null);
+  const submitting = statusAction !== null;
+  const noteHasUnsavedChanges = note.trim().length > 0;
 
   useEffect(() => {
-    void loadComplaint();
-  }, [complaintId, request]);
+    onBackGuardChange?.(
+      submitting,
+      submitting ? "Wait for the complaint status update to finish before leaving this screen." : undefined,
+    );
 
-  const updateStatus = async (
-    status: Extract<ComplaintStatus, "in_progress" | "on_hold" | "resolved">,
-  ) => {
-    setSubmitting(true);
-    setError(null);
+    return () => {
+      onBackGuardChange?.(false);
+    };
+  }, [onBackGuardChange, submitting]);
+
+  useEffect(() => {
+    if (!noteHasUnsavedChanges || submitting) {
+      onBackInterceptChange?.(null);
+      return () => {
+        onBackInterceptChange?.(null);
+      };
+    }
+
+    onBackInterceptChange?.(() => {
+      Alert.alert(
+        "Discard Complaint Note?",
+        "This complaint note has not been submitted yet. Leave this screen and lose the current note?",
+        [
+          {
+            text: "Stay",
+            style: "cancel",
+          },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => {
+              onBackInterceptChange?.(null);
+              onBack();
+            },
+          },
+        ],
+      );
+      return true;
+    });
+
+    return () => {
+      onBackInterceptChange?.(null);
+    };
+  }, [noteHasUnsavedChanges, onBack, onBackInterceptChange, submitting]);
+
+  const actionConfig = useMemo(
+    () => (complaint ? getComplaintActionConfig(complaint.status) : null),
+    [complaint],
+  );
+
+  async function handleOpenJob(jobId: string) {
+    if (!noteHasUnsavedChanges) {
+      onOpenJob(jobId);
+      return;
+    }
+
+    Alert.alert(
+      "Discard Complaint Note?",
+      "Opening the linked job will discard the unsaved complaint note on this screen.",
+      [
+        {
+          text: "Stay",
+          style: "cancel",
+        },
+        {
+          text: "Open Job",
+          style: "destructive",
+          onPress: () => onOpenJob(jobId),
+        },
+      ],
+    );
+  }
+
+  async function handleUpdateStatus(status: ComplaintActionStatus) {
+    setStatusAction(status);
+    setSubmitError(null);
 
     try {
-      await request(`/complaints/${complaintId}/status`, {
-        method: "POST",
-        body: {
-          status,
-          note,
-        },
+      const updatedComplaint = await updateComplaintStatus(request, {
+        complaintId,
+        status,
+        note,
       });
 
       setNote("");
-      await loadComplaint();
-    } catch (statusError) {
-      setError(getErrorMessage(statusError));
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  if (loading) {
+      if (updatedComplaint) {
+        setComplaint(updatedComplaint);
+        await saveComplaintDetailCache(updatedComplaint);
+        return;
+      }
+
+      const refreshedComplaint = await fetchComplaintDetail(request, complaintId);
+      setComplaint(refreshedComplaint);
+      await saveComplaintDetailCache(refreshedComplaint);
+    } catch (statusError) {
+      setSubmitError(getErrorMessage(statusError));
+    } finally {
+      setStatusAction(null);
+    }
+  }
+
+  if (loading && !complaint) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.loadingText}>Loading complaint...</Text>
-      </View>
+      <FullscreenState
+        title="Loading complaint"
+        message="Fetching the latest complaint detail and service timeline."
+        loading
+      />
     );
   }
 
   if (!complaint) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.loadingText}>Complaint unavailable.</Text>
-        <Button label="Back" onPress={onBack} style={styles.backButton} />
-      </View>
+      <FullscreenState
+        title="Complaint unavailable"
+        message={error ?? "The selected complaint could not be loaded."}
+        actionLabel="Back"
+        onAction={onBack}
+      />
     );
   }
 
@@ -91,11 +202,45 @@ export default function ComplaintDetailScreen({
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={loading} onRefresh={() => void loadComplaint()} />
-      }
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void reload()} />}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
-      <Button label="Back to Complaints" variant="ghost" onPress={onBack} />
+      <ScreenHeader
+        title="Complaint Detail"
+        subtitle="Review the complaint context, field history, and current service state before taking action."
+        backLabel="Back to Complaints"
+        backDisabled={submitting}
+        onBack={onBack}
+      />
+
+      {showingCachedData && error ? (
+        <NoticeCard
+          tone="warning"
+          title="Showing Saved Complaint Data"
+          message={error}
+          actionLabel="Retry"
+          onAction={() => void reload()}
+        />
+      ) : null}
+
+      {!showingCachedData && error ? (
+        <NoticeCard
+          tone="danger"
+          title="Unable to Refresh Complaint"
+          message={error}
+          actionLabel="Retry"
+          onAction={() => void reload()}
+        />
+      ) : null}
+
+      {submitError ? (
+        <NoticeCard
+          tone="danger"
+          title="Complaint Update Failed"
+          message={submitError}
+        />
+      ) : null}
 
       <Card>
         <View style={styles.row}>
@@ -141,21 +286,31 @@ export default function ComplaintDetailScreen({
 
       <Card>
         <Text style={styles.sectionTitle}>Timeline</Text>
-        {complaint.timeline.map((entry) => (
-          <View key={`${entry.id ?? entry.date}-${entry.action}`} style={styles.timelineRow}>
-            <Text style={styles.timelineAction}>{entry.action}</Text>
-            <Text style={styles.timelineMeta}>
-              {entry.by} · {formatDateTime(entry.date)}
-            </Text>
-            {entry.note ? <Text style={styles.timelineNote}>{entry.note}</Text> : null}
-          </View>
-        ))}
+        {complaint.timeline.length === 0 ? (
+          <Text style={styles.metaText}>
+            No complaint timeline entries are available yet for this issue.
+          </Text>
+        ) : (
+          complaint.timeline.map((entry) => (
+            <View key={`${entry.id ?? entry.date}-${entry.action}`} style={styles.timelineRow}>
+              <Text style={styles.timelineAction}>{entry.action}</Text>
+              <Text style={styles.timelineMeta}>
+                {entry.by} · {formatDateTime(entry.date)}
+              </Text>
+              {entry.note ? <Text style={styles.timelineNote}>{entry.note}</Text> : null}
+            </View>
+          ))
+        )}
       </Card>
 
-      {complaint.linkedJobs.length > 0 ? (
-        <Card>
-          <Text style={styles.sectionTitle}>Linked Jobs</Text>
-          {complaint.linkedJobs.map((job) => (
+      <Card>
+        <Text style={styles.sectionTitle}>Linked Jobs</Text>
+        {complaint.linkedJobs.length === 0 ? (
+          <Text style={styles.metaText}>
+            No linked field jobs are attached to this complaint yet.
+          </Text>
+        ) : (
+          complaint.linkedJobs.map((job) => (
             <View key={job.id} style={styles.linkedJobRow}>
               <View style={styles.copy}>
                 <Text style={styles.bodyText}>{job.jobNumber}</Text>
@@ -163,12 +318,17 @@ export default function ComplaintDetailScreen({
               </View>
               <View style={styles.linkedJobActions}>
                 <StatusBadge value={job.status} />
-                <Button label="Open" variant="secondary" onPress={() => onOpenJob(job.id)} />
+                <Button
+                  label="Open"
+                  variant="secondary"
+                  onPress={() => void handleOpenJob(job.id)}
+                  disabled={submitting}
+                />
               </View>
             </View>
-          ))}
-        </Card>
-      ) : null}
+          ))
+        )}
+      </Card>
 
       {!["resolved", "closed"].includes(complaint.status) ? (
         <Card>
@@ -176,50 +336,54 @@ export default function ComplaintDetailScreen({
           <Input
             label="Operator note"
             value={note}
-            onChangeText={setNote}
+            onChangeText={(value) => {
+              setNote(value);
+              setSubmitError(null);
+            }}
+            editable={!submitting}
             multiline
             autoCapitalize="sentences"
             placeholder="Add what you found, what changed, or why the issue is on hold."
+            helperText="Complaint updates still require a working connection and are not queued offline."
           />
           <View style={styles.actionStack}>
-            {(complaint.status === "assigned" ||
-              complaint.status === "open" ||
-              complaint.status === "reopened" ||
-              complaint.status === "on_hold") ? (
+            {actionConfig?.canStartWork ? (
               <Button
                 label={complaint.status === "on_hold" ? "Resume Work" : "Start Work"}
-                onPress={() => void updateStatus("in_progress")}
-                loading={submitting}
+                onPress={() => void handleUpdateStatus("in_progress")}
+                loading={statusAction === "in_progress"}
+                disabled={submitting}
               />
             ) : null}
-            {complaint.status === "in_progress" ? (
+            {actionConfig?.canPutOnHold ? (
               <Button
                 label="Put On Hold"
                 variant="secondary"
-                onPress={() => void updateStatus("on_hold")}
-                loading={submitting}
+                onPress={() => void handleUpdateStatus("on_hold")}
+                loading={statusAction === "on_hold"}
+                disabled={submitting}
               />
             ) : null}
-            {(complaint.status === "assigned" ||
-              complaint.status === "in_progress" ||
-              complaint.status === "on_hold" ||
-              complaint.status === "reopened") ? (
+            {actionConfig?.canResolve ? (
               <Button
                 label="Resolve Complaint"
                 variant="danger"
-                onPress={() => void updateStatus("resolved")}
-                loading={submitting}
+                onPress={() => void handleUpdateStatus("resolved")}
+                loading={statusAction === "resolved"}
+                disabled={submitting}
               />
             ) : null}
           </View>
         </Card>
-      ) : null}
-
-      {error ? (
+      ) : (
         <Card>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.sectionTitle}>Complaint Status</Text>
+          <Text style={styles.metaText}>
+            This complaint is already {complaint.status === "closed" ? "closed" : "resolved"} and
+            no further mobile status updates are available.
+          </Text>
         </Card>
-      ) : null}
+      )}
     </ScrollView>
   );
 }
@@ -232,22 +396,6 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  loadingText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  backButton: {
-    minWidth: 120,
   },
   row: {
     flexDirection: "row",
@@ -283,6 +431,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 13,
+    lineHeight: 19,
     color: colors.textMuted,
   },
   badgeRow: {
@@ -324,10 +473,5 @@ const styles = StyleSheet.create({
   },
   actionStack: {
     gap: spacing.sm,
-  },
-  errorText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.danger,
   },
 });
