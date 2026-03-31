@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
@@ -39,16 +39,18 @@ export async function requireAuth() {
   return session;
 }
 
-export async function requireRole(roles: UserRole[]) {
+export async function requireRole(allowedRoles: UserRole[]) {
   const user = await getCurrentUser();
 
-  if (!user) {
-    redirect("/login");
+  if (!user?.organizationId) {
+    throw new Error("Unauthorized");
   }
 
-  if (!roles.includes(user.role)) {
-    redirect("/");
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error("Forbidden");
   }
 
   return user;
 }
+
+export { UserRole };

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { notifyInvoiceCreated } from "@/lib/notifications";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
@@ -10,7 +11,7 @@ import {
   getInvoiceDetailForOrganization,
   listInvoicesForOrganization,
 } from "@/lib/queries/invoices";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import {
   createInvoiceSchema,
   recordInvoicePaymentSchema,
@@ -36,7 +37,7 @@ const listCollectionsSchema = z.object({
 
 export async function listInvoicesAction(input: z.infer<typeof listInvoicesSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listInvoicesSchema.parse(input);
     const data = await listInvoicesForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -49,7 +50,7 @@ export async function listCollectionsAction(
   input: z.infer<typeof listCollectionsSchema> = {},
 ) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listCollectionsSchema.parse(input);
     const data = await getCollectionsDataForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -60,7 +61,7 @@ export async function listCollectionsAction(
 
 export async function createInvoiceAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createInvoiceSchema.parse(input);
     const total = values.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
     const invoice = await db.invoice.create({
@@ -101,7 +102,7 @@ export async function createInvoiceAction(input: unknown) {
 
 export async function updateInvoiceAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = updateInvoiceSchema.parse(input);
     const existing = await db.invoice.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -150,7 +151,7 @@ export async function updateInvoiceAction(input: unknown) {
 
 export async function recordInvoicePaymentAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = recordInvoicePaymentSchema.parse(input);
     const existing = await db.invoice.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -186,7 +187,7 @@ export async function recordInvoicePaymentAction(input: unknown) {
 
 export async function deleteInvoiceAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.invoice.deleteMany({
       where: { id, organizationId: user.organizationId },
     });

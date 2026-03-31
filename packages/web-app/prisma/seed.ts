@@ -94,6 +94,7 @@ const contractIdByLegacyId = new Map(
 
 async function main() {
   const defaultPasswordHash = await hash("ChangeMe123!", 10);
+  const testAdminPasswordHash = await hash("password123", 10);
 
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
@@ -130,6 +131,31 @@ async function main() {
 
   await prisma.user.createMany({
     data: [
+      {
+        id: uuidFromKey("user:admin-test"),
+        organizationId: ORGANIZATION_ID,
+        name: "Test Admin",
+        email: "admin@test.com",
+        emailVerified: null,
+        passwordHash: testAdminPasswordHash,
+        role: UserRole.ADMIN,
+        status: "ACTIVE",
+        avatar: null,
+        image: null,
+        phone: null,
+        territory: null,
+        specialization: null,
+        skills: [],
+        activeJobs: 0,
+        completedToday: 0,
+        rating: 0,
+        totalJobs: 0,
+        avgRating: 0,
+        completedThisWeek: 0,
+        completedThisMonth: 0,
+        lastActiveAt: new Date(),
+        createdAt: new Date(),
+      },
       ...teamMembers.map((member) => ({
         id: teamUserIds.get(member.id)!,
         organizationId: ORGANIZATION_ID,
@@ -395,7 +421,7 @@ async function main() {
   });
 
   console.log(
-    `Seeded 1 organization, ${teamMembers.length + technicians.length + timelineActorInputs.length} users, ${customers.length} customers, ${assets.length} assets, ${contracts.length} contracts, ${invoices.length} invoices, ${tickets.length} tickets, and ${jobs.length} jobs.`,
+    `Seeded 1 organization, ${1 + teamMembers.length + technicians.length + timelineActorInputs.length} users (including admin@test.com / password123), ${customers.length} customers, ${assets.length} assets, ${contracts.length} contracts, ${invoices.length} invoices, ${tickets.length} tickets, and ${jobs.length} jobs.`,
   );
 }
 

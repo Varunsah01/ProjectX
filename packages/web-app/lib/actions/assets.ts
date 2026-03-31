@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { cleanOptional, parseDateInput } from "@/lib/actions/helpers";
 import { getAssetDetailForOrganization, listAssetsForOrganization } from "@/lib/queries/assets";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createAssetSchema, updateAssetSchema } from "@/lib/validations/asset";
 
 const listAssetsSchema = z.object({
@@ -20,7 +21,7 @@ const listAssetsSchema = z.object({
 
 export async function listAssetsAction(input: z.infer<typeof listAssetsSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listAssetsSchema.parse(input);
     const data = await listAssetsForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -31,7 +32,7 @@ export async function listAssetsAction(input: z.infer<typeof listAssetsSchema> =
 
 export async function createAssetAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createAssetSchema.parse(input);
     const asset = await db.asset.create({
       data: {
@@ -64,7 +65,7 @@ export async function createAssetAction(input: unknown) {
 
 export async function updateAssetAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = updateAssetSchema.parse(input);
     const existing = await db.asset.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -105,7 +106,7 @@ export async function updateAssetAction(input: unknown) {
 
 export async function deleteAssetAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.asset.deleteMany({
       where: { id, organizationId: user.organizationId },
     });

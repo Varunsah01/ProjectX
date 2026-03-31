@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import {
   addBillingCycle,
   addMonthsPreservingDay,
@@ -10,7 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getContractDetailForOrganization, listContractsForOrganization } from "@/lib/queries/contracts";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createContractSchema, updateContractSchema } from "@/lib/validations/contract";
 import type { BillingCycle } from "@/lib/types";
 
@@ -26,7 +27,7 @@ const listContractsSchema = z.object({
 
 export async function listContractsAction(input: z.infer<typeof listContractsSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listContractsSchema.parse(input);
     const data = await listContractsForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -37,7 +38,7 @@ export async function listContractsAction(input: z.infer<typeof listContractsSch
 
 export async function createContractAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createContractSchema.parse(input);
     const [plan, asset, customer] = await Promise.all([
       db.plan.findFirst({ where: { id: values.planId, organizationId: user.organizationId } }),
@@ -93,7 +94,7 @@ export async function createContractAction(input: unknown) {
 
 export async function updateContractAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = updateContractSchema.parse(input);
     const existing = await db.contract.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -147,7 +148,7 @@ export async function updateContractAction(input: unknown) {
 
 export async function deleteContractAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.contract.deleteMany({
       where: { id, organizationId: user.organizationId },
     });

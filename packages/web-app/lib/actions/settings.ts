@@ -2,9 +2,10 @@
 
 import bcrypt from "bcrypt";
 import { revalidatePath } from "next/cache";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { getSettingsDataForOrganization } from "@/lib/queries/settings";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import {
   createTeamMemberSchema,
   updateBusinessProfileSchema,
@@ -13,7 +14,7 @@ import {
 
 export async function getSettingsAction() {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const data = await getSettingsDataForOrganization(user.organizationId);
     return actionSuccess(data);
   } catch (error) {
@@ -23,7 +24,7 @@ export async function getSettingsAction() {
 
 export async function updateBusinessProfileAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN]);
     const values = updateBusinessProfileSchema.parse(input);
     await db.organization.update({
       where: { id: user.organizationId },
@@ -49,7 +50,7 @@ export async function updateBusinessProfileAction(input: unknown) {
 
 export async function createTeamMemberAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createTeamMemberSchema.parse(input);
     const passwordHash = await bcrypt.hash(values.password, 10);
     const member = await db.user.create({
@@ -72,7 +73,7 @@ export async function createTeamMemberAction(input: unknown) {
 
 export async function updateTeamMemberAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = updateTeamMemberSchema.parse(input);
     const existing = await db.user.findFirst({
       where: { id: values.id, organizationId: user.organizationId },

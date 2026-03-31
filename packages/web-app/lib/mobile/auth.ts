@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { compare } from "bcrypt";
 import { UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
-import { technicians } from "@/lib/mock-data";
 import { toDateString } from "@/lib/query-utils";
 
 const MOBILE_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
@@ -64,10 +63,6 @@ export class UnsupportedMobileAuthMethodError extends Error {
     this.status = status;
   }
 }
-
-const seededEmployeeIdToEmail = new Map(
-  technicians.map((technician) => [technician.id.toUpperCase(), technician.email.toLowerCase()]),
-);
 
 const technicianSelect = {
   id: true,
@@ -164,20 +159,7 @@ async function findTechnicianByPhone(phone: string) {
 }
 
 async function findTechnicianByEmployeeId(employeeId: string) {
-  const trimmedEmployeeId = employeeId.trim();
-  const directMatch = await findTechnicianById(trimmedEmployeeId);
-
-  if (directMatch) {
-    return directMatch;
-  }
-
-  const seededEmail = seededEmployeeIdToEmail.get(trimmedEmployeeId.toUpperCase());
-
-  if (!seededEmail) {
-    return null;
-  }
-
-  return findTechnicianByEmail(seededEmail);
+  return findTechnicianById(employeeId.trim());
 }
 
 async function findTechnicianByIdentifier(

@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { getCustomerDetailForOrganization, listCustomersForOrganization } from "@/lib/queries/customers";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createCustomerSchema, updateCustomerSchema } from "@/lib/validations/customer";
 
 const listCustomersSchema = z.object({
@@ -19,7 +20,7 @@ const listCustomersSchema = z.object({
 
 export async function listCustomersAction(input: z.infer<typeof listCustomersSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listCustomersSchema.parse(input);
     const data = await listCustomersForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -30,7 +31,7 @@ export async function listCustomersAction(input: z.infer<typeof listCustomersSch
 
 export async function createCustomerAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createCustomerSchema.parse(input);
     const customer = await db.customer.create({
       data: {
@@ -57,7 +58,7 @@ export async function createCustomerAction(input: unknown) {
 
 export async function updateCustomerAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = updateCustomerSchema.parse(input);
     const existing = await db.customer.findFirst({
       where: {
@@ -96,7 +97,7 @@ export async function updateCustomerAction(input: unknown) {
 
 export async function deleteCustomerAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.customer.deleteMany({
       where: {
         id,

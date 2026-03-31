@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { listPlansForOrganization } from "@/lib/queries/plans";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createPlanSchema, updatePlanSchema } from "@/lib/validations/plan";
 
 const listPlansSchema = z.object({
@@ -19,7 +20,7 @@ const listPlansSchema = z.object({
 
 export async function listPlansAction(input: z.infer<typeof listPlansSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listPlansSchema.parse(input);
     const data = await listPlansForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -30,7 +31,7 @@ export async function listPlansAction(input: z.infer<typeof listPlansSchema> = {
 
 export async function createPlanAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createPlanSchema.parse(input);
     const plan = await db.plan.create({
       data: {
@@ -55,7 +56,7 @@ export async function createPlanAction(input: unknown) {
 
 export async function updatePlanAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = updatePlanSchema.parse(input);
     const existing = await db.plan.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -88,7 +89,7 @@ export async function updatePlanAction(input: unknown) {
 
 export async function deletePlanAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.plan.deleteMany({
       where: { id, organizationId: user.organizationId },
     });

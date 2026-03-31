@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { notifyTicketCreated, notifyTicketResolved } from "@/lib/notifications";
 import { cleanOptional, getNextNumber, getSlaDeadline } from "@/lib/actions/helpers";
 import { getTicketDetailForOrganization, listTicketsForOrganization } from "@/lib/queries/tickets";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import {
   assignTicketSchema,
   createTicketSchema,
@@ -27,7 +28,7 @@ const listTicketsSchema = z.object({
 
 export async function listTicketsAction(input: z.infer<typeof listTicketsSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listTicketsSchema.parse(input);
     const data = await listTicketsForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -38,7 +39,7 @@ export async function listTicketsAction(input: z.infer<typeof listTicketsSchema>
 
 export async function createTicketAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createTicketSchema.parse(input);
     const ticket = await db.ticket.create({
       data: {
@@ -89,7 +90,7 @@ export async function createTicketAction(input: unknown) {
 
 export async function updateTicketAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = updateTicketSchema.parse(input);
     const existing = await db.ticket.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -129,7 +130,7 @@ export async function updateTicketAction(input: unknown) {
 
 export async function assignTicketAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = assignTicketSchema.parse(input);
     const existing = await db.ticket.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -166,7 +167,7 @@ export async function assignTicketAction(input: unknown) {
 
 export async function resolveTicketAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = resolveTicketSchema.parse(input);
     const existing = await db.ticket.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -204,7 +205,7 @@ export async function resolveTicketAction(input: unknown) {
 
 export async function deleteTicketAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.ticket.deleteMany({
       where: { id, organizationId: user.organizationId },
     });

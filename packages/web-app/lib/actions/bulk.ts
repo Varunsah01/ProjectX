@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { addMonthsPreservingDay } from "@/lib/billing";
 import { db } from "@/lib/db";
 import {
@@ -12,7 +13,6 @@ import {
   actionFailure,
   actionSuccess,
   getActionError,
-  getOrganizationContext,
 } from "@/lib/query-utils";
 
 const bulkIdsSchema = z
@@ -44,7 +44,7 @@ const revalidatePaths = (paths: string[]) =>
 
 export async function bulkUpdateCustomerStatusAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkCustomerStatusSchema.parse(input);
     const result = await db.customer.updateMany({
       where: {
@@ -67,7 +67,7 @@ export async function bulkUpdateCustomerStatusAction(input: unknown) {
 
 export async function bulkSendInvoiceRemindersAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
     const invoices = await db.invoice.findMany({
       where: {
@@ -99,7 +99,7 @@ export async function bulkSendInvoiceRemindersAction(input: unknown) {
 
 export async function bulkMarkInvoicesPaidAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
     const invoices = await db.invoice.findMany({
       where: {
@@ -140,7 +140,7 @@ export async function bulkMarkInvoicesPaidAction(input: unknown) {
 
 export async function bulkAssignJobsAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkJobsAssignSchema.parse(input);
     const technician = await db.user.findFirst({
       where: {
@@ -198,7 +198,7 @@ export async function bulkAssignJobsAction(input: unknown) {
 
 export async function bulkCancelJobsAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
     const result = await db.job.updateMany({
       where: {
@@ -224,7 +224,7 @@ export async function bulkCancelJobsAction(input: unknown) {
 
 export async function bulkAssignTicketsAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkTicketsAssignSchema.parse(input);
     const technician = await db.user.findFirst({
       where: {
@@ -288,7 +288,7 @@ export async function bulkAssignTicketsAction(input: unknown) {
 
 export async function bulkCloseTicketsAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
     const tickets = await db.ticket.findMany({
       where: {
@@ -337,7 +337,7 @@ export async function bulkCloseTicketsAction(input: unknown) {
 
 export async function bulkRenewContractsAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
     const contracts = await db.contract.findMany({
       where: {

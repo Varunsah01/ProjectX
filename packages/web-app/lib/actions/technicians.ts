@@ -3,9 +3,10 @@
 import bcrypt from "bcrypt";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { listTechniciansForOrganization } from "@/lib/queries/technicians";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createTechnicianSchema, updateTechnicianSchema } from "@/lib/validations/technician";
 
 const listTechniciansSchema = z.object({
@@ -19,7 +20,7 @@ const listTechniciansSchema = z.object({
 
 export async function listTechniciansAction(input: z.infer<typeof listTechniciansSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const params = listTechniciansSchema.parse(input);
     const data = await listTechniciansForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -30,7 +31,7 @@ export async function listTechniciansAction(input: z.infer<typeof listTechnician
 
 export async function createTechnicianAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createTechnicianSchema.parse(input);
     const passwordHash = await bcrypt.hash(values.password, 10);
     const technician = await db.user.create({
@@ -57,7 +58,7 @@ export async function createTechnicianAction(input: unknown) {
 
 export async function updateTechnicianAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = updateTechnicianSchema.parse(input);
     const existing = await db.user.findFirst({
       where: { id: values.id, organizationId: user.organizationId, role: "TECHNICIAN" },
@@ -91,7 +92,7 @@ export async function updateTechnicianAction(input: unknown) {
 
 export async function deleteTechnicianAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN]);
     const existing = await db.user.findFirst({
       where: {
         id,

@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { notifyJobAssigned, notifyJobCompleted } from "@/lib/notifications";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getJobDetailForOrganization, listJobsForOrganization } from "@/lib/queries/jobs";
-import { actionFailure, actionSuccess, getActionError, getOrganizationContext } from "@/lib/query-utils";
+import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createJobSchema, updateJobSchema } from "@/lib/validations/job";
 
 const listJobsSchema = z.object({
@@ -21,7 +22,7 @@ const listJobsSchema = z.object({
 
 export async function listJobsAction(input: z.infer<typeof listJobsSchema> = {}) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT, UserRole.TECHNICIAN]);
     const params = listJobsSchema.parse(input);
     const data = await listJobsForOrganization(user.organizationId, params);
     return actionSuccess(data);
@@ -32,7 +33,7 @@ export async function listJobsAction(input: z.infer<typeof listJobsSchema> = {})
 
 export async function createJobAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createJobSchema.parse(input);
     const job = await db.job.create({
       data: {
@@ -63,7 +64,7 @@ export async function createJobAction(input: unknown) {
 
 export async function updateJobAction(input: unknown) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT, UserRole.TECHNICIAN]);
     const values = updateJobSchema.parse(input);
     const existing = await db.job.findFirst({
       where: { id: values.id, organizationId: user.organizationId },
@@ -105,7 +106,7 @@ export async function updateJobAction(input: unknown) {
 
 export async function completeJobAction(id: string, serviceReport?: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT, UserRole.TECHNICIAN]);
     const existing = await db.job.findFirst({
       where: { id, organizationId: user.organizationId },
     });
@@ -135,7 +136,7 @@ export async function completeJobAction(id: string, serviceReport?: string) {
 
 export async function deleteJobAction(id: string) {
   try {
-    const user = await getOrganizationContext();
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const deleted = await db.job.deleteMany({
       where: { id, organizationId: user.organizationId },
     });
