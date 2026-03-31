@@ -23,8 +23,10 @@ import { Tabs } from "@/components/ui/Tabs";
 import { DataTable } from "@/components/ui/DataTable";
 import {
   deleteTechnicianAction,
+  resetTechnicianPasswordAction,
   updateTechnicianAction,
 } from "@/lib/actions/technicians";
+import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateTechnicianSchema } from "@/lib/validations/technician";
 import { formatDate, getInitials } from "@/lib/utils";
@@ -58,6 +60,7 @@ export default function TechnicianDetailPageClient({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [revealPassword, setRevealPassword] = useState<string | null>(null);
   const [form, setForm] = useState(
     detail
       ? getInitialFormState(detail.technician)
@@ -170,6 +173,19 @@ export default function TechnicianDetailPageClient({
     );
   };
 
+  const handleResetPassword = async () => {
+    await runAction(
+      "resetPassword",
+      resetTechnicianPasswordAction({ id: technician.id }),
+      "Password reset",
+      (data) => {
+        if (data?.generatedPassword) {
+          setRevealPassword(data.generatedPassword);
+        }
+      },
+    );
+  };
+
   const handleDelete = async () => {
     await runAction(
       "delete",
@@ -216,6 +232,14 @@ export default function TechnicianDetailPageClient({
                 >
                   <Edit className="h-4 w-4" />
                   Edit
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(pendingAction)}
+                  onClick={handleResetPassword}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isBusy("resetPassword") ? "Resetting..." : "Reset Password"}
                 </button>
                 <button
                   type="button"
@@ -622,6 +646,13 @@ export default function TechnicianDetailPageClient({
         confirmLabel="Delete Technician"
         loading={isBusy("delete")}
       />
+
+      {revealPassword && (
+        <PasswordRevealModal
+          password={revealPassword}
+          onClose={() => setRevealPassword(null)}
+        />
+      )}
     </div>
   );
 }

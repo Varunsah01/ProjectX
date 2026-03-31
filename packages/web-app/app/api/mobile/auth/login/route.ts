@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  authenticateTechnician,
-  createMobileSession,
-  UnsupportedMobileAuthMethodError,
-} from "@/lib/mobile/auth";
+import { authenticateTechnician, createMobileSession } from "@/lib/mobile/auth";
 import { parseJsonBody } from "@/lib/security/api";
 
 export const dynamic = "force-dynamic";
@@ -12,14 +8,18 @@ export const dynamic = "force-dynamic";
 const loginSchema = z.object({
   identifierType: z.enum(["phone", "employee_id"]),
   identifier: z.string().trim().min(1, "Identifier is required"),
-  authMethod: z.enum(["password", "otp"]),
+  authMethod: z.enum(["password"]),
   secret: z.string().trim().min(1, "Password or OTP is required"),
 });
 
 export async function POST(request: Request) {
   try {
     const body = await parseJsonBody(request, loginSchema);
-    const user = await authenticateTechnician(body);
+    const user = await authenticateTechnician({
+      identifierType: body.identifierType,
+      identifier: body.identifier,
+      secret: body.secret,
+    });
 
     if (!user) {
       return NextResponse.json(
@@ -39,13 +39,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid login request." },
         { status: 400 },
-      );
-    }
-
-    if (error instanceof UnsupportedMobileAuthMethodError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status },
       );
     }
 

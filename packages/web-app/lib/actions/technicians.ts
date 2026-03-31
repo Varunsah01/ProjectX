@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
@@ -8,6 +9,12 @@ import { db } from "@/lib/db";
 import { listTechniciansForOrganization } from "@/lib/queries/technicians";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createTechnicianSchema, updateTechnicianSchema } from "@/lib/validations/technician";
+
+function generatePassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = randomBytes(10);
+  return Array.from(bytes).map((b) => chars[b % chars.length]).join("");
+}
 
 const listTechniciansSchema = z.object({
   search: z.string().optional(),
@@ -33,7 +40,8 @@ export async function createTechnicianAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createTechnicianSchema.parse(input);
-    const passwordHash = await bcrypt.hash(values.password, 10);
+    const generatedPassword = values.password ?? generatePassword();
+    const passwordHash = await bcrypt.hash(generatedPassword, 10);
     const technician = await db.user.create({
       data: {
         organizationId: user.organizationId,
@@ -50,9 +58,30 @@ export async function createTechnicianAction(input: unknown) {
 
     revalidatePath("/technicians");
     revalidatePath("/settings");
-    return actionSuccess({ id: technician.id });
+    return actionSuccess({ id: technician.id, generatedPassword });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to create technician"));
+  }
+}
+
+export async function resetTechnicianPasswordAction(input: { id: string }) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+    const existing = await db.user.findFirst({
+      where: { id: input.id, organizationId: user.organizationId, role: "TECHNICIAN" },
+    });
+
+    if (!existing) {
+      return actionFailure("Technician not found");
+    }
+
+    const generatedPassword = generatePassword();
+    const passwordHash = await bcrypt.hash(generatedPassword, 10);
+    await db.user.update({ where: { id: input.id }, data: { passwordHash } });
+
+    return actionSuccess({ generatedPassword });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to reset password"));
   }
 }
 

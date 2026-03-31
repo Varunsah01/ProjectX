@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField, getFormControlClassName } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { PaymentButton } from "@/components/ui/PaymentButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
@@ -103,8 +102,6 @@ export default function InvoiceDetailPageClient({
 
   const balance = invoice.amount - invoice.paidAmount;
   const isBusy = (key: string) => pendingAction === key;
-  const canCollectPayment =
-    balance > 0 && ["issued", "overdue", "partial"].includes(invoice.status);
 
   const updateField = (
     field: "customerId" | "dueDate" | "type" | "status" | "notes",
@@ -262,15 +259,6 @@ export default function InvoiceDetailPageClient({
                   <Edit className="h-4 w-4" />
                   Edit
                 </button>
-                {canCollectPayment && (
-                  <PaymentButton
-                    invoiceId={invoice.id}
-                    amount={balance}
-                    disabled={Boolean(pendingAction)}
-                    label="Collect Payment"
-                    className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
-                  />
-                )}
                 {!["paid", "cancelled"].includes(invoice.status) && (
                   <button
                     type="button"

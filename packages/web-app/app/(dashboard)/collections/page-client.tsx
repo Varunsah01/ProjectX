@@ -6,7 +6,6 @@ import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { PaymentButton } from "@/components/ui/PaymentButton";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { listCollectionsAction } from "@/lib/actions/invoices";
 import { fetchAllExportRows, type ExportColumn } from "@/lib/export";
@@ -229,20 +228,9 @@ export default function CollectionsPageClient({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {invoice.daysOverdue > 0 &&
-                      ["issued", "overdue", "partial"].includes(invoice.status) ? (
-                        <PaymentButton
-                          invoiceId={invoice.id}
-                          amount={invoice.balance}
-                          label="Collect"
-                          className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-70"
-                        />
-                      ) : null}
-                      <button className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
-                        Send Reminder
-                      </button>
-                    </div>
+                    <button className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
+                      Send Reminder
+                    </button>
                   </td>
                 </tr>
               ))

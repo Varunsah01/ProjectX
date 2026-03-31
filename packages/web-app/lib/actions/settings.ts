@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
@@ -11,6 +12,12 @@ import {
   updateBusinessProfileSchema,
   updateTeamMemberSchema,
 } from "@/lib/validations/settings";
+
+function generatePassword(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = randomBytes(10);
+  return Array.from(bytes).map((b) => chars[b % chars.length]).join("");
+}
 
 export async function getSettingsAction() {
   try {
@@ -52,7 +59,8 @@ export async function createTeamMemberAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createTeamMemberSchema.parse(input);
-    const passwordHash = await bcrypt.hash(values.password, 10);
+    const generatedPassword = values.password ?? generatePassword();
+    const passwordHash = await bcrypt.hash(generatedPassword, 10);
     const member = await db.user.create({
       data: {
         organizationId: user.organizationId,
@@ -65,9 +73,30 @@ export async function createTeamMemberAction(input: unknown) {
     });
 
     revalidatePath("/settings");
-    return actionSuccess({ id: member.id });
+    return actionSuccess({ id: member.id, generatedPassword });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to create team member"));
+  }
+}
+
+export async function resetTeamMemberPasswordAction(input: { id: string }) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+    const existing = await db.user.findFirst({
+      where: { id: input.id, organizationId: user.organizationId },
+    });
+
+    if (!existing) {
+      return actionFailure("Team member not found");
+    }
+
+    const generatedPassword = generatePassword();
+    const passwordHash = await bcrypt.hash(generatedPassword, 10);
+    await db.user.update({ where: { id: input.id }, data: { passwordHash } });
+
+    return actionSuccess({ generatedPassword });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to reset password"));
   }
 }
 

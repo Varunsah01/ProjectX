@@ -1,17 +1,25 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, MapPin, Phone, Star } from "lucide-react";
+import { Mail, MapPin, Phone, Plus, Star } from "lucide-react";
+import { toast } from "sonner";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { FormField } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { listTechniciansAction } from "@/lib/actions/technicians";
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { createTechnicianAction, listTechniciansAction } from "@/lib/actions/technicians";
 import { fetchAllExportRows, type ExportColumn } from "@/lib/export";
+import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { useListUrlState } from "@/lib/use-list-url-state";
 import { DEFAULT_PAGE_SIZE } from "@/lib/url-search-params";
 import { getInitials } from "@/lib/utils";
+import { createTechnicianSchema } from "@/lib/validations/technician";
 import type { PaginatedData, Technician } from "@/lib/types";
 
 const technicianExportColumns: ExportColumn<Technician>[] = [
@@ -28,6 +36,15 @@ const technicianExportColumns: ExportColumn<Technician>[] = [
   { header: "Completed Today", value: (technician) => technician.completedToday },
   { header: "Rating", value: (technician) => technician.rating },
 ];
+
+const BLANK_FORM = {
+  name: "",
+  email: "",
+  phone: "",
+  territory: "",
+  specialization: "",
+  status: "available" as const,
+};
 
 export default function TechniciansPageClient({
   technicians,
@@ -53,6 +70,41 @@ export default function TechniciansPageClient({
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
   });
+
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [form, setForm] = useState(BLANK_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isPending, startTransition] = useTransition();
+  const [revealPassword, setRevealPassword] = useState<string | null>(null);
+
+  const updateField = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => clearFormError(prev, field));
+  };
+
+  const handleCreate = () => {
+    const parsed = createTechnicianSchema.safeParse(form);
+    if (!parsed.success) {
+      setErrors(getFormErrors(parsed.error));
+      toast.error("Please fix the highlighted fields");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await createTechnicianAction(parsed.data);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to create technician");
+        return;
+      }
+      setIsCreateOpen(false);
+      setForm(BLANK_FORM);
+      setErrors({});
+      router.refresh();
+      if (result.data?.generatedPassword) {
+        setRevealPassword(result.data.generatedPassword);
+      }
+    });
+  };
 
   const loadExportData = () =>
     fetchAllExportRows<Technician, PaginatedData<Technician>>(
@@ -100,11 +152,21 @@ export default function TechniciansPageClient({
             },
           ]}
         />
-        <ExportMenu
-          columns={technicianExportColumns}
-          filename="technicians-export"
-          loadData={loadExportData}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New Technician
+          </button>
+          <ExportMenu
+            columns={technicianExportColumns}
+            filename="technicians-export"
+            loadData={loadExportData}
+          />
+        </div>
       </div>
 
       {technicians.data.length === 0 ? (
@@ -190,6 +252,106 @@ export default function TechniciansPageClient({
             onPageSizeChange={(pageSize) => updateParams({ pageSize, page: 1 })}
           />
         </>
+      )}
+
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => {
+          if (!isPending) {
+            setIsCreateOpen(false);
+            setForm(BLANK_FORM);
+            setErrors({});
+          }
+        }}
+        title="New Technician"
+        size="lg"
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField
+            label="Name"
+            name="name"
+            required
+            value={form.name}
+            onChange={(e) => updateField("name", e.target.value)}
+            error={errors.name}
+          />
+          <FormField
+            label="Email"
+            name="email"
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => updateField("email", e.target.value)}
+            error={errors.email}
+          />
+          <FormField
+            label="Phone"
+            name="phone"
+            value={form.phone}
+            onChange={(e) => updateField("phone", e.target.value)}
+            error={errors.phone}
+          />
+          <FormField
+            as="select"
+            label="Status"
+            name="status"
+            value={form.status}
+            onChange={(e) => updateField("status", e.target.value)}
+            error={errors.status}
+            options={[
+              { value: "available", label: "Available" },
+              { value: "on_job", label: "On Job" },
+              { value: "en_route", label: "En Route" },
+              { value: "off_duty", label: "Off Duty" },
+            ]}
+          />
+          <FormField
+            label="Territory"
+            name="territory"
+            value={form.territory}
+            onChange={(e) => updateField("territory", e.target.value)}
+            error={errors.territory}
+          />
+          <FormField
+            label="Specialization"
+            name="specialization"
+            value={form.specialization}
+            onChange={(e) => updateField("specialization", e.target.value)}
+            error={errors.specialization}
+          />
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          A random password will be generated automatically.
+        </p>
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setIsCreateOpen(false);
+              setForm(BLANK_FORM);
+              setErrors({});
+            }}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Cancel
+          </button>
+          <SubmitButton
+            type="button"
+            loading={isPending}
+            loadingText="Creating..."
+            onClick={handleCreate}
+          >
+            Create Technician
+          </SubmitButton>
+        </div>
+      </Modal>
+
+      {revealPassword && (
+        <PasswordRevealModal
+          password={revealPassword}
+          onClose={() => setRevealPassword(null)}
+        />
       )}
     </div>
   );

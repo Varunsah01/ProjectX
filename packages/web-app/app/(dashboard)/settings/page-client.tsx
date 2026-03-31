@@ -3,10 +3,20 @@
 import { useState, useTransition } from "react";
 import type { UserRole } from "@prisma/client";
 import { toast } from "sonner";
+import { FormField } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Tabs } from "@/components/ui/Tabs";
+import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { updateBusinessProfileAction } from "@/lib/actions/settings";
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { Tabs } from "@/components/ui/Tabs";
+import {
+  createTeamMemberAction,
+  resetTeamMemberPasswordAction,
+  updateBusinessProfileAction,
+} from "@/lib/actions/settings";
+import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
+import { createTeamMemberSchema } from "@/lib/validations/settings";
 import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
 import type { SettingsData } from "@/lib/types";
 
@@ -226,66 +236,231 @@ function AuditLogsTab({ logs }: { logs: SettingsData["auditLogs"] }) {
   );
 }
 
+const BLANK_MEMBER_FORM = {
+  name: "",
+  email: "",
+  role: "agent" as "admin" | "manager" | "agent" | "technician",
+  status: "active" as "active" | "inactive",
+};
+
 function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) {
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [form, setForm] = useState(BLANK_MEMBER_FORM);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isPending, startTransition] = useTransition();
+  const [revealPassword, setRevealPassword] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  const updateField = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => clearFormError(prev, field));
+  };
+
+  const handleCreate = () => {
+    const parsed = createTeamMemberSchema.safeParse(form);
+    if (!parsed.success) {
+      setErrors(getFormErrors(parsed.error));
+      toast.error("Please fix the highlighted fields");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await createTeamMemberAction(parsed.data);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to create team member");
+        return;
+      }
+      setIsCreateOpen(false);
+      setForm(BLANK_MEMBER_FORM);
+      setErrors({});
+      if (result.data?.generatedPassword) {
+        setRevealPassword(result.data.generatedPassword);
+      }
+    });
+  };
+
+  const handleResetPassword = (id: string) => {
+    setResettingId(id);
+    startTransition(async () => {
+      const result = await resetTeamMemberPasswordAction({ id });
+      setResettingId(null);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to reset password");
+        return;
+      }
+      if (result.data?.generatedPassword) {
+        setRevealPassword(result.data.generatedPassword);
+      }
+    });
+  };
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-        <h3 className="font-semibold text-slate-900">Team Members</h3>
-        <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
-          Invite Member
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/80">
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
-                Member
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
-                Last Active
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {teamMembers.map((member) => (
-              <tr key={member.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-semibold text-brand-700">
-                      {getInitials(member.name)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {member.name}
-                      </p>
-                      <p className="text-xs text-slate-500">{member.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 capitalize">
-                    {member.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={member.status} />
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-500">
-                  {formatDateTime(member.lastActive)}
-                </td>
+    <>
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h3 className="font-semibold text-slate-900">Team Members</h3>
+          <button
+            type="button"
+            onClick={() => setIsCreateOpen(true)}
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
+          >
+            Add Member
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/80">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Member
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                  Last Active
+                </th>
+                <th className="px-6 py-3" />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {teamMembers.map((member) => (
+                <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-semibold text-brand-700">
+                        {getInitials(member.name)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {member.name}
+                        </p>
+                        <p className="text-xs text-slate-500">{member.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 capitalize">
+                      {member.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={member.status} />
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-500">
+                    {formatDateTime(member.lastActive)}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button
+                      type="button"
+                      disabled={resettingId === member.id || isPending}
+                      onClick={() => handleResetPassword(member.id)}
+                      className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                    >
+                      {resettingId === member.id ? "Resetting..." : "Reset Password"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => {
+          if (!isPending) {
+            setIsCreateOpen(false);
+            setForm(BLANK_MEMBER_FORM);
+            setErrors({});
+          }
+        }}
+        title="Add Team Member"
+        size="md"
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField
+            label="Name"
+            name="name"
+            required
+            value={form.name}
+            onChange={(e) => updateField("name", e.target.value)}
+            error={errors.name}
+          />
+          <FormField
+            label="Email"
+            name="email"
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => updateField("email", e.target.value)}
+            error={errors.email}
+          />
+          <FormField
+            as="select"
+            label="Role"
+            name="role"
+            value={form.role}
+            onChange={(e) => updateField("role", e.target.value)}
+            error={errors.role}
+            options={[
+              { value: "admin", label: "Admin" },
+              { value: "manager", label: "Manager" },
+              { value: "agent", label: "Agent" },
+              { value: "technician", label: "Technician" },
+            ]}
+          />
+          <FormField
+            as="select"
+            label="Status"
+            name="status"
+            value={form.status}
+            onChange={(e) => updateField("status", e.target.value)}
+            error={errors.status}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+          />
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          A random password will be generated automatically.
+        </p>
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => {
+              setIsCreateOpen(false);
+              setForm(BLANK_MEMBER_FORM);
+              setErrors({});
+            }}
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Cancel
+          </button>
+          <SubmitButton
+            type="button"
+            loading={isPending}
+            loadingText="Creating..."
+            onClick={handleCreate}
+          >
+            Create Member
+          </SubmitButton>
+        </div>
+      </Modal>
+
+      {revealPassword && (
+        <PasswordRevealModal
+          password={revealPassword}
+          onClose={() => setRevealPassword(null)}
+        />
+      )}
+    </>
   );
 }
 

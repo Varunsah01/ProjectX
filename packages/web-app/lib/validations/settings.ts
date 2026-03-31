@@ -16,7 +16,7 @@ export const createTeamMemberSchema = z.object({
   email: z.string().trim().email("Invalid email"),
   role: z.enum(["admin", "manager", "agent", "technician"]),
   status: z.enum(["active", "inactive"]).default("active"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
 });
 
 export const updateTeamMemberSchema = createTeamMemberSchema.partial().extend({

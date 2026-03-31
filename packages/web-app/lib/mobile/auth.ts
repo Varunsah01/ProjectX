@@ -53,16 +53,6 @@ type MobileSessionResult = {
 };
 
 type TechnicianIdentifierType = "phone" | "employee_id";
-type TechnicianAuthMethod = "password" | "otp";
-
-export class UnsupportedMobileAuthMethodError extends Error {
-  status: number;
-
-  constructor(message: string, status = 503) {
-    super(message);
-    this.status = status;
-  }
-}
 
 const technicianSelect = {
   id: true,
@@ -176,12 +166,10 @@ async function findTechnicianByIdentifier(
 export async function authenticateTechnician({
   identifierType,
   identifier,
-  authMethod,
   secret,
 }: {
   identifierType: TechnicianIdentifierType;
   identifier: string;
-  authMethod: TechnicianAuthMethod;
   secret: string;
 }) {
   const trimmedIdentifier = identifier.trim();
@@ -195,12 +183,6 @@ export async function authenticateTechnician({
 
   if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {
     return null;
-  }
-
-  if (authMethod !== "password") {
-    throw new UnsupportedMobileAuthMethodError(
-      "OTP sign-in is not enabled for the current pilot. Use your employee ID or phone number with password.",
-    );
   }
 
   const passwordMatches = await compare(trimmedSecret, user.passwordHash);

@@ -6,7 +6,7 @@ export const createTechnicianSchema = z.object({
   phone: z.string().trim().default(""),
   territory: z.string().trim().default(""),
   specialization: z.string().trim().default(""),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
   status: z.enum(["available", "on_job", "en_route", "off_duty"]).default("available"),
 });
 
