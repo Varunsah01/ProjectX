@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/Badge";
 import { GradientText } from "@/components/ui/GradientText";
 
 const trustBadges = [
-  "No credit card required",
-  "UPI & Razorpay ready",
-  "GST compliant",
+  "GST-compliant billing",
+  "Hosted on AWS India",
+  "Onboarding included",
 ];
 
 export function HeroSection() {
@@ -69,12 +69,16 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
             className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center"
           >
-            <Button variant="primary" size="lg" href="#features">
-              Start Free Trial
+            <Button
+              variant="primary"
+              size="lg"
+              href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+            >
+              Book a Demo
               <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Button>
             <Button variant="outline" size="lg" href="#features">
-              See What You Get
+              See How It Works
             </Button>
           </motion.div>
 

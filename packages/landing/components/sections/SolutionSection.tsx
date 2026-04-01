@@ -64,7 +64,7 @@ export function SolutionSection() {
                   { text: "Technician gets assigned automatically", highlight: false },
                   { text: "Job completed with proof", highlight: false },
                   { text: "Invoice generated", highlight: true },
-                  { text: "Payment link sent", highlight: false },
+                  { text: "Payment reminder sent", highlight: false },
                   { text: "You get paid", highlight: true },
                 ].map((step, i) => (
                   <span key={i} className="flex items-center gap-3">

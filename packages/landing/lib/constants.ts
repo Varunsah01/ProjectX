@@ -118,7 +118,7 @@ export const FEATURES = [
     icon: Receipt,
     title: "Recurring Billing",
     description:
-      "Set up monthly, quarterly, or yearly billing cycles. Generate GST-compliant invoices automatically. Support UPI, bank transfer, and online payments.",
+      "Set up monthly, quarterly, or yearly billing cycles. Generate GST-compliant invoices automatically. Send payment reminders via SMS and WhatsApp and track dues by customer.",
   },
   {
     icon: Wallet,
@@ -170,7 +170,7 @@ export const VALUE_PILLARS = [
     metric: "2x",
     title: "Faster Collections",
     description:
-      "Automated reminders, online payment links, and clear overdue tracking mean you spend less time chasing payments and more time getting paid.",
+      "Automated SMS and WhatsApp reminders, structured follow-ups, and clear overdue tracking mean you spend less time chasing payments and more time getting paid.",
   },
   {
     metric: "90%",
@@ -216,9 +216,9 @@ export const TESTIMONIALS = [
 export const FAQ_ITEMS = [
   {
     question:
-      "Is Project X suitable for my small business with only 50-100 customers?",
+      "Is Project X suitable if I am just starting to digitise my operations?",
     answer:
-      "Absolutely. Our Starter plan is completely free for up to 100 customers. Most service businesses start small and grow with us. The platform is designed to be simple enough for a 2-person team and powerful enough for a 50-person operation.",
+      "Yes. Project X is built for service businesses of all sizes — whether you manage 50 customers or 5,000. We onboard every customer personally, so the platform is configured around your workflow from day one, not the other way around.",
   },
   {
     question: "Do my technicians need smartphones?",
@@ -226,14 +226,14 @@ export const FAQ_ITEMS = [
       "Yes, the mobile app requires an Android or iOS smartphone. However, the app is lightweight and works well even on budget smartphones with limited data. It also works offline and syncs when connectivity is restored.",
   },
   {
-    question: "Can my customers pay online through the platform?",
+    question: "Does the platform support digital payment collection?",
     answer:
-      "Yes. We integrate with Razorpay and support UPI, credit/debit cards, net banking, and wallets. Your customers receive payment links via SMS or WhatsApp and can pay with one tap.",
+      "Yes. Project X supports sending payment reminders via SMS and WhatsApp, tracking dues, and recording collections. Online payment link generation is part of the platform and is configured during your onboarding based on how your business currently collects.",
   },
   {
     question: "Does it work with Tally or other accounting software?",
     answer:
-      "Our Business plan includes Tally integration. We also support CSV exports that work with any accounting software. Zoho Books and QuickBooks integrations are on our roadmap.",
+      "Yes. We support Tally integration and CSV exports compatible with any accounting software. Zoho Books and QuickBooks integrations are on the roadmap. Our team will configure the right setup for you during onboarding.",
   },
   {
     question: "Is my data safe?",
@@ -243,11 +243,11 @@ export const FAQ_ITEMS = [
   {
     question: "What kind of support do you provide?",
     answer:
-      "All plans include email support. Professional and Business plans get priority WhatsApp and phone support during business hours (9 AM - 7 PM IST). Business plan customers get a dedicated account manager.",
+      "Every Project X customer gets hands-on onboarding support — we set up your account, help migrate your existing data, and train your team. Ongoing support is available via WhatsApp and email during business hours (9 AM – 7 PM IST). Larger accounts get a dedicated point of contact.",
   },
   {
-    question: "Can I try it before committing?",
+    question: "How does the onboarding process work?",
     answer:
-      "Yes. The Starter plan is free forever for up to 100 customers. Professional and Business plans come with a 14-day free trial, no credit card required.",
+      "We start with a demo call where we walk you through the platform using your real business context — customer types, service cycles, team structure. If it is a good fit, our team onboards you directly: setting up your account, configuring your workflows, and training your staff. No self-serve signup; we do this together.",
   },
 ];

@@ -78,8 +78,12 @@ export function Navbar() {
               <Button variant="ghost" size="sm">
                 Login
               </Button>
-              <Button variant="primary" size="sm" href="#features">
-                Start Free Trial
+              <Button
+                variant="primary"
+                size="sm"
+                href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+              >
+                Book a Demo
               </Button>
             </div>
 
@@ -169,8 +173,12 @@ export function Navbar() {
                   <Button variant="outline" size="md">
                     Login
                   </Button>
-                  <Button variant="primary" size="md" href="#features">
-                    Start Free Trial
+                  <Button
+                    variant="primary"
+                    size="md"
+                    href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+                  >
+                    Book a Demo
                   </Button>
                 </motion.div>
               </div>

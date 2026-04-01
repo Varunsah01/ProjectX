@@ -23,7 +23,7 @@ export function CTASection() {
             <div className="relative">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90 backdrop-blur-sm mb-8">
                 <Sparkles className="h-4 w-4" />
-                Free forever for up to 100 customers
+                Personalised onboarding with every account
               </div>
 
               <h2 className="text-3xl font-bold text-white sm:text-4xl lg:text-5xl !leading-tight">
@@ -32,13 +32,17 @@ export function CTASection() {
                 Customers and Revenue?
               </h2>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-brand-100/90 leading-relaxed">
-                Join hundreds of Indian service businesses that are collecting
-                faster, serving better, and renewing more. Start in under 5
-                minutes.
+                Built specifically for Indian recurring service businesses. Book
+                a demo and see exactly how Project X fits your operation — we
+                will walk you through it with your real business context.
               </p>
               <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-                <Button variant="white" size="lg" href="#features">
-                  Start Your Free Trial
+                <Button
+                  variant="white"
+                  size="lg"
+                  href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+                >
+                  Book a Demo
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
                 <Button
@@ -47,11 +51,11 @@ export function CTASection() {
                   href="#features"
                   className="text-white/90 hover:text-white hover:bg-white/10"
                 >
-                  Talk to Sales
+                  See How It Works
                 </Button>
               </div>
               <p className="mt-8 text-sm text-brand-200/70">
-                No credit card required. Set up in under 5 minutes.
+                We onboard you personally — no self-serve setup required.
               </p>
             </div>
           </div>
