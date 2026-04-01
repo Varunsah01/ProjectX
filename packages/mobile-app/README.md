@@ -99,7 +99,7 @@ Check:
 - `EXPO_PUBLIC_API_URL` is set for non-dev/internal builds
 - the URL is a valid absolute `http://` or `https://` URL
 - the URL is not localhost-like for internal builds
-- `app.json` still has valid Android config and existing asset paths
+- `packages/mobile-app/config/expo-config.ts` still has valid Android config and existing asset paths
 
 ### App warns that the build will not work on a physical phone
 

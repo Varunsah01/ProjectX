@@ -5,7 +5,7 @@ This document covers the Expo environment contract for the Android field operato
 ## Internal Build Config Location
 
 - Expo app config: `packages/mobile-app/app.config.ts`
-- Static Expo metadata: `packages/mobile-app/app.json`
+- Shared Expo metadata: `packages/mobile-app/config/expo-config.ts`
 - EAS build profiles: `packages/mobile-app/eas.json`
 
 Run EAS commands from `packages/mobile-app` so the app config and `eas.json` resolve together.

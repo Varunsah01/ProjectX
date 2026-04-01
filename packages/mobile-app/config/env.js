@@ -5,6 +5,7 @@ const LOCALHOST_HOSTS = new Set([
   "10.0.2.2",
   "::1",
 ]);
+const PLACEHOLDER_HOSTS = new Set(["your_deployed_web_app_url"]);
 
 const API_URL_DOC_HINT =
   "See packages/mobile-app/ENVIRONMENT.md for local Expo and EAS build-time setup.";
@@ -55,12 +56,28 @@ function isLocalhostLikeUrl(value) {
   return LOCALHOST_HOSTS.has(parsedUrl.hostname.toLowerCase());
 }
 
+function isPlaceholderApiUrl(value) {
+  if (!value || !isValidAbsoluteHttpUrl(value)) {
+    return false;
+  }
+
+  const parsedUrl = new URL(value);
+  const hostname = parsedUrl.hostname.toLowerCase();
+
+  return (
+    PLACEHOLDER_HOSTS.has(hostname) ||
+    hostname.endsWith(".example.com") ||
+    value.includes("YOUR_DEPLOYED_WEB_APP_URL")
+  );
+}
+
 function getMobileEnvContract(rawEnv) {
   const buildIntent = inferMobileBuildIntent(rawEnv);
   const buildProfile = readEnvValue(rawEnv, "EAS_BUILD_PROFILE");
   const apiUrl = normalizeApiUrl(rawEnv);
   const apiUrlRequired = buildIntent === "non-dev";
   const isLocalhostLikeApiUrl = isLocalhostLikeUrl(apiUrl);
+  const isPlaceholderApiUrlValue = isPlaceholderApiUrl(apiUrl);
   const errors = [];
   const warnings = [];
 
@@ -82,6 +99,12 @@ function getMobileEnvContract(rawEnv) {
     );
   }
 
+  if (apiUrl && isPlaceholderApiUrlValue && apiUrlRequired) {
+    errors.push(
+      "EXPO_PUBLIC_API_URL must point to a real deployed backend. Placeholder example hosts are not allowed for internal or production-like builds.",
+    );
+  }
+
   if (!apiUrl && !apiUrlRequired) {
     warnings.push(
       "EXPO_PUBLIC_API_URL is not set. Local Expo development will fall back to localhost/emulator-only behavior.",
@@ -94,6 +117,7 @@ function getMobileEnvContract(rawEnv) {
     buildIntent,
     buildProfile,
     isLocalhostLikeApiUrl,
+    isPlaceholderApiUrl: isPlaceholderApiUrlValue,
     errors,
     warnings,
   };

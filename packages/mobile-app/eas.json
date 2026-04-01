@@ -1,13 +1,29 @@
 {
   "cli": {
-    "appVersionSource": "local"
+    "version": ">= 18.4.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "internal": {
       "distribution": "internal",
       "channel": "internal",
+      "node": "20.19.0",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "node": "20.19.0",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "NODE_ENV": "production"
       }
     }
   }

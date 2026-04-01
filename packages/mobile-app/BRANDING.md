@@ -45,4 +45,4 @@ The pilot build now aligns on a simple teal brand color:
 If final design assets use a different primary color, update:
 
 - `packages/mobile-app/src/constants/theme.ts`
-- splash/adaptive icon background color in `packages/mobile-app/app.json`
+- splash/adaptive icon background color in `packages/mobile-app/config/expo-config.ts`

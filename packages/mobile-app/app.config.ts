@@ -5,8 +5,8 @@ import {
   formatMobileEnvValidationError,
   getMobileEnvContract,
 } from "./config/env";
+import { mobileExpoConfig } from "./config/expo-config";
 
-const appJson = require("./app.json");
 const projectRoot = __dirname;
 const androidPackagePattern = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
@@ -58,9 +58,9 @@ export default function getAppConfig(): ExpoConfig {
   }
 
   const config: ExpoConfig = {
-    ...appJson.expo,
+    ...mobileExpoConfig,
     extra: {
-      ...(appJson.expo.extra ?? {}),
+      ...(mobileExpoConfig.extra ?? {}),
       mobileEnv: {
         apiUrlRequired: mobileEnvContract.apiUrlRequired,
         buildIntent: mobileEnvContract.buildIntent,
