@@ -72,7 +72,7 @@ export function HeroSection() {
             <Button
               variant="primary"
               size="lg"
-              href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+              href="/book-demo"
             >
               Book a Demo
               <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />

@@ -81,7 +81,7 @@ export function Navbar() {
               <Button
                 variant="primary"
                 size="sm"
-                href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+                href="/book-demo"
               >
                 Book a Demo
               </Button>
@@ -176,7 +176,7 @@ export function Navbar() {
                   <Button
                     variant="primary"
                     size="md"
-                    href="mailto:hello@projectx.in?subject=Book%20a%20Demo"
+                    href="/book-demo"
                   >
                     Book a Demo
                   </Button>
