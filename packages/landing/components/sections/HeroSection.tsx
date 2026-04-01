@@ -10,8 +10,8 @@ import { GradientText } from "@/components/ui/GradientText";
 
 const trustBadges = [
   "GST-compliant billing",
-  "Hosted on AWS India",
-  "Onboarding included",
+  "Office and field teams",
+  "Guided onboarding included",
 ];
 
 export function HeroSection() {

@@ -5,23 +5,14 @@ const footerLinks = {
   Product: [
     { label: "Features", href: "#features" },
     { label: "Industries", href: "#industries" },
-    { label: "Roadmap", href: "#" },
   ],
   Company: [
-    { label: "About", href: "#" },
-    { label: "Blog", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Contact", href: "#" },
+    { label: "Book a Demo", href: "/book-demo" },
+    { label: "Contact", href: "mailto:hello@projectx.in" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Refund Policy", href: "#" },
-  ],
-  Connect: [
-    { label: "LinkedIn", href: "#" },
-    { label: "Twitter", href: "#" },
-    { label: "YouTube", href: "#" },
+    { label: "Terms of Service", href: "/terms" },
   ],
 };
 
@@ -29,9 +20,9 @@ export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-white">
       <Container className="py-12 lg:py-16">
-        <div className="grid grid-cols-2 gap-8 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
           {/* Brand */}
-          <div className="col-span-2 lg:col-span-1">
+          <div className="col-span-2 lg:col-span-1 lg:pr-4">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand shadow-md shadow-brand-500/20">
                 <span className="text-lg font-bold text-white">X</span>
@@ -79,13 +70,10 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-6">
             <a href="/privacy" className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-              Privacy
+              Privacy Policy
             </a>
-            <a href="#" className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-              Terms
-            </a>
-            <a href="#" className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
-              Cookies
+            <a href="/terms" className="text-sm text-slate-400 hover:text-slate-600 transition-colors">
+              Terms of Service
             </a>
           </div>
         </div>

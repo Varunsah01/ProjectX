@@ -50,7 +50,7 @@ export function Navbar() {
         <Container>
           <div className="flex h-16 items-center justify-between lg:h-20">
             {/* Logo */}
-            <a href="#" className="flex items-center gap-2.5 group">
+            <a href="/" className="flex items-center gap-2.5 group">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand shadow-lg shadow-brand-500/20 transition-transform group-hover:scale-105">
                 <span className="text-lg font-bold text-white">X</span>
               </div>
@@ -75,9 +75,6 @@ export function Navbar() {
 
             {/* Desktop CTA */}
             <div className="hidden items-center gap-3 lg:flex">
-              <Button variant="ghost" size="sm">
-                Login
-              </Button>
               <Button
                 variant="primary"
                 size="sm"
@@ -170,9 +167,6 @@ export function Navbar() {
                   transition={{ delay: 0.2 }}
                   className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4"
                 >
-                  <Button variant="outline" size="md">
-                    Login
-                  </Button>
                   <Button
                     variant="primary"
                     size="md"

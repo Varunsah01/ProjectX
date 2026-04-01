@@ -23,18 +23,19 @@ export function CTASection() {
             <div className="relative">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm font-medium text-white/90 backdrop-blur-sm mb-8">
                 <Sparkles className="h-4 w-4" />
-                Personalised onboarding with every account
+                Tailored walkthrough · Guided onboarding · Built for your workflow
               </div>
 
               <h2 className="text-3xl font-bold text-white sm:text-4xl lg:text-5xl !leading-tight">
-                Ready to Stop Losing
+                See How Project X Fits
                 <br />
-                Customers and Revenue?
+                Your Service Business
               </h2>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-brand-100/90 leading-relaxed">
-                Built specifically for Indian recurring service businesses. Book
-                a demo and see exactly how Project X fits your operation — we
-                will walk you through it with your real business context.
+                Book a demo and we will walk you through the platform using your
+                real business context — your industry, team size, and the
+                specific problems you want to solve. No pressure, no pitch.
+                Pricing comes after we understand your requirements.
               </p>
               <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
                 <Button
@@ -48,14 +49,14 @@ export function CTASection() {
                 <Button
                   variant="ghost"
                   size="lg"
-                  href="#features"
+                  href="mailto:hello@projectx.in"
                   className="text-white/90 hover:text-white hover:bg-white/10"
                 >
-                  See How It Works
+                  Talk to Us
                 </Button>
               </div>
               <p className="mt-8 text-sm text-brand-200/70">
-                We onboard you personally — no self-serve setup required.
+                Our team handles setup end-to-end — your team is operational within 1–2 weeks.
               </p>
             </div>
           </div>
