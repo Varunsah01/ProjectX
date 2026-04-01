@@ -19,9 +19,14 @@ export function PasswordRevealModal({ password, onClose }: PasswordRevealModalPr
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Password Created" size="sm">
-      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
-        Save this password — it will not be shown again.
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Save this password — it won't be shown again"
+      size="sm"
+    >
+      <p className="mb-4 text-sm text-slate-600">
+        Copy it now and store it somewhere secure before closing this dialog.
       </p>
       <div className="flex items-center gap-2">
         <input

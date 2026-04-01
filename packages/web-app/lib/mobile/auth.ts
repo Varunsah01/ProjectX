@@ -179,6 +179,10 @@ export async function authenticateTechnician({
     return null;
   }
 
+  if (/^\d{6}$/.test(trimmedSecret)) {
+    return null;
+  }
+
   const user = await findTechnicianByIdentifier(identifierType, trimmedIdentifier);
 
   if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {

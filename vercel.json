@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install --workspace=packages/web-app --include-workspace-root",
+  "buildCommand": "cd packages/web-app && npx prisma generate && npx next build",
+  "outputDirectory": "packages/web-app/.next",
+  "crons": [
+    {
+      "path": "/api/cron/generate-invoices",
+      "schedule": "30 0 * * *"
+    }
+  ]
+}

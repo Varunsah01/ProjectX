@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateTechnician, createMobileSession } from "@/lib/mobile/auth";
-import { parseJsonBody } from "@/lib/security/api";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +13,23 @@ const loginSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const body = await parseJsonBody(request, loginSchema);
+    const rawBody = await request.json();
+
+    if (
+      rawBody &&
+      typeof rawBody === "object" &&
+      "otpCode" in rawBody &&
+      rawBody.otpCode != null
+    ) {
+      return NextResponse.json(
+        {
+          error: "OTP login is not available yet. Use your password to sign in.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const body = loginSchema.parse(rawBody);
     const user = await authenticateTechnician({
       identifierType: body.identifierType,
       identifier: body.identifier,
