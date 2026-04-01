@@ -215,39 +215,43 @@ export const TESTIMONIALS = [
 
 export const FAQ_ITEMS = [
   {
-    question:
-      "Is Project X suitable if I am just starting to digitise my operations?",
+    question: "Who is Project X built for?",
     answer:
-      "Yes. Project X is built for service businesses of all sizes — whether you manage 50 customers or 5,000. We onboard every customer personally, so the platform is configured around your workflow from day one, not the other way around.",
+      "Project X is built for Indian recurring service businesses — companies that run on repeat visits, AMC contracts, and periodic collections. Water purifier services, AC and HVAC maintenance, CCTV installation, pest control, elevator maintenance, facility management — if your business has a regular customer base on service agreements, this platform was designed around your specific workflows.",
   },
   {
-    question: "Do my technicians need smartphones?",
+    question: "How is pricing handled?",
     answer:
-      "Yes, the mobile app requires an Android or iOS smartphone. However, the app is lightweight and works well even on budget smartphones with limited data. It also works offline and syncs when connectivity is restored.",
+      "We do not publish fixed pricing online. Every business is different in size, service type, and what they actually need from the platform. After your demo call, we put together a commercial proposal based on your team size and requirements. No hidden fees, no self-serve checkout — the pricing conversation happens directly with our team.",
   },
   {
-    question: "Does the platform support digital payment collection?",
+    question: "Is there a demo before I commit to anything?",
     answer:
-      "Yes. Project X supports sending payment reminders via SMS and WhatsApp, tracking dues, and recording collections. Online payment link generation is part of the platform and is configured during your onboarding based on how your business currently collects.",
+      "Yes — the demo is where everything starts. Book a call and we will walk you through the platform using your real business context: your industry, team structure, and the specific problems you want to solve. There is no pitch, no pressure, and no obligation to proceed.",
   },
   {
-    question: "Does it work with Tally or other accounting software?",
+    question: "How does onboarding work once we decide to go ahead?",
     answer:
-      "Yes. We support Tally integration and CSV exports compatible with any accounting software. Zoho Books and QuickBooks integrations are on the roadmap. Our team will configure the right setup for you during onboarding.",
+      "Our team handles the full setup. We configure your account, import your customer data, set up your workflows and invoice cycles, and train your staff — both the office team and field technicians. We do not hand you a login and leave you to figure it out. Most businesses are fully operational within one to two weeks.",
   },
   {
-    question: "Is my data safe?",
+    question: "We run on Excel and WhatsApp. Can you help us migrate?",
     answer:
-      "Your data is encrypted at rest and in transit, hosted on AWS India (Mumbai region) servers, and backed up daily. We follow industry-standard security practices to keep your business data secure.",
+      "Yes — this is the most common situation we work with. Our onboarding team takes your existing customer lists, contract records, and transaction history and brings them into the platform. You do not need to re-enter data manually. We have moved businesses off spreadsheets, paper registers, and WhatsApp-based tracking.",
   },
   {
-    question: "What kind of support do you provide?",
+    question: "Do field technicians need smartphones?",
     answer:
-      "Every Project X customer gets hands-on onboarding support — we set up your account, help migrate your existing data, and train your team. Ongoing support is available via WhatsApp and email during business hours (9 AM – 7 PM IST). Larger accounts get a dedicated point of contact.",
+      "Yes. The technician mobile app runs on Android or iOS, but it is designed to be lightweight and works well on budget Android phones. It also works offline — technicians can log job completions, upload photos, and capture signatures without an active connection, and the app syncs automatically when connectivity is restored.",
   },
   {
-    question: "How does the onboarding process work?",
+    question: "Can the platform be configured for how our business works?",
     answer:
-      "We start with a demo call where we walk you through the platform using your real business context — customer types, service cycles, team structure. If it is a good fit, our team onboards you directly: setting up your account, configuring your workflows, and training your staff. No self-serve signup; we do this together.",
+      "Yes. During onboarding we configure customer categories, asset types, contract templates, billing cycles, job types, complaint workflows, and escalation rules to match exactly how you run your operation. Project X is not a generic tool you force your process into — we fit it around your business.",
+  },
+  {
+    question: "Is our business data secure?",
+    answer:
+      "All data is encrypted in transit and at rest, hosted on AWS India (Mumbai region) servers, and backed up daily. Your customer records, contract history, and operational data are stored on Indian infrastructure and are never shared with third parties.",
   },
 ];

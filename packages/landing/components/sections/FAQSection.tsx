@@ -63,7 +63,7 @@ export function FAQSection() {
           <SectionHeading
             eyebrow="FAQ"
             title="Frequently Asked Questions"
-            subtitle="Everything you need to know about getting started with Project X."
+            subtitle="Common questions from service businesses considering Project X."
           />
         </AnimatedSection>
 
