@@ -26,6 +26,20 @@ export const metadata: Metadata = {
     description:
       "Collect faster, serve better, renew more customers. The operating system for Indian service businesses.",
     type: "website",
+    siteName: "Project X",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Project X - Recurring Service Operations Platform",
+    description:
+      "Collect faster, serve better, renew more customers. The operating system for Indian service businesses.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  other: {
+    "theme-color": "#4f46e5",
   },
 };
 
@@ -36,7 +50,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {/* Skip to content link for accessibility */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-xl focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-white focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

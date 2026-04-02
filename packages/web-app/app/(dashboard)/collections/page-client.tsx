@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Clock, IndianRupee } from "lucide-react";
+import { toast } from "sonner";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PaginationControls } from "@/components/ui/PaginationControls";
+import { bulkSendInvoiceRemindersAction } from "@/lib/actions/bulk";
 import { listCollectionsAction } from "@/lib/actions/invoices";
 import { fetchAllExportRows, type ExportColumn } from "@/lib/export";
 import { useListUrlState } from "@/lib/use-list-url-state";
@@ -36,12 +39,28 @@ export default function CollectionsPageClient({
     pageSize: number;
   };
 }) {
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
   const { updateParams } = useListUrlState({
     search: "",
     bucket: "all",
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
   });
+
+  const handleSendReminder = async (invoiceId: string) => {
+    setSendingId(invoiceId);
+    try {
+      const result = await bulkSendInvoiceRemindersAction({ ids: [invoiceId] });
+      if (result.success) {
+        toast.success("Reminder sent");
+      } else {
+        toast.error(result.error ?? "Failed to send reminder");
+      }
+    } finally {
+      setSendingId(null);
+    }
+  };
 
   const loadExportData = () =>
     fetchAllExportRows<CollectionRow, CollectionsData>(
@@ -228,8 +247,12 @@ export default function CollectionsPageClient({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <button className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
-                      Send Reminder
+                    <button
+                      onClick={() => handleSendReminder(invoice.id)}
+                      disabled={sendingId === invoice.id}
+                      className="rounded-lg bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {sendingId === invoice.id ? "Sending..." : "Send Reminder"}
                     </button>
                   </td>
                 </tr>

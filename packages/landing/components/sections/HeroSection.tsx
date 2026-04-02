@@ -20,11 +20,11 @@ export function HeroSection() {
 
   return (
     <section className="relative overflow-hidden pt-28 pb-20 lg:pt-36 lg:pb-28">
-      {/* Background decorations */}
+      {/* Animated gradient background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[700px] w-[900px] rounded-full bg-brand-100/30 blur-3xl" />
-        <div className="absolute top-40 right-0 h-[300px] w-[300px] rounded-full bg-accent-400/10 blur-3xl animate-float" />
-        <div className="absolute bottom-0 left-0 h-[250px] w-[250px] rounded-full bg-brand-200/15 blur-3xl animate-float-delayed" />
+        <div className="absolute inset-0 bg-gradient-shift animate-gradient-shift opacity-100" />
+        <div className="absolute top-40 right-0 h-[300px] w-[300px] rounded-full bg-accent-400/10 blur-3xl will-change-transform animate-float" />
+        <div className="absolute bottom-0 left-0 h-[250px] w-[250px] rounded-full bg-brand-200/15 blur-3xl will-change-transform animate-float-delayed" />
         {/* Subtle grid */}
         <div className="absolute inset-0 bg-grid-pattern opacity-40" />
       </div>
@@ -46,7 +46,7 @@ export function HeroSection() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-            className="mt-8 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-7xl !leading-[1.1]"
+            className="mt-8 text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-7xl !leading-[1.1]"
           >
             Collect Faster. Serve Better.{" "}
             <GradientText>Renew More Customers.</GradientText>
@@ -58,9 +58,9 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
             className="mt-6 text-lg text-slate-600 sm:text-xl lg:text-2xl max-w-3xl mx-auto leading-relaxed"
           >
-            The all-in-one operations platform for recurring service businesses.
-            Stop juggling spreadsheets, WhatsApp groups, and missed payments —
-            run your entire service operation from one place.
+            The operating system built from the ground up for recurring service
+            businesses. Customers, billing, complaints, technicians, contracts
+            — managed from one platform, by your whole team.
           </motion.p>
 
           <motion.div
@@ -72,13 +72,13 @@ export function HeroSection() {
             <Button
               variant="primary"
               size="lg"
-              href="/book-demo"
+              href="mailto:hello@projectx.in"
             >
-              Book a Demo
+              Talk to Us
               <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Button>
-            <Button variant="outline" size="lg" href="#features">
-              See How It Works
+            <Button variant="outline" size="lg" href="/book-demo">
+              Book a Demo
             </Button>
           </motion.div>
 
@@ -109,7 +109,7 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 60 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-16 mx-auto max-w-5xl"
+          className="mt-16 mx-auto max-w-5xl will-change-transform"
         >
           <div className="relative rounded-2xl border border-slate-200/80 bg-white p-2 shadow-2xl shadow-brand-500/10">
             {/* Window chrome */}

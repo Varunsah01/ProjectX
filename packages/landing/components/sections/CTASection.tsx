@@ -9,7 +9,7 @@ export function CTASection() {
   return (
     <section className="py-20 lg:py-28">
       <Container>
-        <AnimatedSection>
+        <AnimatedSection variant="scale">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-brand px-8 py-16 text-center sm:px-16 lg:py-24">
             {/* Background pattern */}
             <div className="absolute inset-0 bg-grid-pattern opacity-10" />
@@ -41,22 +41,22 @@ export function CTASection() {
                 <Button
                   variant="white"
                   size="lg"
-                  href="/book-demo"
+                  href="mailto:hello@projectx.in"
                 >
-                  Book a Demo
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                  Talk to Us
+                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="lg"
-                  href="mailto:hello@projectx.in"
-                  className="text-white/90 hover:text-white hover:bg-white/10"
+                  href="/book-demo"
+                  className="text-white border-2 border-white/30 hover:text-white hover:bg-white/10 hover:border-white/50"
                 >
-                  Talk to Us
+                  Book a Demo
                 </Button>
               </div>
               <p className="mt-8 text-sm text-brand-200/70">
-                Our team handles setup end-to-end — your team is operational within 1–2 weeks.
+                Our team handles setup end-to-end — your team is operational within 1-2 weeks.
               </p>
             </div>
           </div>

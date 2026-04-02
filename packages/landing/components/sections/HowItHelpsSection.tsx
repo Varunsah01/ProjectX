@@ -1,48 +1,38 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect } from "react";
 import { motion, useInView } from "framer-motion";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { GradientText } from "@/components/ui/GradientText";
-import {
-  AnimatedSection,
-  StaggerContainer,
-  AnimatedItem,
-} from "@/components/ui/AnimatedSection";
+import { AnimatedSection } from "@/components/ui/AnimatedSection";
 import { VALUE_PILLARS } from "@/lib/constants";
 
 function CountUp({ target, suffix = "" }: { target: number; suffix?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, margin: "-50px" });
-  const [count, setCount] = useState(0);
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const isInView = useInView(spanRef, { once: true, margin: "-50px" });
 
   useEffect(() => {
-    if (!isInView) return;
+    if (!isInView || !spanRef.current) return;
 
+    const startTime = performance.now();
     const duration = 1500;
-    const steps = 60;
-    const increment = target / steps;
-    let current = 0;
-    const interval = duration / steps;
 
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= target) {
-        setCount(target);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(current));
-      }
-    }, interval);
+    function animate(currentTime: number) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+      const value = Math.floor(eased * target);
+      if (spanRef.current) spanRef.current.textContent = `${value}${suffix}`;
+      if (progress < 1) requestAnimationFrame(animate);
+    }
 
-    return () => clearInterval(timer);
-  }, [isInView, target]);
+    requestAnimationFrame(animate);
+  }, [isInView, target, suffix]);
 
   return (
-    <span ref={ref} className="tabular-nums">
-      {count}
-      {suffix}
+    <span ref={spanRef} className="tabular-nums">
+      0{suffix}
     </span>
   );
 }
@@ -59,17 +49,23 @@ export function HowItHelpsSection() {
       <div className="absolute inset-0 bg-grid-pattern opacity-30 -z-10" />
 
       <Container>
-        <AnimatedSection>
+        <AnimatedSection variant="fade-in">
           <SectionHeading
             eyebrow="Impact"
             title="Real Results for Real Businesses"
-            subtitle="Service businesses using platforms like Project X report dramatic improvements across their operations."
+            subtitle="Project X customers report dramatic, measurable improvements across their operations."
           />
         </AnimatedSection>
 
-        <StaggerContainer className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {VALUE_PILLARS.map((pillar, i) => (
-            <AnimatedItem key={pillar.title}>
+            <motion.div
+              key={pillar.title}
+              initial={{ opacity: 0, scale: 0.92 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.5, delay: i * 0.12, ease: "easeOut" }}
+            >
               <div className="group relative rounded-2xl border border-slate-200 bg-white p-8 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 h-full">
                 {/* Top gradient bar */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-500 to-accent-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
@@ -92,9 +88,9 @@ export function HowItHelpsSection() {
                   </p>
                 </div>
               </div>
-            </AnimatedItem>
+            </motion.div>
           ))}
-        </StaggerContainer>
+        </div>
       </Container>
     </section>
   );

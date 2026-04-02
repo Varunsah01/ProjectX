@@ -28,11 +28,12 @@ export function TestimonialsSection() {
             <AnimatedItem key={testimonial.name}>
               <div className="group relative rounded-2xl border border-slate-200 bg-white p-8 shadow-sm h-full transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-brand-200">
                 {/* Star rating */}
-                <div className="flex gap-1">
+                <div className="flex gap-1" aria-label="5 out of 5 stars">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       className="h-4 w-4 fill-amber-400 text-amber-400"
+                      aria-hidden="true"
                     />
                   ))}
                 </div>

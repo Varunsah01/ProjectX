@@ -26,6 +26,10 @@ import {
   Flame,
   Bug,
   Building,
+  MapPin,
+  Headset,
+  Layers,
+  MonitorSmartphone,
 } from "lucide-react";
 
 export const SITE_CONFIG = {
@@ -39,6 +43,13 @@ export const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Industries", href: "#industries" },
   { label: "FAQ", href: "#faq" },
+];
+
+export const SOCIAL_PROOF_STATS = [
+  { value: "500+", numericValue: 500, suffix: "+", label: "Service Businesses" },
+  { value: "15+", numericValue: 15, suffix: "+", label: "Industries Served" },
+  { value: "50+", numericValue: 50, suffix: "+", label: "Cities Across India" },
+  { value: "98%", numericValue: 98, suffix: "%", label: "Customer Retention" },
 ];
 
 export const PAIN_POINTS = [
@@ -83,21 +94,21 @@ export const PAIN_POINTS = [
 export const SOLUTION_POINTS = [
   {
     icon: Zap,
-    title: "No more juggling",
+    title: "Replace 5 Tools with One",
     description:
-      "Replace 5 tools with 1. Spreadsheets, WhatsApp groups, paper registers, and phone calls — all replaced by a single platform.",
+      "Spreadsheets, WhatsApp groups, paper registers, phone calls, and manual tracking — all replaced by a single, purpose-built platform.",
   },
   {
     icon: Link,
-    title: "Everything talks to everything",
+    title: "Automated End-to-End Workflows",
     description:
       "A complaint triggers a technician assignment. A completed service triggers an invoice. An AMC expiry triggers a renewal reminder. Automatically.",
   },
   {
     icon: Smartphone,
-    title: "Works where your team works",
+    title: "Office, Field, and Customer — All in Sync",
     description:
-      "Office staff use the web app. Technicians use the mobile app. Customers use the self-service portal. Everyone stays in sync.",
+      "Office staff use the web app. Technicians use the mobile app. Customers use the self-service portal. Everyone stays connected, in real time.",
   },
 ];
 
@@ -186,6 +197,33 @@ export const VALUE_PILLARS = [
   },
 ];
 
+export const WHY_CHOOSE_US = [
+  {
+    icon: MapPin,
+    title: "Built Exclusively for India",
+    description:
+      "GST-compliant invoicing, WhatsApp and SMS integrations, Indian payment gateways, and data hosted on AWS Mumbai. Not a foreign tool localised as an afterthought — built from day one for Indian service businesses.",
+  },
+  {
+    icon: Headset,
+    title: "White-Glove Onboarding",
+    description:
+      "We handle your entire setup — account configuration, customer data migration, workflow design, and hands-on staff training. Your team is fully operational within 1-2 weeks, without lifting a finger.",
+  },
+  {
+    icon: Layers,
+    title: "Depth, Not Breadth",
+    description:
+      "Project X is not a generic CRM with service features bolted on. Every module is purpose-built for recurring service operations — from AMC lifecycle management to technician job tracking with proof of service.",
+  },
+  {
+    icon: MonitorSmartphone,
+    title: "One Platform, Three Interfaces",
+    description:
+      "A web dashboard for your office team, a mobile app for field technicians (works offline), and a branded self-service portal for your customers. Everyone operates from the same system.",
+  },
+];
+
 export const TESTIMONIALS = [
   {
     name: "Rajesh Kumar",
@@ -222,7 +260,7 @@ export const FAQ_ITEMS = [
   {
     question: "How is pricing handled?",
     answer:
-      "We do not publish fixed pricing online. Every business is different in size, service type, and what they actually need from the platform. After your demo call, we put together a commercial proposal based on your team size and requirements. No hidden fees, no self-serve checkout — the pricing conversation happens directly with our team.",
+      "We do not publish fixed pricing online. Every business is different in size, service type, and what they actually need from the platform. After your demo call, we put together a custom commercial proposal based on your team size, the modules you need, and how your operation works. No hidden fees, no one-size-fits-all plans — the pricing conversation happens directly with our team, and is tailored to deliver the best value for your specific business.",
   },
   {
     question: "Is there a demo before I commit to anything?",
@@ -232,7 +270,7 @@ export const FAQ_ITEMS = [
   {
     question: "How does onboarding work once we decide to go ahead?",
     answer:
-      "Our team handles the full setup. We configure your account, import your customer data, set up your workflows and invoice cycles, and train your staff — both the office team and field technicians. We do not hand you a login and leave you to figure it out. Most businesses are fully operational within one to two weeks.",
+      "Our team handles the full setup end-to-end. We configure your account, import your customer data, set up your workflows and invoice cycles, and train your staff — both the office team and field technicians. We do not hand you a login and leave you to figure it out. Most businesses are fully operational within one to two weeks.",
   },
   {
     question: "We run on Excel and WhatsApp. Can you help us migrate?",
@@ -255,3 +293,16 @@ export const FAQ_ITEMS = [
       "All data is encrypted in transit and at rest, hosted on AWS India (Mumbai region) servers, and backed up daily. Your customer records, contract history, and operational data are stored on Indian infrastructure and are never shared with third parties.",
   },
 ];
+
+export const INLINE_CTA_CONTENT = {
+  afterFeatures: {
+    text: "Want to see how these modules work for your specific business?",
+    buttonText: "Talk to Our Team",
+    buttonHref: "mailto:hello@projectx.in",
+  },
+  afterTestimonials: {
+    text: "Join hundreds of service businesses already running on Project X.",
+    buttonText: "Book a Demo",
+    buttonHref: "/book-demo",
+  },
+};

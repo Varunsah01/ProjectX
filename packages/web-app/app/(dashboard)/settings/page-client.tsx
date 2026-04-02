@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { toast } from "sonner";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField } from "@/components/ui/FormField";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -11,6 +13,11 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Tabs } from "@/components/ui/Tabs";
 import {
+  createPlanAction,
+  updatePlanAction,
+  deletePlanAction,
+} from "@/lib/actions/plans";
+import {
   createTeamMemberAction,
   resetTeamMemberPasswordAction,
   updateBusinessProfileAction,
@@ -18,7 +25,7 @@ import {
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createTeamMemberSchema } from "@/lib/validations/settings";
 import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
-import type { SettingsData } from "@/lib/types";
+import type { Plan, SettingsData } from "@/lib/types";
 
 export default function SettingsPageClient({
   data,
@@ -464,58 +471,278 @@ function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) 
   );
 }
 
+const BLANK_PLAN_FORM = {
+  name: "",
+  type: "amc" as "amc" | "warranty",
+  description: "",
+  price: 0,
+  duration: 12,
+  visitsCovered: 0,
+  isActive: true,
+};
+
+type PlanFormState = typeof BLANK_PLAN_FORM;
+
 function PlansTab({ plans }: { plans: SettingsData["plans"] }) {
+  const router = useRouter();
+  const [planModal, setPlanModal] = useState<{ open: boolean; plan: Plan | null }>({ open: false, plan: null });
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; plan: Plan | null }>({ open: false, plan: null });
+  const [isPending, startTransition] = useTransition();
+
+  const handleSave = (form: PlanFormState) => {
+    startTransition(async () => {
+      const result = planModal.plan
+        ? await updatePlanAction({ id: planModal.plan.id, ...form })
+        : await createPlanAction(form);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to save plan");
+        return;
+      }
+      toast.success(planModal.plan ? "Plan updated" : "Plan created");
+      setPlanModal({ open: false, plan: null });
+      router.refresh();
+    });
+  };
+
+  const handleDelete = () => {
+    if (!deleteModal.plan) return;
+    const planId = deleteModal.plan.id;
+    startTransition(async () => {
+      const result = await deletePlanAction(planId);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to delete plan");
+        return;
+      }
+      toast.success("Plan deleted");
+      setDeleteModal({ open: false, plan: null });
+      router.refresh();
+    });
+  };
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-slate-500">
-          Manage your service plans and pricing
-        </p>
-        <button className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
-          Add Plan
-        </button>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <div
-            key={plan.id}
-            className="rounded-xl border border-slate-200 bg-white p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200"
+    <>
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-slate-500">
+            Manage your service plans and pricing
+          </p>
+          <button
+            type="button"
+            onClick={() => setPlanModal({ open: true, plan: null })}
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-semibold text-slate-900">{plan.name}</h4>
-                <span className="text-xs uppercase text-slate-500">
-                  {plan.type}
+            Add Plan
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <div
+              key={plan.id}
+              className="rounded-xl border border-slate-200 bg-white p-5 hover:shadow-md hover:border-slate-300 transition-all duration-200"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-semibold text-slate-900">{plan.name}</h4>
+                  <span className="text-xs uppercase text-slate-500">
+                    {plan.type}
+                  </span>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    plan.isActive
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {plan.isActive ? "Active" : "Inactive"}
                 </span>
               </div>
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                  plan.isActive
-                    ? "bg-green-100 text-green-700"
-                    : "bg-slate-100 text-slate-500"
-                }`}
-              >
-                {plan.isActive ? "Active" : "Inactive"}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">{plan.description}</p>
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-              <div>
-                <p className="text-lg font-bold text-slate-900 tabular-nums">
-                  {formatCurrency(plan.price)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {plan.duration} months · {plan.visitsCovered} visits
-                </p>
+              <p className="mt-2 text-sm text-slate-500">{plan.description}</p>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+                <div>
+                  <p className="text-lg font-bold text-slate-900 tabular-nums">
+                    {formatCurrency(plan.price)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {plan.duration} months · {plan.visitsCovered} visits
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPlanModal({ open: true, plan })}
+                    className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteModal({ open: true, plan })}
+                    className="text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <button className="text-sm text-brand-600 hover:text-brand-700 font-medium transition-colors">
-                Edit
-              </button>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+
+      <PlanFormModal
+        isOpen={planModal.open}
+        plan={planModal.plan}
+        isPending={isPending}
+        onClose={() => { if (!isPending) setPlanModal({ open: false, plan: null }); }}
+        onSave={handleSave}
+      />
+
+      <ConfirmModal
+        isOpen={deleteModal.open}
+        onClose={() => { if (!isPending) setDeleteModal({ open: false, plan: null }); }}
+        onConfirm={handleDelete}
+        title="Delete Plan"
+        description={`Delete "${deleteModal.plan?.name}"? Existing contracts will not be affected.`}
+        confirmLabel="Delete Plan"
+        loading={isPending}
+      />
+    </>
+  );
+}
+
+function PlanFormModal({
+  isOpen,
+  plan,
+  isPending,
+  onClose,
+  onSave,
+}: {
+  isOpen: boolean;
+  plan: Plan | null;
+  isPending: boolean;
+  onClose: () => void;
+  onSave: (form: PlanFormState) => void;
+}) {
+  const [form, setForm] = useState<PlanFormState>(BLANK_PLAN_FORM);
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm(
+        plan
+          ? {
+              name: plan.name,
+              type: plan.type,
+              description: plan.description,
+              price: plan.price,
+              duration: plan.duration,
+              visitsCovered: plan.visitsCovered,
+              isActive: plan.isActive,
+            }
+          : BLANK_PLAN_FORM,
+      );
+    }
+  }, [isOpen, plan]);
+
+  const update = <K extends keyof PlanFormState>(key: K, value: PlanFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={plan ? "Edit Plan" : "Add Plan"}
+      size="md"
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField
+          label="Plan Name"
+          name="name"
+          required
+          value={form.name}
+          onChange={(e) => update("name", e.target.value)}
+          containerClassName="sm:col-span-2"
+        />
+        <FormField
+          as="select"
+          label="Type"
+          name="type"
+          value={form.type}
+          onChange={(e) => update("type", e.target.value as "amc" | "warranty")}
+          options={[
+            { value: "amc", label: "AMC" },
+            { value: "warranty", label: "Warranty" },
+          ]}
+        />
+        <FormField
+          label="Price (INR)"
+          name="price"
+          type="number"
+          required
+          value={String(form.price)}
+          onChange={(e) => update("price", parseFloat(e.target.value) || 0)}
+        />
+        <FormField
+          label="Duration (months)"
+          name="duration"
+          type="number"
+          required
+          value={String(form.duration)}
+          onChange={(e) => update("duration", parseInt(e.target.value, 10) || 1)}
+        />
+        <FormField
+          label="Visits Covered"
+          name="visitsCovered"
+          type="number"
+          required
+          value={String(form.visitsCovered)}
+          onChange={(e) => update("visitsCovered", parseInt(e.target.value, 10) || 0)}
+        />
+        <FormField
+          as="textarea"
+          label="Description"
+          name="description"
+          required
+          rows={3}
+          value={form.description}
+          onChange={(e) => update("description", e.target.value)}
+          containerClassName="sm:col-span-2"
+        />
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <span className="text-sm font-medium text-slate-700">Active</span>
+        <button
+          type="button"
+          onClick={() => update("isActive", !form.isActive)}
+          className={`relative h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:ring-offset-2 ${
+            form.isActive ? "bg-brand-600" : "bg-slate-200"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+              form.isActive ? "translate-x-5" : ""
+            }`}
+          />
+        </button>
+      </div>
+      <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={onClose}
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          Cancel
+        </button>
+        <SubmitButton
+          type="button"
+          loading={isPending}
+          loadingText="Saving..."
+          onClick={() => onSave(form)}
+        >
+          {plan ? "Save Changes" : "Create Plan"}
+        </SubmitButton>
+      </div>
+    </Modal>
   );
 }
 

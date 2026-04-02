@@ -14,6 +14,7 @@ import {
   deleteInvoiceAction,
   updateInvoiceAction,
 } from "@/lib/actions/invoices";
+import { bulkSendInvoiceRemindersAction } from "@/lib/actions/bulk";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateInvoiceSchema } from "@/lib/validations/invoice";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -223,6 +224,16 @@ export default function InvoiceDetailPageClient({
     );
   };
 
+  const handleSendReminder = async () => {
+    await runAction(
+      "reminder",
+      bulkSendInvoiceRemindersAction({ ids: [invoice.id] }),
+      "Reminder sent to customer",
+    );
+  };
+
+  const canSendReminder = ["issued", "overdue", "partial"].includes(invoice.status);
+
   const formTotal = form.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
 
   return (
@@ -269,10 +280,17 @@ export default function InvoiceDetailPageClient({
                     {isBusy("status") ? "Updating..." : "Cancel Invoice"}
                   </button>
                 )}
-                <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  <Send className="h-4 w-4" />
-                  Send Reminder
-                </button>
+                {canSendReminder && (
+                  <button
+                    type="button"
+                    disabled={Boolean(pendingAction)}
+                    onClick={handleSendReminder}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <Send className="h-4 w-4" />
+                    {isBusy("reminder") ? "Sending..." : "Send Reminder"}
+                  </button>
+                )}
                 <a
                   href={`/api/invoices/${invoice.id}/pdf`}
                   target="_blank"

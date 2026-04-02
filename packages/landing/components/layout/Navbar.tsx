@@ -46,6 +46,7 @@ export function Navbar() {
             ? "bg-white/80 backdrop-blur-xl shadow-sm shadow-slate-200/50"
             : "bg-transparent"
         )}
+        aria-label="Main navigation"
       >
         <Container>
           <div className="flex h-16 items-center justify-between lg:h-20">
@@ -75,6 +76,12 @@ export function Navbar() {
 
             {/* Desktop CTA */}
             <div className="hidden items-center gap-3 lg:flex">
+              <a
+                href="mailto:hello@projectx.in"
+                className="text-sm font-medium text-slate-600 transition-colors hover:text-brand-600 px-3 py-2"
+              >
+                Talk to Us
+              </a>
               <Button
                 variant="primary"
                 size="sm"
@@ -88,6 +95,8 @@ export function Navbar() {
             <button
               className="lg:hidden relative rounded-xl p-2 text-slate-600 hover:bg-slate-100 transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle navigation menu"
+              aria-expanded={isMobileMenuOpen}
             >
               <AnimatePresence mode="wait">
                 {isMobileMenuOpen ? (
@@ -169,6 +178,13 @@ export function Navbar() {
                 >
                   <Button
                     variant="primary"
+                    size="md"
+                    href="mailto:hello@projectx.in"
+                  >
+                    Talk to Us
+                  </Button>
+                  <Button
+                    variant="outline"
                     size="md"
                     href="/book-demo"
                   >

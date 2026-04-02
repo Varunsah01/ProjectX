@@ -19,14 +19,14 @@ export function FeaturesSection() {
           <SectionHeading
             eyebrow="Platform Modules"
             title="Everything You Need to Run Your Service Business"
-            subtitle="Eight powerful modules that work together, so you don't have to."
+            subtitle="Deep, purpose-built modules for every part of your operation — not a generic CRM with bolt-ons."
           />
         </AnimatedSection>
 
         <StaggerContainer className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((feature, i) => (
             <AnimatedItem key={feature.title}>
-              <div className="group h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 hover:border-brand-200 relative overflow-hidden">
+              <div className="group h-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 hover:border-brand-200 relative overflow-hidden gradient-border">
                 {/* Subtle gradient overlay on hover */}
                 <div className="absolute inset-0 bg-gradient-to-br from-brand-50/0 to-accent-50/0 group-hover:from-brand-50/50 group-hover:to-accent-50/30 transition-all duration-500 -z-0" />
 

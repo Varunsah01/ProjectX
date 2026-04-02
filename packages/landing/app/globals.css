@@ -80,8 +80,14 @@
     mask-composite: exclude;
     opacity: 0;
     transition: opacity 0.3s;
+    pointer-events: none;
   }
   .gradient-border:hover::before {
     opacity: 1;
+  }
+
+  /* Will-change hint for animated elements */
+  .will-change-transform {
+    will-change: transform, opacity;
   }
 }

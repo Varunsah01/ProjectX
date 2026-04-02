@@ -20,10 +20,11 @@ function FAQItem({
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className={`border-b border-slate-100 ${index === 0 ? "" : ""}`}>
+    <div className="border-b border-slate-100">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex w-full items-center justify-between py-5 text-left group"
+        aria-expanded={isOpen}
       >
         <span className="text-base font-medium text-slate-900 pr-8 group-hover:text-brand-600 transition-colors">
           {question}
@@ -32,6 +33,7 @@ function FAQItem({
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
           className="shrink-0 rounded-full bg-slate-100 p-1 text-slate-500 group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors"
+          aria-hidden="true"
         >
           <ChevronDown className="h-4 w-4" />
         </motion.span>

@@ -1,14 +1,23 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { GradientText } from "@/components/ui/GradientText";
 import {
   AnimatedSection,
   StaggerContainer,
   AnimatedItem,
 } from "@/components/ui/AnimatedSection";
 import { SOLUTION_POINTS } from "@/lib/constants";
+
+const flowSteps = [
+  { text: "Customer raises a complaint", highlight: true },
+  { text: "Technician gets assigned automatically", highlight: false },
+  { text: "Job completed with proof", highlight: false },
+  { text: "Invoice generated", highlight: true },
+  { text: "Payment reminder sent", highlight: false },
+  { text: "You get paid", highlight: true },
+];
 
 export function SolutionSection() {
   return (
@@ -17,7 +26,7 @@ export function SolutionSection() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-brand-100/20 blur-3xl -z-10" />
 
       <Container>
-        <AnimatedSection>
+        <AnimatedSection variant="fade-in">
           <SectionHeading
             eyebrow="The Solution"
             title="One Platform. Everything Connected."
@@ -32,7 +41,7 @@ export function SolutionSection() {
           {SOLUTION_POINTS.map((point, i) => (
             <AnimatedItem key={point.title}>
               <div className="relative text-center">
-                {/* Step number */}
+                {/* Step icon */}
                 <div className="relative z-10 mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-lg shadow-brand-500/25 transition-transform hover:scale-105">
                   <point.icon className="h-8 w-8" />
                 </div>
@@ -50,24 +59,38 @@ export function SolutionSection() {
           ))}
         </StaggerContainer>
 
-        {/* Automated flow diagram */}
+        {/* Animated flow diagram */}
         <AnimatedSection delay={0.3}>
           <div className="mt-16 relative rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50/80 to-white p-8 overflow-hidden">
             {/* Background grid */}
             <div className="absolute inset-0 bg-grid-pattern opacity-30" />
 
             <div className="relative">
-              {/* Flow steps */}
-              <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
-                {[
-                  { text: "Customer raises a complaint", highlight: true },
-                  { text: "Technician gets assigned automatically", highlight: false },
-                  { text: "Job completed with proof", highlight: false },
-                  { text: "Invoice generated", highlight: true },
-                  { text: "Payment reminder sent", highlight: false },
-                  { text: "You get paid", highlight: true },
-                ].map((step, i) => (
-                  <span key={i} className="flex items-center gap-3">
+              {/* Flow steps with staggered animation */}
+              <motion.div
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: "-50px" }}
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.15 } },
+                }}
+                className="flex flex-wrap items-center justify-center gap-3 text-sm"
+              >
+                {flowSteps.map((step, i) => (
+                  <motion.span
+                    key={i}
+                    variants={{
+                      hidden: { opacity: 0, y: 10, scale: 0.95 },
+                      visible: {
+                        opacity: 1,
+                        y: 0,
+                        scale: 1,
+                        transition: { duration: 0.4, ease: "easeOut" },
+                      },
+                    }}
+                    className="flex items-center gap-3"
+                  >
                     <span
                       className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition-all ${
                         step.highlight
@@ -77,14 +100,26 @@ export function SolutionSection() {
                     >
                       {step.text}
                     </span>
-                    {i < 5 && (
-                      <svg className="h-4 w-4 text-brand-300 shrink-0 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {i < flowSteps.length - 1 && (
+                      <motion.svg
+                        variants={{
+                          hidden: { opacity: 0 },
+                          visible: {
+                            opacity: 1,
+                            transition: { duration: 0.3, delay: 0.1 },
+                          },
+                        }}
+                        className="h-4 w-4 text-brand-300 shrink-0 hidden sm:block"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      </motion.svg>
                     )}
-                  </span>
+                  </motion.span>
                 ))}
-              </div>
+              </motion.div>
 
               <p className="mt-6 text-center text-sm text-slate-500">
                 All of this happens inside one platform. No spreadsheets. No

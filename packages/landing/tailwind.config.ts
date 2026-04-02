@@ -38,6 +38,7 @@ const config: Config = {
         "grow-bar": "growBar 1s ease-out forwards",
         "slide-up": "slideUp 0.3s ease-out",
         "fade-in": "fadeIn 0.5s ease-out",
+        "gradient-shift": "gradientShift 15s ease infinite",
       },
       keyframes: {
         float: {
@@ -56,6 +57,24 @@ const config: Config = {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        gradientShift: {
+          "0%": {
+            backgroundPosition: "0% 50%",
+            backgroundSize: "200% 200%",
+          },
+          "50%": {
+            backgroundPosition: "100% 50%",
+            backgroundSize: "200% 200%",
+          },
+          "100%": {
+            backgroundPosition: "0% 50%",
+            backgroundSize: "200% 200%",
+          },
+        },
+      },
+      backgroundImage: {
+        "gradient-shift":
+          "radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.12) 0%, transparent 50%), radial-gradient(ellipse at 50% 0%, rgba(167, 139, 250, 0.1) 0%, transparent 60%)",
       },
     },
   },
