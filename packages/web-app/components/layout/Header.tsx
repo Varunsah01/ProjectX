@@ -1,25 +1,139 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Search, Bell, ChevronDown, Menu } from "lucide-react";
+import {
+  Search, Bell, ChevronDown, Menu,
+  Users, Receipt, AlertCircle, Wrench, FileText,
+} from "lucide-react";
 import { getInitials } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
+import { globalSearchAction, type SearchResult } from "@/lib/actions/search";
+import {
+  getNotificationsAction,
+  markAllNotificationsReadAction,
+  type AppNotification,
+} from "@/lib/actions/notifications";
 
 export function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Search
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Notifications
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const { setMobileOpen } = useSidebar();
   const { data: session, status } = useSession();
+  const pathname = usePathname();
   const user = session?.user;
   const displayName = user?.name || "Workspace User";
   const role = formatRole(user?.role);
   const initials = getInitials(displayName);
 
+  // Prime unread badge on mount
+  useEffect(() => {
+    getNotificationsAction().then((res) => {
+      if (res.success) {
+        setUnreadCount(res.data.filter((n) => !n.read).length);
+      }
+    });
+  }, []);
+
+  // Clear search on navigation
+  useEffect(() => {
+    setQuery("");
+    setResults([]);
+    setShowDropdown(false);
+    setNotifOpen(false);
+  }, [pathname]);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (query.length < 2) {
+      setResults([]);
+      setShowDropdown(query.length > 0);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      const res = await globalSearchAction(query);
+      setIsSearching(false);
+      if (res.success) {
+        setResults(res.data);
+        setShowDropdown(true);
+      }
+    }, 200);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  // Close search dropdown on outside click
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      setShowDropdown(false);
+      setQuery("");
+    }
+  }, []);
+
+  async function handleBellClick() {
+    if (notifOpen) {
+      setNotifOpen(false);
+      return;
+    }
+    setNotifOpen(true);
+    const res = await getNotificationsAction();
+    if (res.success) {
+      setNotifications(res.data);
+      const unread = res.data.filter((n) => !n.read).length;
+      setUnreadCount(unread);
+      if (unread > 0) {
+        await markAllNotificationsReadAction();
+        setUnreadCount(0);
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      }
+    }
+  }
+
+  async function handleMarkAllRead() {
+    await markAllNotificationsReadAction();
+    setUnreadCount(0);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  }
+
   async function handleSignOut() {
     setShowUserMenu(false);
     await signOut({ callbackUrl: "/login" });
   }
+
+  const grouped = groupResults(results);
+  const hasResults = results.length > 0;
+  const showNoResults = query.length >= 2 && !isSearching && !hasResults;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur-md px-4 sm:px-6">
@@ -34,26 +148,145 @@ export function Header() {
         </button>
 
         {/* Search */}
-        <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div ref={searchWrapperRef} className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => { if (query.length >= 2) setShowDropdown(true); }}
+            onKeyDown={handleKeyDown}
             placeholder="Search customers, invoices, tickets..."
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
           />
+
+          {/* Search dropdown */}
+          {showDropdown && (
+            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+              {isSearching && (
+                <div className="px-4 py-3 text-sm text-slate-500">Searching...</div>
+              )}
+              {showNoResults && (
+                <div className="px-4 py-3 text-sm text-slate-500">No results for &ldquo;{query}&rdquo;</div>
+              )}
+              {hasResults && !isSearching && (
+                <div className="max-h-80 overflow-y-auto py-1">
+                  {grouped.map(({ label, icon: Icon, items }) => (
+                    <div key={label}>
+                      <div className="flex items-center gap-2 px-3 py-1.5">
+                        <Icon className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          {label}
+                        </span>
+                      </div>
+                      {items.map((result) => (
+                        <Link
+                          key={result.id}
+                          href={getResultHref(result)}
+                          onClick={() => { setShowDropdown(false); setQuery(""); }}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-900">
+                              {getResultTitle(result)}
+                            </p>
+                            <p className="truncate text-xs text-slate-500">
+                              {getResultSubtitle(result)}
+                            </p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-2 sm:gap-4">
         {/* Notifications */}
-        <button className="relative rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-          </span>
-        </button>
+        <div className="relative">
+          <button
+            onClick={handleBellClick}
+            className="relative rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+              </span>
+            )}
+          </button>
+
+          {notifOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+              <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                {/* Panel header */}
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
+                  {notifications.some((n) => !n.read) && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+
+                {/* List */}
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+                      <Bell className="h-8 w-8 text-slate-200" />
+                      <p className="text-sm text-slate-500">You&rsquo;re all caught up.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {notifications.map((n) => {
+                        const Icon = getNotifIcon(n.type);
+                        const href = n.link ?? "#";
+                        return (
+                          <Link
+                            key={n.id}
+                            href={href}
+                            onClick={() => setNotifOpen(false)}
+                            className={`flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors ${
+                              !n.read ? "bg-brand-50/40" : ""
+                            }`}
+                          >
+                            <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${getNotifIconBg(n.type)}`}>
+                              <Icon className={`h-3.5 w-3.5 ${getNotifIconColor(n.type)}`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-slate-900 leading-snug">
+                                {n.title}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs text-slate-500">
+                                {n.message}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-400">
+                                {formatRelativeTime(n.createdAt)}
+                              </p>
+                            </div>
+                            {!n.read && (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* User Menu */}
         <div className="relative">
@@ -78,18 +311,11 @@ export function Header() {
           </button>
           {showUserMenu && (
             <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowUserMenu(false)}
-              />
+              <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
               <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="px-4 py-2.5">
-                  <p className="text-sm font-medium text-slate-900">
-                    {displayName}
-                  </p>
-                  <p className="truncate text-xs text-slate-500">
-                    {user?.email ?? "Signed in"}
-                  </p>
+                  <p className="text-sm font-medium text-slate-900">{displayName}</p>
+                  <p className="truncate text-xs text-slate-500">{user?.email ?? "Signed in"}</p>
                 </div>
                 <div className="my-1 border-t border-slate-100" />
                 <Link
@@ -115,11 +341,94 @@ export function Header() {
   );
 }
 
-function formatRole(role?: string) {
-  if (!role) {
-    return "User";
-  }
+// ── Search helpers ───────────────────────────────────────────────────────────
 
+type GroupEntry = {
+  label: string;
+  icon: React.ElementType;
+  items: SearchResult[];
+};
+
+function groupResults(results: SearchResult[]): GroupEntry[] {
+  const map: Record<string, GroupEntry> = {
+    customer: { label: "Customers", icon: Users, items: [] },
+    invoice:  { label: "Invoices",  icon: Receipt, items: [] },
+    ticket:   { label: "Complaints", icon: AlertCircle, items: [] },
+    job:      { label: "Jobs",      icon: Wrench, items: [] },
+  };
+  for (const r of results) map[r.type].items.push(r);
+  return Object.values(map).filter((g) => g.items.length > 0);
+}
+
+function getResultHref(result: SearchResult): string {
+  switch (result.type) {
+    case "customer": return `/customers/${result.id}`;
+    case "invoice":  return `/invoices/${result.id}`;
+    case "ticket":   return `/complaints/${result.id}`;
+    case "job":      return `/jobs/${result.id}`;
+  }
+}
+
+function getResultTitle(result: SearchResult): string {
+  switch (result.type) {
+    case "customer": return result.name;
+    case "invoice":  return result.invoiceNumber;
+    case "ticket":   return result.subject;
+    case "job":      return result.jobNumber;
+  }
+}
+
+function getResultSubtitle(result: SearchResult): string {
+  switch (result.type) {
+    case "customer": return result.city;
+    case "invoice":  return `${result.customerName} · ${result.status}`;
+    case "ticket":   return result.priority;
+    case "job":      return result.jobType;
+  }
+}
+
+// ── Notification helpers ─────────────────────────────────────────────────────
+
+function getNotifIcon(type: string): React.ElementType {
+  if (type.startsWith("invoice"))  return Receipt;
+  if (type.startsWith("contract")) return FileText;
+  if (type.startsWith("ticket"))   return AlertCircle;
+  if (type.startsWith("job"))      return Wrench;
+  return Bell;
+}
+
+function getNotifIconBg(type: string): string {
+  if (type.startsWith("invoice"))  return "bg-blue-50";
+  if (type.startsWith("contract")) return "bg-purple-50";
+  if (type.startsWith("ticket"))   return "bg-red-50";
+  if (type.startsWith("job"))      return "bg-green-50";
+  return "bg-slate-100";
+}
+
+function getNotifIconColor(type: string): string {
+  if (type.startsWith("invoice"))  return "text-blue-500";
+  if (type.startsWith("contract")) return "text-purple-500";
+  if (type.startsWith("ticket"))   return "text-red-500";
+  if (type.startsWith("job"))      return "text-green-600";
+  return "text-slate-500";
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1)  return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)   return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7)     return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+// ── Misc ─────────────────────────────────────────────────────────────────────
+
+function formatRole(role?: string) {
+  if (!role) return "User";
   return role
     .toLowerCase()
     .split("_")

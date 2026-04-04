@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   IndianRupee,
   AlertCircle,
+  CheckCircle2,
   Shield,
   Briefcase,
   Users,
@@ -16,12 +18,36 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, RevenuePeriod } from "@/lib/types";
 
-export default function DashboardPageClient({ data }: { data: DashboardData }) {
-  const { metrics, overdueInvoices, recentTickets, expiringContracts, todayJobs, activeTechniciansCount, revenueChartData } = data;
+const PERIOD_OPTIONS: { value: RevenuePeriod; label: string }[] = [
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "12m", label: "12M" },
+  { value: "ytd", label: "YTD" },
+];
+
+function formatYAxisLabel(value: number): string {
+  if (value === 0) return "0";
+  if (value >= 100000) return `${(value / 100000).toFixed(value % 100000 === 0 ? 0 : 1)}L`;
+  if (value >= 1000) return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}K`;
+  return String(Math.round(value));
+}
+
+export default function DashboardPageClient({
+  data,
+  period,
+}: {
+  data: DashboardData;
+  period: RevenuePeriod;
+}) {
+  const router = useRouter();
+  const { metrics, actionItems, overdueInvoices, recentTickets, expiringContracts, todayJobs, activeTechniciansCount, revenueChartData } = data;
   const [hoveredBar, setHoveredBar] = useState<number | null>(null);
-  const maxValue = Math.max(...revenueChartData.map((item) => Math.max(item.billed, item.collected)), 1);
+  const rawMax = Math.max(...revenueChartData.map((item) => Math.max(item.billed, item.collected)), 1);
+  // Round up to a nice value so y-axis ticks are clean
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const maxValue = Math.ceil(rawMax / magnitude) * magnitude;
 
   return (
     <div>
@@ -89,31 +115,90 @@ export default function DashboardPageClient({ data }: { data: DashboardData }) {
         ))}
       </div>
 
+      <div className="mb-8 rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
+          <AlertCircle className="h-4 w-4 text-slate-500" />
+          <h3 className="font-semibold text-slate-900">Action Required</h3>
+        </div>
+        {actionItems.length === 0 ? (
+          <div className="flex items-center gap-3 px-5 py-6">
+            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+            <p className="text-sm font-medium text-emerald-700">Everything is on track</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {actionItems.map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      item.level === "critical" ? "bg-red-500" : "bg-amber-400"
+                    }`}
+                  />
+                  <p className="text-sm text-slate-700 truncate">{item.label}</p>
+                </div>
+                <Link
+                  href={item.href}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    item.level === "critical"
+                      ? "bg-red-50 text-red-700 hover:bg-red-100"
+                      : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  }`}
+                >
+                  {item.actionLabel}
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-start justify-between mb-6 gap-4">
           <div>
             <h3 className="font-semibold text-slate-900">Revenue Overview</h3>
             <p className="text-sm text-slate-500">
-              Monthly billed vs collected (in lakhs)
+              Monthly billed vs collected
             </p>
           </div>
-          <div className="flex items-center gap-5 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-sm bg-brand-500" />
-              <span className="text-slate-600">Billed</span>
+          <div className="flex items-center gap-4 shrink-0">
+            {/* Legend */}
+            <div className="hidden sm:flex items-center gap-5 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-sm bg-brand-500" />
+                <span className="text-slate-600">Billed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-sm bg-emerald-500" />
+                <span className="text-slate-600">Collected</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-sm bg-emerald-500" />
-              <span className="text-slate-600">Collected</span>
+            {/* Period pills */}
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => router.push(`/?period=${opt.value}`)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    period === opt.value
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
         <div className="flex">
+          {/* Y-axis labels — 5 ticks from maxValue down to 0 */}
           <div className="flex flex-col justify-between pr-3 text-right h-48">
-            {[5, 4, 3, 2, 1, 0].map((v) => (
-              <span key={v} className="text-[10px] text-slate-400 leading-none">
-                {v}L
+            {[5, 4, 3, 2, 1, 0].map((step) => (
+              <span key={step} className="text-[10px] text-slate-400 leading-none">
+                {formatYAxisLabel((step / 5) * maxValue)}
               </span>
             ))}
           </div>
@@ -128,14 +213,14 @@ export default function DashboardPageClient({ data }: { data: DashboardData }) {
             <div className="flex items-end gap-3 h-48 relative z-10">
               {revenueChartData.map((d, i) => (
                 <div
-                  key={d.month}
+                  key={d.monthFull}
                   className="flex-1 flex flex-col items-center gap-1.5"
                   onMouseEnter={() => setHoveredBar(i)}
                   onMouseLeave={() => setHoveredBar(null)}
                 >
                   {hoveredBar === i && (
                     <div className="absolute -top-2 transform -translate-y-full bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg z-20 whitespace-nowrap">
-                      <p className="font-medium">{d.month}</p>
+                      <p className="font-semibold">{d.monthFull}</p>
                       <p>Billed: {formatCurrency(d.billed)}</p>
                       <p>Collected: {formatCurrency(d.collected)}</p>
                       <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1" />

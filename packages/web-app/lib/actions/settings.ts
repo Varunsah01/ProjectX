@@ -100,6 +100,57 @@ export async function resetTeamMemberPasswordAction(input: { id: string }) {
   }
 }
 
+export async function removeTeamMemberAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN]);
+
+    if (user.id === id) {
+      return actionFailure("You cannot remove yourself");
+    }
+
+    const existing = await db.user.findFirst({
+      where: { id, organizationId: user.organizationId },
+    });
+
+    if (!existing) {
+      return actionFailure("Team member not found");
+    }
+
+    const activeJobs = await db.job.count({
+      where: {
+        technicianId: id,
+        status: { in: ["PENDING", "ASSIGNED", "EN_ROUTE", "IN_PROGRESS"] },
+      },
+    });
+
+    if (activeJobs > 0) {
+      return actionFailure(
+        `Cannot remove — ${activeJobs} active job${activeJobs === 1 ? "" : "s"} assigned. Reassign them first.`,
+      );
+    }
+
+    // Check for historical records to decide hard vs soft delete
+    const [jobCount, timelineCount, auditCount, noteCount] = await Promise.all([
+      db.job.count({ where: { technicianId: id } }),
+      db.ticketTimeline.count({ where: { byUserId: id } }),
+      db.auditLog.count({ where: { userId: id } }),
+      db.customerNote.count({ where: { userId: id } }),
+    ]);
+
+    if (jobCount > 0 || timelineCount > 0 || auditCount > 0 || noteCount > 0) {
+      // Soft-delete: preserve historical records, filter from team list
+      await db.user.update({ where: { id }, data: { status: "REMOVED" } });
+    } else {
+      await db.user.delete({ where: { id } });
+    }
+
+    revalidatePath("/settings");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to remove team member"));
+  }
+}
+
 export async function updateTeamMemberAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);

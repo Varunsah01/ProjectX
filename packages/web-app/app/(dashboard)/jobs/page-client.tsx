@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { CalendarDays, LayoutList, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { BulkActionBar } from "@/components/ui/BulkActionBar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { bulkAssignJobsAction, bulkCancelJobsAction } from "@/lib/actions/bulk";
 import { listJobsAction } from "@/lib/actions/jobs";
+import { JobCalendar } from "@/components/ui/JobCalendar";
 import { fetchAllExportRows, type ExportColumn } from "@/lib/export";
 import { useListUrlState } from "@/lib/use-list-url-state";
 import { DEFAULT_PAGE_SIZE } from "@/lib/url-search-params";
@@ -47,6 +48,9 @@ export default function JobsPageClient({
     type: string;
     page: number;
     pageSize: number;
+    view: string;
+    week: string;
+    calTech: string;
   };
 }) {
   const router = useRouter();
@@ -61,6 +65,7 @@ export default function JobsPageClient({
     type: "all",
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
+    view: "",
   });
 
   useEffect(() => {
@@ -136,6 +141,42 @@ export default function JobsPageClient({
         }
       />
 
+      {/* View toggle */}
+      <div className="mb-4 flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+        {(
+          [
+            { value: "", label: "List", Icon: LayoutList },
+            { value: "calendar", label: "Calendar", Icon: CalendarDays },
+          ] as const
+        ).map(({ value, label, Icon }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => updateParams({ view: value || null })}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              params.view === value
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Calendar view */}
+      {params.view === "calendar" && (
+        <JobCalendar
+          technicians={technicians}
+          initialWeekStr={params.week}
+          initialTechId={params.calTech}
+        />
+      )}
+
+      {/* List view */}
+      {params.view !== "calendar" && (
+      <>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <FilterBar
           className="mb-0 flex-1"
@@ -338,6 +379,8 @@ export default function JobsPageClient({
         confirmLabel="Cancel Jobs"
         loading={pendingAction === "cancel"}
       />
+      </>
+      )}
     </div>
   );
 }

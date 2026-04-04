@@ -12,5 +12,5 @@ export default async function SettingsPage() {
   }
 
   const data = await getSettingsData();
-  return <SettingsPageClient data={data} currentRole={user.role} />;
+  return <SettingsPageClient data={data} currentRole={user.role} currentUserId={user.id} />;
 }

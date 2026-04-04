@@ -104,7 +104,8 @@ model Organization {
   email           String
   address         String
   city            String
-  gst             String?
+  gst                  String?
+  notificationSettings Json?            @default("{}") @map("notification_settings")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
   users           User[]
@@ -119,6 +120,7 @@ model Organization {
   jobs            Job[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  customerNotes   CustomerNote[]
 
   @@map("organizations")
   @@index([createdAt])
@@ -156,6 +158,7 @@ model User {
   jobs               Job[]            @relation("JobTechnician")
   notifications      Notification[]
   auditLogs          AuditLog[]
+  customerNotes      CustomerNote[]
 
   @@map("users")
   @@index([organizationId])
@@ -221,6 +224,7 @@ model Customer {
   invoices       Invoice[]
   tickets        Ticket[]
   jobs           Job[]
+  notes          CustomerNote[]
 
   @@map("customers")
   @@index([organizationId])
@@ -488,5 +492,23 @@ model AuditLog {
 
   @@map("audit_logs")
   @@index([organizationId])
+  @@index([createdAt])
+}
+
+model CustomerNote {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid @map("organization_id")
+  customerId     String       @db.Uuid @map("customer_id")
+  userId         String       @db.Uuid @map("user_id")
+  type           String
+  note           String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@map("customer_notes")
+  @@index([organizationId])
+  @@index([customerId])
   @@index([createdAt])
 }

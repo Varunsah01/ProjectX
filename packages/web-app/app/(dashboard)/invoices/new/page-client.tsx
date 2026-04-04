@@ -23,7 +23,7 @@ export default function NewInvoicePageClient({
   customers: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"issue" | "draft" | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [customerId, setCustomerId] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -53,12 +53,8 @@ export default function NewInvoicePageClient({
 
   const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (isSubmitting) {
-      return;
-    }
+  const handleCreate = async (draft: boolean) => {
+    if (submitting) return;
 
     const payload = {
       customerId,
@@ -68,6 +64,7 @@ export default function NewInvoicePageClient({
         ...item,
         amount: item.qty * item.rate,
       })),
+      draft,
     };
     const parsed = createInvoiceSchema.safeParse(payload);
 
@@ -77,7 +74,7 @@ export default function NewInvoicePageClient({
       return;
     }
 
-    setIsSubmitting(true);
+    setSubmitting(draft ? "draft" : "issue");
     setErrors({});
 
     try {
@@ -88,11 +85,11 @@ export default function NewInvoicePageClient({
         return;
       }
 
-      toast.success("Invoice created");
+      toast.success(draft ? "Draft saved" : "Invoice created");
       router.push(`/invoices/${result.data.id}`);
       router.refresh();
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(null);
     }
   };
 
@@ -107,7 +104,7 @@ export default function NewInvoicePageClient({
       />
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => e.preventDefault()}
         className="max-w-3xl rounded-xl border border-slate-200 bg-white p-6"
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -234,7 +231,7 @@ export default function NewInvoicePageClient({
                 <button
                   type="button"
                   onClick={() => removeItem(index)}
-                  disabled={items.length === 1 || isSubmitting}
+                  disabled={items.length === 1 || Boolean(submitting)}
                   className="mt-1.5 rounded p-1 text-slate-400 hover:text-red-500 disabled:opacity-30"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -248,7 +245,7 @@ export default function NewInvoicePageClient({
           <button
             type="button"
             onClick={addItem}
-            disabled={isSubmitting}
+            disabled={Boolean(submitting)}
             className="mt-3 inline-flex items-center gap-1 text-sm text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <Plus className="h-4 w-4" />
@@ -268,12 +265,26 @@ export default function NewInvoicePageClient({
         </div>
 
         <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-6">
-          <SubmitButton loading={isSubmitting} loadingText="Creating...">
+          <SubmitButton
+            type="button"
+            loading={submitting === "issue"}
+            loadingText="Creating..."
+            disabled={Boolean(submitting)}
+            onClick={() => handleCreate(false)}
+          >
             Create Invoice
           </SubmitButton>
           <button
             type="button"
-            disabled={isSubmitting}
+            disabled={Boolean(submitting)}
+            onClick={() => handleCreate(true)}
+            className="rounded-lg border border-slate-200 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {submitting === "draft" ? "Saving..." : "Save as Draft"}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(submitting)}
             onClick={() => router.back()}
             className="rounded-lg border border-slate-200 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
           >

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { BulkActionBar } from "@/components/ui/BulkActionBar";
 import { DataTable } from "@/components/ui/DataTable";
 import { ExportMenu } from "@/components/ui/ExportMenu";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { FormField } from "@/components/ui/FormField";
+import { ImportModal } from "@/components/ui/ImportModal";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -52,6 +53,7 @@ export default function CustomersPageClient({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<Customer["status"]>("active");
   const { updateParams } = useListUrlState({
     search: "",
@@ -117,13 +119,23 @@ export default function CustomersPageClient({
         title="Customers"
         subtitle={`${customers.total} total customers`}
         actions={
-          <button
-            onClick={() => router.push("/customers/new")}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            <Plus className="h-4 w-4" />
-            Add Customer
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
+            <button
+              onClick={() => router.push("/customers/new")}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              <Plus className="h-4 w-4" />
+              Add Customer
+            </button>
+          </div>
         }
       />
 
@@ -252,6 +264,12 @@ export default function CustomersPageClient({
         ]}
         data={customers.data}
         onRowClick={(customer) => router.push(`/customers/${customer.id}`)}
+      />
+
+      <ImportModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onSuccess={() => router.refresh()}
       />
 
       <Modal

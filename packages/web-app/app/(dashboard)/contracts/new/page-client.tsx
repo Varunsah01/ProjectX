@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FormField } from "@/components/ui/FormField";
 import { SubmitButton } from "@/components/ui/SubmitButton";
-import { BILLING_CYCLE_OPTIONS, formatBillingCycleLabel } from "@/lib/billing";
+import { addMonthsPreservingDay, BILLING_CYCLE_OPTIONS, formatBillingCycleLabel } from "@/lib/billing";
+import { BillingSchedulePreview } from "@/components/ui/BillingSchedulePreview";
 import { createContractAction } from "@/lib/actions/contracts";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createContractSchema } from "@/lib/validations/contract";
@@ -52,6 +53,15 @@ export default function CreateContractPageClient({
   const customerAssets = assets.filter((asset) => asset.customerId === form.customerId);
   const filteredPlans = plans.filter((plan) => plan.isActive && plan.type === form.type);
   const selectedPlan = plans.find((plan) => plan.id === form.planId);
+
+  // Mirror the action's endDate calculation for the preview
+  const previewEndDate = useMemo(() => {
+    if (!form.startDate || !selectedPlan) return "";
+    const start = new Date(form.startDate);
+    const end = addMonthsPreservingDay(start, selectedPlan.duration);
+    end.setDate(end.getDate() - 1);
+    return end.toISOString().split("T")[0];
+  }, [form.startDate, selectedPlan]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -293,6 +303,16 @@ export default function CreateContractPageClient({
                 onChange={(e) => update("startDate", e.target.value)}
                 error={errors.startDate}
               />
+
+              {selectedPlan && form.startDate && previewEndDate && (
+                <BillingSchedulePreview
+                  startDate={form.startDate}
+                  endDate={previewEndDate}
+                  billingCycle={form.billingCycle}
+                  price={selectedPlan.price}
+                  collapsible
+                />
+              )}
 
               <FormField
                 as="textarea"

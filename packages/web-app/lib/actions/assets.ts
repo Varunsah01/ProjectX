@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
-import { cleanOptional, parseDateInput } from "@/lib/actions/helpers";
+import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getAssetDetailForOrganization, listAssetsForOrganization } from "@/lib/queries/assets";
+import { logAuditEvent } from "@/lib/security/audit";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createAssetSchema, updateAssetSchema } from "@/lib/validations/asset";
 
@@ -101,6 +102,91 @@ export async function updateAssetAction(input: unknown) {
     return actionSuccess(detail!.asset);
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to update asset"));
+  }
+}
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  preventive_maintenance: "Preventive Maintenance",
+  repair: "Repair",
+  inspection: "Inspection",
+  part_replacement: "Part Replacement",
+};
+
+const logAssetServiceSchema = z.object({
+  assetId: z.string().min(1),
+  serviceDate: z.string().min(1, "Service date is required"),
+  serviceType: z.enum(["preventive_maintenance", "repair", "inspection", "part_replacement"]),
+  technicianId: z.string().min(1, "Technician is required"),
+  notes: z.string().optional(),
+  nextServiceDate: z.string().optional(),
+});
+
+export async function logAssetServiceAction(input: unknown) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
+    const values = logAssetServiceSchema.parse(input);
+
+    const asset = await db.asset.findFirst({
+      where: { id: values.assetId, organizationId: user.organizationId },
+    });
+
+    if (!asset) {
+      return actionFailure("Asset not found");
+    }
+
+    const serviceDate = parseDateInput(values.serviceDate);
+    const nextServiceDate = values.nextServiceDate ? parseDateInput(values.nextServiceDate) : null;
+    const jobType = values.serviceType === "inspection" ? "INSPECTION" : "SCHEDULED";
+    const serviceTypeLabel = SERVICE_TYPE_LABELS[values.serviceType];
+
+    const job = await db.job.create({
+      data: {
+        organizationId: user.organizationId,
+        jobNumber: await getNextNumber("JOB", user.organizationId, "job"),
+        customerId: asset.customerId,
+        assetId: values.assetId,
+        technicianId: values.technicianId,
+        type: jobType as never,
+        status: "COMPLETED",
+        scheduledDate: serviceDate,
+        completedAt: serviceDate,
+        serviceReport: serviceTypeLabel,
+        notes: cleanOptional(values.notes),
+      },
+    });
+
+    await db.asset.update({
+      where: { id: values.assetId },
+      data: {
+        lastServiceDate: serviceDate,
+        ...(nextServiceDate ? { nextServiceDate } : {}),
+      },
+    });
+
+    await logAuditEvent({
+      organizationId: user.organizationId,
+      userId: user.id,
+      action: "UPDATE",
+      entity: "Asset",
+      entityId: values.assetId,
+      before: {
+        lastServiceDate: asset.lastServiceDate,
+        nextServiceDate: asset.nextServiceDate,
+      },
+      after: {
+        lastServiceDate: serviceDate,
+        nextServiceDate: nextServiceDate ?? asset.nextServiceDate,
+        serviceJobId: job.id,
+        serviceType: serviceTypeLabel,
+      },
+    });
+
+    revalidatePath(`/assets/${values.assetId}`);
+    revalidatePath("/assets");
+    revalidatePath("/jobs");
+    return actionSuccess({ jobId: job.id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to log service"));
   }
 }
 

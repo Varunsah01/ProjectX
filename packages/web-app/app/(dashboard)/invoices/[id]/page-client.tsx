@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Download, Edit, Plus, Send, Trash2 } from "lucide-react";
+import { CreditCard, Download, Edit, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField, getFormControlClassName } from "@/components/ui/FormField";
@@ -12,8 +12,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
   deleteInvoiceAction,
+  issueInvoiceAction,
   updateInvoiceAction,
 } from "@/lib/actions/invoices";
+import { RecordPaymentModal } from "../RecordPaymentModal";
 import { bulkSendInvoiceRemindersAction } from "@/lib/actions/bulk";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateInvoiceSchema } from "@/lib/validations/invoice";
@@ -62,6 +64,7 @@ export default function InvoiceDetailPageClient({
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [form, setForm] = useState<InvoiceFormState>(
@@ -224,6 +227,15 @@ export default function InvoiceDetailPageClient({
     );
   };
 
+  const handleIssueInvoice = async () => {
+    await runAction(
+      "issue",
+      issueInvoiceAction(invoice.id),
+      "Invoice issued",
+      () => router.refresh(),
+    );
+  };
+
   const handleSendReminder = async () => {
     await runAction(
       "reminder",
@@ -261,6 +273,17 @@ export default function InvoiceDetailPageClient({
               </button>
             ) : (
               <>
+                {invoice.status === "draft" && (
+                  <button
+                    type="button"
+                    disabled={Boolean(pendingAction)}
+                    onClick={handleIssueInvoice}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <Send className="h-4 w-4" />
+                    {isBusy("issue") ? "Issuing..." : "Issue Invoice"}
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={Boolean(pendingAction)}
@@ -291,6 +314,17 @@ export default function InvoiceDetailPageClient({
                     {isBusy("reminder") ? "Sending..." : "Send Reminder"}
                   </button>
                 )}
+                {["issued", "overdue", "partial"].includes(invoice.status) && balance > 0 && (
+                  <button
+                    type="button"
+                    disabled={Boolean(pendingAction)}
+                    onClick={() => setIsPaymentOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Record Payment
+                  </button>
+                )}
                 <a
                   href={`/api/invoices/${invoice.id}/pdf`}
                   target="_blank"
@@ -314,6 +348,26 @@ export default function InvoiceDetailPageClient({
           </div>
         }
       />
+
+      {invoice.status === "draft" && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">This invoice is a draft</p>
+            <p className="text-xs text-amber-600">
+              It has not been sent to the customer. Click{" "}
+              <span className="font-medium">Issue Invoice</span> to issue it and send a notification.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={Boolean(pendingAction)}
+            onClick={handleIssueInvoice}
+            className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isBusy("issue") ? "Issuing..." : "Issue Invoice"}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-6 lg:col-span-2">
@@ -640,7 +694,10 @@ export default function InvoiceDetailPageClient({
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <h3 className="mb-3 font-semibold text-slate-900">Activity</h3>
             <div className="space-y-3">
-              <ActivityItem date={invoice.issuedDate} text="Invoice created and issued" />
+              <ActivityItem
+                date={invoice.issuedDate}
+                text={invoice.status === "draft" ? "Invoice saved as draft" : "Invoice created and issued"}
+              />
               {invoice.paidAmount > 0 && (
                 <ActivityItem
                   date={invoice.issuedDate}
@@ -671,6 +728,13 @@ export default function InvoiceDetailPageClient({
         description={`Delete ${invoice.invoiceNumber}? This cannot be undone.`}
         confirmLabel="Delete Invoice"
         loading={isBusy("delete")}
+      />
+
+      <RecordPaymentModal
+        invoice={invoice}
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        onSuccess={() => router.refresh()}
       />
     </div>
   );

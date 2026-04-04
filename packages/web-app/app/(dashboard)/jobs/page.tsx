@@ -17,6 +17,9 @@ export default async function JobsPage({
     type: readSearchParam(searchParams, "type", "all"),
     page: readNumberSearchParam(searchParams, "page", 1),
     pageSize: readNumberSearchParam(searchParams, "pageSize", DEFAULT_PAGE_SIZE),
+    view: readSearchParam(searchParams, "view"),
+    week: readSearchParam(searchParams, "week"),
+    calTech: readSearchParam(searchParams, "calTech"),
   };
   const [jobs, formOptions] = await Promise.all([
     listJobs({

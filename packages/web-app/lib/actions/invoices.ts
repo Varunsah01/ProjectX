@@ -64,6 +64,7 @@ export async function createInvoiceAction(input: unknown) {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createInvoiceSchema.parse(input);
     const total = values.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+    const status = values.draft ? "DRAFT" : "ISSUED";
     const invoice = await db.invoice.create({
       data: {
         organizationId: user.organizationId,
@@ -74,7 +75,7 @@ export async function createInvoiceAction(input: unknown) {
         paidAmount: 0,
         dueDate: parseDateInput(values.dueDate),
         issuedDate: new Date(),
-        status: "ISSUED",
+        status,
         type: values.type.toUpperCase() as never,
         notes: cleanOptional(values.notes),
         items: {
@@ -90,13 +91,46 @@ export async function createInvoiceAction(input: unknown) {
     });
 
     const detail = await getInvoiceDetailForOrganization(user.organizationId, invoice.id);
-    await notifyInvoiceCreated(invoice.id);
+    if (!values.draft) {
+      await notifyInvoiceCreated(invoice.id);
+    }
     revalidatePath("/invoices");
     revalidatePath(`/invoices/${invoice.id}`);
     revalidatePath("/");
     return actionSuccess(detail!);
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to create invoice"));
+  }
+}
+
+export async function issueInvoiceAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
+    const existing = await db.invoice.findFirst({
+      where: { id, organizationId: user.organizationId },
+    });
+
+    if (!existing) {
+      return actionFailure("Invoice not found");
+    }
+
+    if (existing.status !== "DRAFT") {
+      return actionFailure("Only draft invoices can be issued");
+    }
+
+    await db.invoice.update({
+      where: { id },
+      data: { status: "ISSUED" },
+    });
+
+    await notifyInvoiceCreated(id);
+    revalidatePath("/invoices");
+    revalidatePath(`/invoices/${id}`);
+    revalidatePath("/");
+    const detail = await getInvoiceDetailForOrganization(user.organizationId, id);
+    return actionSuccess(detail!);
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to issue invoice"));
   }
 }
 

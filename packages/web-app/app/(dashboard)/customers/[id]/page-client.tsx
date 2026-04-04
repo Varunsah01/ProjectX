@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building, Edit, Mail, MapPin, Phone, Power, Trash2 } from "lucide-react";
+import { Building, Edit, FileText, Mail, MapPin, MessageCircle, MessageSquare, Phone, Power, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField } from "@/components/ui/FormField";
@@ -11,11 +11,11 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Tabs } from "@/components/ui/Tabs";
 import { DataTable } from "@/components/ui/DataTable";
-import { deleteCustomerAction, updateCustomerAction } from "@/lib/actions/customers";
+import { addCustomerNoteAction, deleteCustomerAction, updateCustomerAction } from "@/lib/actions/customers";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateCustomerSchema } from "@/lib/validations/customer";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
-import type { Asset, Contract, Invoice, Ticket } from "@/lib/types";
+import type { Asset, Contract, CustomerNote, Invoice, Ticket } from "@/lib/types";
 
 type CustomerDetail = {
   customer: {
@@ -36,6 +36,7 @@ type CustomerDetail = {
   invoices: Invoice[];
   tickets: Ticket[];
   contracts: Contract[];
+  notes: CustomerNote[];
 };
 
 function getInitialFormState(detail: CustomerDetail["customer"]) {
@@ -102,7 +103,7 @@ export default function CustomerDetailPageClient({
     );
   }
 
-  const { customer, assets, invoices, tickets, contracts } = detail;
+  const { customer, assets, invoices, tickets, contracts, notes } = detail;
   const isBusy = (key: string) => pendingAction === key;
 
   const updateField = (
@@ -618,6 +619,18 @@ export default function CustomerDetailPageClient({
               />
             ),
           },
+          {
+            id: "communication",
+            label: "Communication",
+            count: notes.length,
+            content: (
+              <CommunicationTab
+                customerId={customer.id}
+                notes={notes}
+                onRefresh={() => router.refresh()}
+              />
+            ),
+          },
         ]}
       />
 
@@ -634,6 +647,154 @@ export default function CustomerDetailPageClient({
         confirmLabel="Delete Customer"
         loading={isBusy("delete")}
       />
+    </div>
+  );
+}
+
+// ─── Communication tab ───────────────────────────────────────────────────────
+
+const NOTE_TYPES = [
+  { value: "call", label: "Call", Icon: Phone, color: "bg-emerald-100 text-emerald-600" },
+  { value: "meeting", label: "Meeting", Icon: Users, color: "bg-purple-100 text-purple-600" },
+  { value: "email", label: "Email", Icon: Mail, color: "bg-blue-100 text-blue-600" },
+  { value: "whatsapp", label: "WhatsApp", Icon: MessageCircle, color: "bg-teal-100 text-teal-600" },
+  { value: "note", label: "Note", Icon: FileText, color: "bg-slate-100 text-slate-600" },
+] as const;
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+function NoteTypeBadge({ type }: { type: string }) {
+  const meta = NOTE_TYPES.find((t) => t.value === type) ?? NOTE_TYPES[4];
+  const { Icon, color, label } = meta;
+  return (
+    <div
+      title={label}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${color}`}
+    >
+      <Icon className="h-4 w-4" />
+    </div>
+  );
+}
+
+function CommunicationTab({
+  customerId,
+  notes,
+  onRefresh,
+}: {
+  customerId: string;
+  notes: CustomerNote[];
+  onRefresh: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [type, setType] = useState("call");
+  const [loading, setLoading] = useState(false);
+
+  const handleLog = async () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    setLoading(true);
+    const result = await addCustomerNoteAction({ customerId, type, note: trimmed });
+    setLoading(false);
+
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to log note");
+      return;
+    }
+
+    setText("");
+    onRefresh();
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Quick-add form */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          {NOTE_TYPES.map(({ value, label, Icon, color }) => (
+            <button
+              key={value}
+              type="button"
+              title={label}
+              onClick={() => setType(value)}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${
+                type === value
+                  ? `${color} border-current`
+                  : "border-transparent bg-white text-slate-400 hover:bg-slate-100"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          ))}
+          <span className="ml-1 text-xs font-medium text-slate-500 capitalize">
+            {NOTE_TYPES.find((t) => t.value === type)?.label}
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Add a note, call log, or message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleLog();
+              }
+            }}
+            disabled={loading}
+            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-70"
+          />
+          <button
+            type="button"
+            disabled={loading || !text.trim()}
+            onClick={handleLog}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Logging..." : "Log"}
+          </button>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      {notes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <MessageSquare className="mb-3 h-8 w-8 text-slate-300" />
+          <p className="text-sm font-medium text-slate-500">No communication logged yet</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Log calls, meetings, emails, and notes above.
+          </p>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="absolute left-4 top-5 bottom-0 w-px bg-slate-100" />
+          <div className="space-y-4">
+            {notes.map((note) => (
+              <div key={note.id} className="flex gap-3">
+                <div className="relative z-10">
+                  <NoteTypeBadge type={note.type} />
+                </div>
+                <div className="flex-1 rounded-lg border border-slate-100 bg-white px-4 py-3">
+                  <p className="text-sm text-slate-800">{note.note}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {note.userName} &middot; {timeAgo(note.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

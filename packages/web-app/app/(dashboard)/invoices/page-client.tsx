@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Plus } from "lucide-react";
+import { CreditCard, Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { BulkActionBar } from "@/components/ui/BulkActionBar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -16,6 +16,7 @@ import {
   bulkSendInvoiceRemindersAction,
 } from "@/lib/actions/bulk";
 import { listInvoicesAction } from "@/lib/actions/invoices";
+import { RecordPaymentModal } from "./RecordPaymentModal";
 import { fetchAllExportRows, type ExportColumn } from "@/lib/export";
 import { useListUrlState } from "@/lib/use-list-url-state";
 import { DEFAULT_PAGE_SIZE } from "@/lib/url-search-params";
@@ -58,6 +59,7 @@ export default function InvoicesPageClient({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [confirmAction, setConfirmAction] = useState<"reminders" | "paid" | null>(
     null,
   );
@@ -258,19 +260,35 @@ export default function InvoicesPageClient({
           {
             key: "actions",
             header: "Actions",
-            className: "w-28",
-            render: (invoice) => (
-              <a
-                href={`/api/invoices/${invoice.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => event.stopPropagation()}
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download
-              </a>
-            ),
+            className: "w-48",
+            render: (invoice) => {
+              const balance = invoice.amount - invoice.paidAmount;
+              const canRecordPayment =
+                ["issued", "overdue", "partial"].includes(invoice.status) && balance > 0;
+              return (
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  {canRecordPayment && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentInvoice(invoice)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      Pay
+                    </button>
+                  )}
+                  <a
+                    href={`/api/invoices/${invoice.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    PDF
+                  </a>
+                </div>
+              );
+            },
           },
         ]}
         data={invoices.data}
@@ -312,6 +330,18 @@ export default function InvoicesPageClient({
         confirmLabel={confirmAction === "paid" ? "Mark Paid" : "Send Reminders"}
         loading={pendingAction === confirmAction}
       />
+
+      {paymentInvoice && (
+        <RecordPaymentModal
+          invoice={paymentInvoice}
+          isOpen={Boolean(paymentInvoice)}
+          onClose={() => setPaymentInvoice(null)}
+          onSuccess={() => {
+            setPaymentInvoice(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

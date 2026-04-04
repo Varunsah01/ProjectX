@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   IndianRupee,
   TrendingUp,
@@ -17,13 +18,330 @@ import {
   RefreshCw,
   ArrowUpRight,
   CircleDot,
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
+import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { ReportsOverview } from "@/lib/types";
+
+const PRESET_OPTIONS = [
+  { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
+  { value: "this_quarter", label: "This Quarter" },
+  { value: "last_quarter", label: "Last Quarter" },
+  { value: "this_year", label: "This Year" },
+  { value: "custom", label: "Custom" },
+] as const;
+
+function formatDateRangeLabel(from: string, to: string): string {
+  const [fromYear, fromMonth, fromDay] = from.split("-").map(Number);
+  const [toYear, toMonth, toDay] = to.split("-").map(Number);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fromStr = `${months[fromMonth - 1]} ${fromDay}`;
+  const toStr = `${months[toMonth - 1]} ${toDay}, ${toYear}`;
+  if (fromYear !== toYear) {
+    return `${fromStr}, ${fromYear} – ${toStr}`;
+  }
+  return `${fromStr} – ${toStr}`;
+}
+
+function DateRangePicker({
+  preset,
+  from,
+  to,
+}: {
+  preset: string;
+  from: string;
+  to: string;
+}) {
+  const router = useRouter();
+  const [customFrom, setCustomFrom] = useState(from);
+  const [customTo, setCustomTo] = useState(to);
+
+  const handlePreset = (value: string) => {
+    if (value === "custom") {
+      router.push(`/reports?preset=custom&from=${from}&to=${to}`);
+    } else {
+      router.push(`/reports?preset=${value}`);
+    }
+  };
+
+  const handleApply = () => {
+    if (customFrom && customTo) {
+      router.push(`/reports?preset=custom&from=${customFrom}&to=${customTo}`);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+        {PRESET_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => handlePreset(opt.value)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              preset === opt.value
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {preset === "custom" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <span className="text-slate-400 text-sm">–</span>
+          <input
+            type="date"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={!customFrom || !customTo}
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportExportMenu({
+  data,
+  from,
+  to,
+}: {
+  data: ReportsOverview;
+  from: string;
+  to: string;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const [loading, setLoading] = useState<"excel" | "pdf" | null>(null);
+
+  const handleExcel = async () => {
+    if (loading) return;
+    setLoading("excel");
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+      const dateRange = formatDateRangeLabel(from, to);
+
+      // ── Overview sheet ──────────────────────────────────────────────
+      const overviewRows: (string | number)[][] = [
+        [`Reports & Analytics – ${dateRange}`],
+        [],
+        ["SUMMARY METRICS"],
+        ["Total Revenue", formatCurrency(data.totalRevenue)],
+        ["Total Collected", formatCurrency(data.totalCollected)],
+        ["Collection Rate", `${data.collectionRate}%`],
+        ["Active Contracts", data.activeContractsCount],
+        ["Avg Resolution Time", `${data.avgResolutionHours}h`],
+        [],
+        ["TOP CUSTOMERS BY REVENUE"],
+        ["Customer", "Total Paid", "Outstanding", "Assets"],
+        ...data.topCustomers.map((c) => [
+          c.name,
+          formatCurrency(c.totalPaid),
+          formatCurrency(c.outstanding),
+          c.assetsCount,
+        ]),
+        [],
+        ["CONTRACT STATUS DISTRIBUTION"],
+        ["Status", "Count"],
+        ["Active", data.contractStatusCounts.active ?? 0],
+        ["Expiring Soon", data.contractStatusCounts.expiring_soon ?? 0],
+        ["Expired", data.contractStatusCounts.expired ?? 0],
+        ["Renewed", data.contractStatusCounts.renewed ?? 0],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overviewRows), "Overview");
+
+      // ── Collections sheet ───────────────────────────────────────────
+      const collectionsRows: (string | number)[][] = [
+        [`Collections – ${dateRange}`],
+        [],
+        ["SUMMARY METRICS"],
+        ["Total Outstanding", formatCurrency(data.totalOutstanding)],
+        ["Overdue Amount", formatCurrency(data.overdueAmount)],
+        ["Avg Days Overdue", `${data.avgDaysOverdue} days`],
+        [],
+        ["AGING BREAKDOWN"],
+        ["Period", "Invoices", "Amount"],
+        ...([
+          { key: "not_due", label: "Not Due" },
+          { key: "0_30", label: "0–30 Days" },
+          { key: "30_60", label: "30–60 Days" },
+          { key: "60_90", label: "60–90 Days" },
+          { key: "90_plus", label: "90+ Days" },
+        ] as const).map((b) => {
+          const item = data.agingBuckets[b.key] ?? { count: 0, amount: 0 };
+          return [b.label, item.count, formatCurrency(item.amount)];
+        }),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(collectionsRows), "Collections");
+
+      // ── Service sheet ───────────────────────────────────────────────
+      const serviceRows: (string | number)[][] = [
+        [`Service – ${dateRange}`],
+        [],
+        ["SUMMARY METRICS"],
+        ["Total Jobs", data.totalJobs],
+        ["Completed Jobs", data.completedJobs],
+        ["Completion Rate", `${data.completedRate}%`],
+        ["Avg Resolution Time", `${data.avgResolutionHours}h`],
+        [],
+        ["JOBS BY TYPE"],
+        ["Type", "Count"],
+        ["Complaint", data.jobsByType.complaint ?? 0],
+        ["Scheduled", data.jobsByType.scheduled ?? 0],
+        ["Installation", data.jobsByType.installation ?? 0],
+        ["Inspection", data.jobsByType.inspection ?? 0],
+        [],
+        ["COMPLAINT STATUS"],
+        ["Status", "Count"],
+        ["Open", data.openComplaints],
+        ["In Progress", data.inProgressComplaints],
+        ["Resolved", data.resolvedComplaints],
+        [],
+        ["TECHNICIAN PERFORMANCE"],
+        ["Name", "Specialization", "Completed Jobs", "Active Jobs", "Rating"],
+        ...data.techPerformance.map((t) => [
+          t.name,
+          t.specialization || "",
+          t.completedJobs,
+          t.activeJobs,
+          t.rating,
+        ]),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(serviceRows), "Service");
+
+      // ── Contracts sheet ─────────────────────────────────────────────
+      const contractsRows: (string | number)[][] = [
+        [`Contracts – ${dateRange}`],
+        [],
+        ["SUMMARY METRICS"],
+        ["Active Contracts", data.activeContractsCount],
+        ["Expiring in 30 Days", data.expiringIn30],
+        ["Expired Contracts", data.expiredContracts],
+        ["Renewed Contracts", data.renewedContracts],
+        ["Renewal Rate", `${data.renewalRate}%`],
+        ["Total AMC Value", formatCurrency(data.totalAmcValue)],
+        ["Total Warranty Value", formatCurrency(data.totalWarrantyValue)],
+        [],
+        ["RENEWAL PIPELINE"],
+        ["Customer", "Asset", "Type", "Status", "Expires", "Value"],
+        ...data.renewalPipeline.map((c) => [
+          c.customerName,
+          c.assetName,
+          c.type.toUpperCase(),
+          c.status,
+          c.endDate,
+          formatCurrency(c.value),
+        ]),
+        ...(data.highUtilizationContracts.length > 0
+          ? [
+              [],
+              ["HIGH UTILIZATION CONTRACTS (>80% visits used)"],
+              ["Customer", "Asset", "Visits Used", "Visits Covered", "% Used"],
+              ...data.highUtilizationContracts.map((c) => [
+                c.customerName,
+                c.assetName,
+                c.visitsUsed,
+                c.visitsCovered,
+                c.visitsCovered > 0
+                  ? `${Math.round((c.visitsUsed / c.visitsCovered) * 100)}%`
+                  : "0%",
+              ]),
+            ]
+          : []),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contractsRows), "Contracts");
+
+      XLSX.writeFile(wb, `report-${from}.xlsx`);
+      toast.success(`Excel export ready`);
+      detailsRef.current?.removeAttribute("open");
+    } catch {
+      toast.error("Failed to export Excel");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handlePdf = async () => {
+    if (loading) return;
+    setLoading("pdf");
+    try {
+      const response = await fetch(`/api/reports/pdf?from=${from}&to=${to}`);
+      if (!response.ok) throw new Error("Failed to generate PDF");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `report-${from}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded");
+      detailsRef.current?.removeAttribute("open");
+    } catch {
+      toast.error("Failed to generate PDF");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <details ref={detailsRef} className="relative shrink-0">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        Export
+        <ChevronDown className="h-4 w-4 text-slate-400" />
+      </summary>
+      <div className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        <button
+          type="button"
+          disabled={Boolean(loading)}
+          onClick={handleExcel}
+          className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <FileSpreadsheet className="h-4 w-4 text-slate-500" />
+          Export as Excel (.xlsx)
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(loading)}
+          onClick={handlePdf}
+          className="flex w-full items-center gap-2 border-t border-slate-100 px-4 py-3 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <FileText className="h-4 w-4 text-slate-500" />
+          Export as PDF
+        </button>
+      </div>
+    </details>
+  );
+}
 
 function SectionCard({
   title,
@@ -560,13 +878,28 @@ function ContractsTab({ data }: { data: ReportsOverview }) {
   );
 }
 
-export default function ReportsPageClient({ data }: { data: ReportsOverview }) {
+export default function ReportsPageClient({
+  data,
+  from,
+  to,
+  preset,
+}: {
+  data: ReportsOverview;
+  from: string;
+  to: string;
+  preset: string;
+}) {
   return (
     <div>
       <PageHeader
         title="Reports & Analytics"
-        subtitle="Track business performance and trends"
+        subtitle={formatDateRangeLabel(from, to)}
       />
+
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <DateRangePicker preset={preset} from={from} to={to} />
+        <ReportExportMenu data={data} from={from} to={to} />
+      </div>
 
       <Tabs
         tabs={[

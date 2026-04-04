@@ -284,6 +284,15 @@ export interface Job {
   serviceReport?: string;
 }
 
+export interface LinkedJob {
+  id: string;
+  jobNumber: string;
+  type: JobType;
+  status: JobStatus;
+  technicianName: string;
+  scheduledDate: string;
+}
+
 export interface Technician {
   id: string;
   name: string;
@@ -324,6 +333,14 @@ export interface Contract {
   visitsUsed: number;
   nextServiceDate: string;
   notes?: string;
+}
+
+export interface CustomerNote {
+  id: string;
+  type: string;
+  note: string;
+  userName: string;
+  createdAt: string;
 }
 
 export interface Plan {
@@ -378,15 +395,27 @@ export interface DashboardMetrics {
   technicianUtilization: number;
 }
 
+export interface ActionItem {
+  key: string;
+  level: "critical" | "warning";
+  label: string;
+  href: string;
+  actionLabel: string;
+  count: number;
+}
+
 export interface DashboardData {
   metrics: DashboardMetrics;
+  actionItems: ActionItem[];
   overdueInvoices: Invoice[];
   recentTickets: Ticket[];
   expiringContracts: Contract[];
   todayJobs: Job[];
   activeTechniciansCount: number;
-  revenueChartData: { month: string; billed: number; collected: number }[];
+  revenueChartData: { month: string; monthFull: string; billed: number; collected: number }[];
 }
+
+export type RevenuePeriod = "3m" | "6m" | "12m" | "ytd";
 
 export interface CollectionsBucket {
   label: string;
@@ -474,6 +503,7 @@ export interface SettingsData {
   teamMembers: TeamMember[];
   plans: Plan[];
   auditLogs: AuditLogEntry[];
+  notificationSettings: Record<string, unknown>;
 }
 
 export type PrismaCustomerStatusType = PrismaCustomerStatusValue;

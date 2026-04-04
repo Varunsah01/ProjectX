@@ -15,9 +15,16 @@ import {
 } from "@/lib/query-utils";
 import type { Job, ListParams, PaginatedData } from "@/lib/types";
 
+type JobListParams = ListParams & {
+  fromDate?: string;
+  toDate?: string;
+  technicianId?: string;
+};
+
 function buildJobWhere(
   organizationId: string,
   params: ReturnType<typeof normalizeListParams>,
+  extra: Pick<JobListParams, "fromDate" | "toDate" | "technicianId"> = {},
 ): Prisma.JobWhereInput {
   return {
     organizationId,
@@ -32,6 +39,15 @@ function buildJobWhere(
       : {}),
     ...(params.status ? { status: toEnumValue<JobStatus>(params.status) } : {}),
     ...(params.type ? { type: toEnumValue<JobType>(params.type) } : {}),
+    ...(extra.technicianId ? { technicianId: extra.technicianId } : {}),
+    ...(extra.fromDate || extra.toDate
+      ? {
+          scheduledDate: {
+            ...(extra.fromDate ? { gte: new Date(extra.fromDate) } : {}),
+            ...(extra.toDate ? { lte: new Date(extra.toDate + "T23:59:59.999") } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -53,10 +69,14 @@ function getJobOrderBy(
 
 export async function listJobsForOrganization(
   organizationId: string,
-  params: ListParams = {},
+  params: JobListParams = {},
 ): Promise<PaginatedData<Job>> {
   const normalized = normalizeListParams(params);
-  const where = buildJobWhere(organizationId, normalized);
+  const where = buildJobWhere(organizationId, normalized, {
+    fromDate: params.fromDate,
+    toDate: params.toDate,
+    technicianId: params.technicianId,
+  });
   const [total, records] = await Promise.all([
     db.job.count({ where }),
     db.job.findMany({
@@ -76,7 +96,7 @@ export async function listJobsForOrganization(
   );
 }
 
-export async function listJobs(params: ListParams = {}) {
+export async function listJobs(params: JobListParams = {}) {
   const user = await getOrganizationContext();
   return listJobsForOrganization(user.organizationId, params);
 }

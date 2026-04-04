@@ -13,10 +13,11 @@ import {
   addDays,
   getDaysDifference,
   getMonthLabel,
+  getMonthLabelWithYear,
   getOrganizationContext,
   toDateString,
 } from "@/lib/query-utils";
-import type { DashboardData, DashboardMetrics } from "@/lib/types";
+import type { ActionItem, DashboardData, DashboardMetrics, RevenuePeriod } from "@/lib/types";
 
 function getReferenceDate(dates: Date[]) {
   return dates.reduce<Date | null>((latest, current) => {
@@ -28,19 +29,31 @@ function getReferenceDate(dates: Date[]) {
   }, null) ?? new Date();
 }
 
+function getPeriodMonths(period: RevenuePeriod, referenceDate: Date): number {
+  if (period === "3m") return 3;
+  if (period === "6m") return 6;
+  if (period === "12m") return 12;
+  // ytd: January through the reference month (inclusive), minimum 1
+  return Math.max(1, referenceDate.getMonth() + 1);
+}
+
 function buildLastMonths(referenceDate: Date, count: number) {
   return Array.from({ length: count }).map((_, index) => {
     const date = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - (count - 1 - index), 1);
     return {
       key: `${date.getFullYear()}-${date.getMonth()}`,
       label: getMonthLabel(date),
+      labelFull: getMonthLabelWithYear(date),
       billed: 0,
       collected: 0,
     };
   });
 }
 
-export async function getDashboardDataForOrganization(organizationId: string): Promise<DashboardData> {
+export async function getDashboardDataForOrganization(
+  organizationId: string,
+  period: RevenuePeriod = "6m",
+): Promise<DashboardData> {
   const [customers, assets, invoices, tickets, contracts, jobs, technicians] = await Promise.all([
     db.customer.findMany({
       where: { organizationId },
@@ -177,7 +190,80 @@ export async function getDashboardDataForOrganization(organizationId: string): P
     technicianUtilization,
   };
 
-  const revenueChartData = buildLastMonths(referenceDate, 6).map((bucket) => {
+  const thirtyDaysAgo = addDays(referenceDate, -30);
+  const sevenDaysFromNow = addDays(referenceDate, 7);
+
+  const longOverdueCount = invoices.filter(
+    (inv) => inv.status === "OVERDUE" && inv.dueDate < thirtyDaysAgo,
+  ).length;
+
+  const criticalUnassignedCount = tickets.filter(
+    (t) =>
+      t.priority === "CRITICAL" &&
+      !t.assignedToId &&
+      !["RESOLVED", "CLOSED"].includes(t.status),
+  ).length;
+
+  const expiringThisWeekCount = contracts.filter(
+    (c) =>
+      !["EXPIRED", "CANCELLED", "RENEWED"].includes(c.status) &&
+      c.endDate >= referenceDate &&
+      c.endDate <= sevenDaysFromNow,
+  ).length;
+
+  const pendingJobsCount = jobs.filter((j) => j.status === "PENDING").length;
+
+  const draftInvoicesCount = invoices.filter((inv) => inv.status === "DRAFT").length;
+
+  const allActionCandidates: (ActionItem | false)[] = [
+    longOverdueCount > 0 && {
+      key: "long_overdue",
+      level: "critical" as const,
+      label: `${longOverdueCount} invoice${longOverdueCount !== 1 ? "s" : ""} overdue`,
+      href: "/collections",
+      actionLabel: "View Collections",
+      count: longOverdueCount,
+    },
+    criticalUnassignedCount > 0 && {
+      key: "critical_unassigned",
+      level: "critical" as const,
+      label: `${criticalUnassignedCount} critical complaint${criticalUnassignedCount !== 1 ? "s" : ""} unassigned`,
+      href: "/complaints?status=open&type=critical",
+      actionLabel: "Assign Now",
+      count: criticalUnassignedCount,
+    },
+    expiringThisWeekCount > 0 && {
+      key: "expiring_soon",
+      level: "warning" as const,
+      label: `${expiringThisWeekCount} contract${expiringThisWeekCount !== 1 ? "s" : ""} expiring this week`,
+      href: "/contracts?status=expiring_soon",
+      actionLabel: "View Contracts",
+      count: expiringThisWeekCount,
+    },
+    pendingJobsCount > 0 && {
+      key: "pending_jobs",
+      level: "warning" as const,
+      label: `${pendingJobsCount} job${pendingJobsCount !== 1 ? "s" : ""} unassigned`,
+      href: "/jobs?status=pending",
+      actionLabel: "Assign Jobs",
+      count: pendingJobsCount,
+    },
+    draftInvoicesCount > 0 && {
+      key: "draft_invoices",
+      level: "warning" as const,
+      label: `${draftInvoicesCount} draft invoice${draftInvoicesCount !== 1 ? "s" : ""} not yet issued`,
+      href: "/invoices?status=draft",
+      actionLabel: "Review",
+      count: draftInvoicesCount,
+    },
+  ];
+
+  const actionItems = allActionCandidates
+    .filter((item): item is ActionItem => Boolean(item))
+    .slice(0, 5);
+
+  const periodMonths = getPeriodMonths(period, referenceDate);
+  const revenueChartData = buildLastMonths(referenceDate, periodMonths).map((bucket) => {
     invoices.forEach((invoice) => {
       const key = `${invoice.issuedDate.getFullYear()}-${invoice.issuedDate.getMonth()}`;
       if (key === bucket.key) {
@@ -188,6 +274,7 @@ export async function getDashboardDataForOrganization(organizationId: string): P
 
     return {
       month: bucket.label,
+      monthFull: bucket.labelFull,
       billed: bucket.billed,
       collected: bucket.collected,
     };
@@ -195,6 +282,7 @@ export async function getDashboardDataForOrganization(organizationId: string): P
 
   return {
     metrics,
+    actionItems,
     overdueInvoices: overdueInvoices.slice(0, 5).map(mapInvoice),
     recentTickets: recentTickets.map(mapTicket),
     expiringContracts: expiringContracts.map(mapContract),
@@ -204,7 +292,7 @@ export async function getDashboardDataForOrganization(organizationId: string): P
   };
 }
 
-export async function getDashboardData() {
+export async function getDashboardData(period: RevenuePeriod = "6m") {
   const user = await getOrganizationContext();
-  return getDashboardDataForOrganization(user.organizationId);
+  return getDashboardDataForOrganization(user.organizationId, period);
 }

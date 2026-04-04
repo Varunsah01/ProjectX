@@ -1,36 +1,52 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { UserRole } from "@prisma/client";
 import {
   Briefcase,
+  CalendarCheck,
   CheckCircle,
   Edit,
   Mail,
   MapPin,
   Phone,
+  Plus,
   Power,
   Star,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { DataTable } from "@/components/ui/DataTable";
 import { FormField } from "@/components/ui/FormField";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Tabs } from "@/components/ui/Tabs";
-import { DataTable } from "@/components/ui/DataTable";
 import {
   deleteTechnicianAction,
   resetTechnicianPasswordAction,
   updateTechnicianAction,
 } from "@/lib/actions/technicians";
-import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateTechnicianSchema } from "@/lib/validations/technician";
 import { formatDate, getInitials } from "@/lib/utils";
 import type { Job, Technician, Ticket } from "@/lib/types";
+
+const JOB_PAGE_SIZE = 10;
+
+const JOB_STATUS_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "assigned", label: "Assigned" },
+  { value: "en_route", label: "En Route" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 function getInitialFormState(technician: Technician) {
   return {
@@ -46,14 +62,10 @@ function getInitialFormState(technician: Technician) {
 
 export default function TechnicianDetailPageClient({
   detail,
+  currentRole,
 }: {
-  detail:
-    | {
-        technician: Technician;
-        jobs: Job[];
-        tickets: Ticket[];
-      }
-    | null;
+  detail: { technician: Technician; jobs: Job[]; tickets: Ticket[] } | null;
+  currentRole: UserRole | null;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -75,15 +87,21 @@ export default function TechnicianDetailPageClient({
         },
   );
 
-  useEffect(() => {
-    if (!detail) {
-      return;
-    }
+  // Jobs tab state
+  const [jobStatusFilter, setJobStatusFilter] = useState("all");
+  const [jobPage, setJobPage] = useState(1);
 
+  useEffect(() => {
+    if (!detail) return;
     setForm(getInitialFormState(detail.technician));
     setErrors({});
     setIsEditing(false);
   }, [detail]);
+
+  // Reset job page when filter changes
+  useEffect(() => {
+    setJobPage(1);
+  }, [jobStatusFilter]);
 
   if (!detail) {
     return (
@@ -102,6 +120,18 @@ export default function TechnicianDetailPageClient({
   const { technician, jobs, tickets } = detail;
   const filledStars = Math.round(technician.rating);
   const isBusy = (key: string) => pendingAction === key;
+  const isAdmin = currentRole === "ADMIN";
+
+  // Jobs filtering + pagination
+  const filteredJobs =
+    jobStatusFilter === "all"
+      ? jobs
+      : jobs.filter((j) => j.status === jobStatusFilter);
+  const totalJobPages = Math.max(1, Math.ceil(filteredJobs.length / JOB_PAGE_SIZE));
+  const pagedJobs = filteredJobs.slice(
+    (jobPage - 1) * JOB_PAGE_SIZE,
+    jobPage * JOB_PAGE_SIZE,
+  );
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -114,20 +144,14 @@ export default function TechnicianDetailPageClient({
     successMessage: string,
     onSuccess?: (data: T | undefined) => void,
   ) => {
-    if (pendingAction) {
-      return;
-    }
-
+    if (pendingAction) return;
     setPendingAction(key);
-
     try {
       const result = await action;
-
       if (!result.success) {
         toast.error(result.error ?? "Something went wrong");
         return;
       }
-
       toast.success(successMessage);
       onSuccess?.(result.data);
     } finally {
@@ -141,35 +165,24 @@ export default function TechnicianDetailPageClient({
       ...form,
       password: form.password || undefined,
     });
-
     if (!parsed.success) {
       setErrors(getFormErrors(parsed.error));
       toast.error("Please fix the highlighted fields");
       return;
     }
-
-    await runAction(
-      "save",
-      updateTechnicianAction(parsed.data),
-      "Technician updated",
-      () => {
-        setIsEditing(false);
-        router.refresh();
-      },
-    );
+    await runAction("save", updateTechnicianAction(parsed.data), "Technician updated", () => {
+      setIsEditing(false);
+      router.refresh();
+    });
   };
 
   const toggleStatus = async () => {
-    const nextStatus =
-      technician.status === "available" ? "off_duty" : "available";
-
+    const nextStatus = technician.status === "available" ? "off_duty" : "available";
     await runAction(
       "status",
       updateTechnicianAction({ id: technician.id, status: nextStatus }),
       nextStatus === "available" ? "Technician marked available" : "Technician marked off duty",
-      () => {
-        router.refresh();
-      },
+      () => router.refresh(),
     );
   };
 
@@ -179,24 +192,17 @@ export default function TechnicianDetailPageClient({
       resetTechnicianPasswordAction({ id: technician.id }),
       "Password reset",
       (data) => {
-        if (data?.generatedPassword) {
-          setRevealPassword(data.generatedPassword);
-        }
+        if (data?.generatedPassword) setRevealPassword(data.generatedPassword);
       },
     );
   };
 
   const handleDelete = async () => {
-    await runAction(
-      "delete",
-      deleteTechnicianAction(technician.id),
-      "Technician deleted",
-      () => {
-        setIsDeleteOpen(false);
-        router.push("/technicians");
-        router.refresh();
-      },
-    );
+    await runAction("delete", deleteTechnicianAction(technician.id), "Technician deleted", () => {
+      setIsDeleteOpen(false);
+      router.push("/technicians");
+      router.refresh();
+    });
   };
 
   return (
@@ -224,6 +230,15 @@ export default function TechnicianDetailPageClient({
               </button>
             ) : (
               <>
+                {/* Assign Job quick action */}
+                <Link
+                  href={`/jobs/new?technicianId=${technician.id}`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Assign Job
+                </Link>
+
                 <button
                   type="button"
                   disabled={Boolean(pendingAction)}
@@ -233,6 +248,7 @@ export default function TechnicianDetailPageClient({
                   <Edit className="h-4 w-4" />
                   Edit
                 </button>
+
                 <button
                   type="button"
                   disabled={Boolean(pendingAction)}
@@ -241,11 +257,16 @@ export default function TechnicianDetailPageClient({
                 >
                   {isBusy("resetPassword") ? "Resetting..." : "Reset Password"}
                 </button>
+
                 <button
                   type="button"
                   disabled={Boolean(pendingAction)}
                   onClick={toggleStatus}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                    technician.status === "available"
+                      ? "border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+                      : "border-green-200 bg-white text-green-700 hover:bg-green-50"
+                  }`}
                 >
                   <Power className="h-4 w-4" />
                   {isBusy("status")
@@ -256,26 +277,33 @@ export default function TechnicianDetailPageClient({
                 </button>
               </>
             )}
-            <button
-              type="button"
-              disabled={Boolean(pendingAction)}
-              onClick={() => setIsDeleteOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </button>
+
+            {/* Delete — ADMIN only */}
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={Boolean(pendingAction)}
+                onClick={() => setIsDeleteOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            )}
           </div>
         }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* ── Left column ── */}
         <div className="space-y-6 lg:col-span-2">
+
+          {/* Profile card */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             {isEditing ? (
               <div>
                 <div className="mb-6 flex items-start gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xl font-bold text-brand-700">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xl font-bold text-brand-700">
                     {getInitials(form.name || technician.name)}
                   </div>
                   <div className="flex-1">
@@ -370,31 +398,29 @@ export default function TechnicianDetailPageClient({
               </div>
             ) : (
               <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xl font-bold text-brand-700">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-xl font-bold text-brand-700">
                   {getInitials(technician.name)}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-lg font-semibold text-slate-900">
                       {technician.name}
                     </h2>
                     <StatusBadge status={technician.status} />
                   </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {technician.specialization}
-                  </p>
+                  <p className="mt-1 text-sm text-slate-500">{technician.specialization}</p>
                   <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <Phone className="h-4 w-4 text-slate-400" />
+                      <Phone className="h-4 w-4 shrink-0 text-slate-400" />
                       {technician.phone}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <Mail className="h-4 w-4 text-slate-400" />
+                      <Mail className="h-4 w-4 shrink-0 text-slate-400" />
                       <span className="truncate">{technician.email}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <MapPin className="h-4 w-4 text-slate-400" />
-                      <span className="truncate">{technician.territory}</span>
+                      <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
+                      {technician.territory}
                     </div>
                   </div>
                 </div>
@@ -402,45 +428,37 @@ export default function TechnicianDetailPageClient({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-md">
-              <div className="mb-1 flex items-center gap-2 text-slate-500">
-                <Briefcase className="h-4 w-4" />
-                <span className="text-xs font-medium">Active Jobs</span>
-              </div>
-              <p className="tabular-nums text-2xl font-bold text-slate-900">
-                {technician.activeJobs}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-md">
-              <div className="mb-1 flex items-center gap-2 text-slate-500">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-xs font-medium">Completed Today</span>
-              </div>
-              <p className="tabular-nums text-2xl font-bold text-slate-900">
-                {technician.completedToday}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-md">
-              <div className="mb-1 flex items-center gap-2 text-slate-500">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                <span className="text-xs font-medium">Total Rating</span>
-              </div>
-              <p className="tabular-nums text-2xl font-bold text-slate-900">
-                {technician.rating}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-md">
-              <div className="mb-1 flex items-center gap-2 text-slate-500">
-                <MapPin className="h-4 w-4" />
-                <span className="text-xs font-medium">Territory</span>
-              </div>
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {technician.territory}
-              </p>
-            </div>
+          {/* Performance metric cards */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+            <MetricCard
+              icon={<Briefcase className="h-4 w-4" />}
+              label="Active Jobs"
+              value={technician.activeJobs}
+            />
+            <MetricCard
+              icon={<CheckCircle className="h-4 w-4" />}
+              label="Completed Today"
+              value={technician.completedToday}
+            />
+            <MetricCard
+              icon={<CalendarCheck className="h-4 w-4" />}
+              label="This Week"
+              value={technician.completedThisWeek}
+            />
+            <MetricCard
+              icon={<CalendarCheck className="h-4 w-4" />}
+              label="This Month"
+              value={technician.completedThisMonth}
+            />
+            <MetricCard
+              icon={<Star className="h-4 w-4 fill-amber-400 text-amber-400" />}
+              label="Rating"
+              value={technician.rating}
+              numeric={false}
+            />
           </div>
 
+          {/* Jobs + Tickets tabs */}
           <Tabs
             tabs={[
               {
@@ -448,41 +466,74 @@ export default function TechnicianDetailPageClient({
                 label: "Job History",
                 count: jobs.length,
                 content: (
-                  <DataTable<Job>
-                    columns={[
-                      {
-                        key: "jobNumber",
-                        header: "Job #",
-                        render: (jobRow) => (
-                          <span className="font-medium text-slate-900">
-                            {jobRow.jobNumber}
-                          </span>
-                        ),
-                      },
-                      {
-                        key: "customer",
-                        header: "Customer",
-                        render: (jobRow) => jobRow.customerName,
-                      },
-                      {
-                        key: "type",
-                        header: "Type",
-                        render: (jobRow) => <span className="capitalize">{jobRow.type}</span>,
-                      },
-                      {
-                        key: "date",
-                        header: "Date",
-                        render: (jobRow) => formatDate(jobRow.scheduledDate),
-                      },
-                      {
-                        key: "status",
-                        header: "Status",
-                        render: (jobRow) => <StatusBadge status={jobRow.status} />,
-                      },
-                    ]}
-                    data={jobs}
-                    onRowClick={(jobRow) => router.push(`/jobs/${jobRow.id}`)}
-                  />
+                  <div className="space-y-3">
+                    {/* Status filter */}
+                    <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-3">
+                      {JOB_STATUS_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setJobStatusFilter(opt.value)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                            jobStatusFilter === opt.value
+                              ? "bg-brand-600 text-white"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          {opt.label}
+                          {opt.value === "all" && (
+                            <span className="ml-1 opacity-70">({jobs.length})</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    <DataTable<Job>
+                      columns={[
+                        {
+                          key: "jobNumber",
+                          header: "Job #",
+                          render: (job) => (
+                            <span className="font-medium text-slate-900">{job.jobNumber}</span>
+                          ),
+                        },
+                        {
+                          key: "customer",
+                          header: "Customer",
+                          render: (job) => job.customerName,
+                        },
+                        {
+                          key: "type",
+                          header: "Type",
+                          render: (job) => (
+                            <span className="capitalize">{job.type}</span>
+                          ),
+                        },
+                        {
+                          key: "date",
+                          header: "Date",
+                          render: (job) => formatDate(job.scheduledDate),
+                        },
+                        {
+                          key: "status",
+                          header: "Status",
+                          render: (job) => <StatusBadge status={job.status} />,
+                        },
+                      ]}
+                      data={pagedJobs}
+                      emptyMessage={
+                        jobStatusFilter === "all"
+                          ? "No jobs assigned to this technician."
+                          : `No ${jobStatusFilter.replace("_", " ")} jobs.`
+                      }
+                      page={jobPage}
+                      pageSize={JOB_PAGE_SIZE}
+                      totalCount={filteredJobs.length}
+                      totalPages={totalJobPages}
+                      onPageChange={setJobPage}
+                      onRowClick={(job) => router.push(`/jobs/${job.id}`)}
+                    />
+                  </div>
                 ),
               },
               {
@@ -495,35 +546,34 @@ export default function TechnicianDetailPageClient({
                       {
                         key: "ticketNumber",
                         header: "Ticket #",
-                        render: (ticketRow) => (
-                          <span className="font-medium text-slate-900">
-                            {ticketRow.ticketNumber}
-                          </span>
+                        render: (t) => (
+                          <span className="font-medium text-slate-900">{t.ticketNumber}</span>
                         ),
                       },
                       {
                         key: "subject",
                         header: "Subject",
-                        render: (ticketRow) => ticketRow.subject,
+                        render: (t) => t.subject,
                       },
                       {
                         key: "customer",
                         header: "Customer",
-                        render: (ticketRow) => ticketRow.customerName,
+                        render: (t) => t.customerName,
                       },
                       {
                         key: "priority",
                         header: "Priority",
-                        render: (ticketRow) => <StatusBadge status={ticketRow.priority} />,
+                        render: (t) => <StatusBadge status={t.priority} />,
                       },
                       {
                         key: "status",
                         header: "Status",
-                        render: (ticketRow) => <StatusBadge status={ticketRow.status} />,
+                        render: (t) => <StatusBadge status={t.status} />,
                       },
                     ]}
                     data={tickets}
-                    onRowClick={(ticketRow) => router.push(`/complaints/${ticketRow.id}`)}
+                    emptyMessage="No tickets assigned to this technician."
+                    onRowClick={(t) => router.push(`/complaints/${t.id}`)}
                   />
                 ),
               },
@@ -531,18 +581,20 @@ export default function TechnicianDetailPageClient({
           />
         </div>
 
+        {/* ── Right sidebar ── */}
         <div className="space-y-4">
+          {/* Performance detail */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <h3 className="mb-4 font-semibold text-slate-900">Performance</h3>
             <div className="space-y-4">
               <div>
-                <p className="mb-1 text-xs text-slate-500">Rating</p>
+                <p className="mb-1.5 text-xs text-slate-500">Rating</p>
                 <div className="flex items-center gap-1">
-                  {Array.from({ length: 5 }).map((_, index) => (
+                  {Array.from({ length: 5 }).map((_, i) => (
                     <Star
-                      key={index}
+                      key={i}
                       className={`h-5 w-5 ${
-                        index < filledStars
+                        i < filledStars
                           ? "fill-amber-400 text-amber-400"
                           : "text-slate-200"
                       }`}
@@ -579,9 +631,7 @@ export default function TechnicianDetailPageClient({
               </div>
               <div className="border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">
-                    Total Jobs
-                  </span>
+                  <span className="text-sm font-medium text-slate-700">Total Jobs</span>
                   <span className="tabular-nums text-lg font-bold text-slate-900">
                     {technician.totalJobs}
                   </span>
@@ -590,10 +640,9 @@ export default function TechnicianDetailPageClient({
             </div>
           </div>
 
+          {/* Skills */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <h3 className="mb-3 font-semibold text-slate-900">
-              Skills & Specialization
-            </h3>
+            <h3 className="mb-3 font-semibold text-slate-900">Skills &amp; Specialization</h3>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700">
                 {technician.specialization}
@@ -609,6 +658,7 @@ export default function TechnicianDetailPageClient({
             </div>
           </div>
 
+          {/* Availability */}
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <h3 className="mb-3 font-semibold text-slate-900">Availability</h3>
             <div className="space-y-3">
@@ -618,9 +668,7 @@ export default function TechnicianDetailPageClient({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Territory</span>
-                <span className="text-sm font-medium text-slate-900">
-                  {technician.territory}
-                </span>
+                <span className="text-sm font-medium text-slate-900">{technician.territory}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Joined</span>
@@ -628,24 +676,41 @@ export default function TechnicianDetailPageClient({
                   {formatDate(technician.joinDate)}
                 </span>
               </div>
+              <div className="border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  disabled={Boolean(pendingAction)}
+                  onClick={toggleStatus}
+                  className={`w-full rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                    technician.status === "available"
+                      ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                      : "border-green-200 text-green-700 hover:bg-green-50"
+                  }`}
+                >
+                  {isBusy("status")
+                    ? "Updating..."
+                    : technician.status === "available"
+                      ? "Mark Off Duty"
+                      : "Mark Available"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <ConfirmModal
-        isOpen={isDeleteOpen}
-        onClose={() => {
-          if (!isBusy("delete")) {
-            setIsDeleteOpen(false);
-          }
-        }}
-        onConfirm={handleDelete}
-        title="Delete Technician"
-        description={`Delete ${technician.name}? This cannot be undone.`}
-        confirmLabel="Delete Technician"
-        loading={isBusy("delete")}
-      />
+      {/* ── Modals ── */}
+      {isAdmin && (
+        <ConfirmModal
+          isOpen={isDeleteOpen}
+          onClose={() => { if (!isBusy("delete")) setIsDeleteOpen(false); }}
+          onConfirm={handleDelete}
+          title="Delete Technician"
+          description={`Delete ${technician.name}? This cannot be undone.`}
+          confirmLabel="Delete Technician"
+          loading={isBusy("delete")}
+        />
+      )}
 
       {revealPassword && (
         <PasswordRevealModal
@@ -653,6 +718,30 @@ export default function TechnicianDetailPageClient({
           onClose={() => setRevealPassword(null)}
         />
       )}
+    </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  numeric = true,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  numeric?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-md">
+      <div className="mb-1.5 flex items-center gap-2 text-slate-500">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className={`font-bold text-slate-900 ${numeric ? "tabular-nums text-2xl" : "text-xl"}`}>
+        {value}
+      </p>
     </div>
   );
 }

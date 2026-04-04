@@ -18,6 +18,9 @@ const listJobsSchema = z.object({
   pageSize: z.number().int().min(1).max(100).optional(),
   sortBy: z.string().optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
+  fromDate: z.string().optional(),
+  toDate: z.string().optional(),
+  technicianId: z.string().optional(),
 });
 
 export async function listJobsAction(input: z.infer<typeof listJobsSchema> = {}) {

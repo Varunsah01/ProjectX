@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Cpu, Edit, Hash, MapPin, Power, Shield, Trash2, User, Wrench, Clock } from "lucide-react";
+import { AlertTriangle, Calendar, Cpu, Edit, Hash, MapPin, Plus, Power, Shield, Trash2, User, Wrench, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField } from "@/components/ui/FormField";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
-import { deleteAssetAction, updateAssetAction } from "@/lib/actions/assets";
+import { deleteAssetAction, logAssetServiceAction, updateAssetAction } from "@/lib/actions/assets";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateAssetSchema } from "@/lib/validations/asset";
 import { formatDate } from "@/lib/utils";
@@ -53,18 +54,51 @@ function getInitialFormState(asset: AssetDetail["asset"]) {
   };
 }
 
+const SERVICE_TYPES = [
+  { value: "preventive_maintenance", label: "Preventive Maintenance" },
+  { value: "repair", label: "Repair" },
+  { value: "inspection", label: "Inspection" },
+  { value: "part_replacement", label: "Part Replacement" },
+];
+
+function getServiceDueStatus(nextServiceDate: string): "overdue" | "due_soon" | null {
+  if (!nextServiceDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const next = new Date(nextServiceDate);
+  next.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((next.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays < 0) return "overdue";
+  if (diffDays <= 7) return "due_soon";
+  return null;
+}
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export default function AssetDetailPageClient({
   detail,
   customers,
+  technicians,
 }: {
   detail: AssetDetail | null;
   customers: Array<{ id: string; name: string; city: string }>;
+  technicians: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isLogServiceOpen, setIsLogServiceOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [serviceForm, setServiceForm] = useState({
+    serviceDate: "",
+    serviceType: "preventive_maintenance",
+    technicianId: "",
+    notes: "",
+    nextServiceDate: "",
+  });
   const [form, setForm] = useState(
     detail
       ? getInitialFormState(detail.asset)
@@ -178,6 +212,40 @@ export default function AssetDetailPageClient({
     );
   };
 
+  const openLogService = () => {
+    setServiceForm({
+      serviceDate: todayStr(),
+      serviceType: "preventive_maintenance",
+      technicianId: technicians[0]?.id ?? "",
+      notes: "",
+      nextServiceDate: "",
+    });
+    setIsLogServiceOpen(true);
+  };
+
+  const handleLogService = async () => {
+    if (!serviceForm.serviceDate || !serviceForm.technicianId) {
+      toast.error("Service date and technician are required");
+      return;
+    }
+    await runAction(
+      "logService",
+      logAssetServiceAction({
+        assetId: asset.id,
+        serviceDate: serviceForm.serviceDate,
+        serviceType: serviceForm.serviceType,
+        technicianId: serviceForm.technicianId,
+        notes: serviceForm.notes || undefined,
+        nextServiceDate: serviceForm.nextServiceDate || undefined,
+      }),
+      "Service logged",
+      () => {
+        setIsLogServiceOpen(false);
+        router.refresh();
+      },
+    );
+  };
+
   const handleDelete = async () => {
     await runAction(
       "delete",
@@ -220,6 +288,15 @@ export default function AssetDetailPageClient({
                 <button
                   type="button"
                   disabled={Boolean(pendingAction)}
+                  onClick={openLogService}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <Plus className="h-4 w-4" />
+                  Log Service
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(pendingAction)}
                   onClick={() => setIsEditing(true)}
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
                 >
@@ -253,6 +330,40 @@ export default function AssetDetailPageClient({
           </div>
         }
       />
+
+      {(() => {
+        const status = getServiceDueStatus(asset.nextServiceDate);
+        if (status === "overdue") {
+          return (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div>
+                <p className="text-sm font-semibold text-red-800">Service Overdue</p>
+                <p className="text-xs text-red-600">
+                  Next service was scheduled for{" "}
+                  <span className="font-medium">{formatDate(asset.nextServiceDate)}</span>.
+                  Log a service or update the next service date.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        if (status === "due_soon") {
+          return (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Service Due Soon</p>
+                <p className="text-xs text-amber-600">
+                  Next service is scheduled for{" "}
+                  <span className="font-medium">{formatDate(asset.nextServiceDate)}</span>.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-6 lg:col-span-2">
@@ -463,9 +574,34 @@ export default function AssetDetailPageClient({
         </div>
       </div>
 
-      {jobs.length > 0 && (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
-          <h3 className="mb-4 font-semibold text-slate-900">Service History</h3>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900">Service History</h3>
+          <button
+            type="button"
+            disabled={Boolean(pendingAction)}
+            onClick={openLogService}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Log Service
+          </button>
+        </div>
+        {jobs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Wrench className="mb-3 h-8 w-8 text-slate-300" />
+            <p className="text-sm font-medium text-slate-500">No service history yet</p>
+            <p className="mt-1 text-xs text-slate-400">Log a service to start tracking maintenance history.</p>
+            <button
+              type="button"
+              onClick={openLogService}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Log First Service
+            </button>
+          </div>
+        ) : (
           <div className="space-y-3">
             {jobs.map((job) => (
               <Link
@@ -482,17 +618,105 @@ export default function AssetDetailPageClient({
                     {job.technicianName} &middot; {formatDate(job.scheduledDate)}
                   </p>
                   {job.serviceReport && (
-                    <p className="mt-1 text-xs text-slate-400">
-                      {job.serviceReport}
-                    </p>
+                    <p className="mt-1 text-xs text-slate-400">{job.serviceReport}</p>
+                  )}
+                  {job.notes && (
+                    <p className="mt-1 text-xs text-slate-400 italic">{job.notes}</p>
                   )}
                 </div>
                 <StatusBadge status={job.status} />
               </Link>
             ))}
           </div>
+        )}
+      </div>
+
+      <Modal
+        isOpen={isLogServiceOpen}
+        onClose={() => {
+          if (!isBusy("logService")) setIsLogServiceOpen(false);
+        }}
+        title="Log Service"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              label="Service Date"
+              name="serviceDate"
+              type="date"
+              required
+              value={serviceForm.serviceDate}
+              onChange={(e) =>
+                setServiceForm((prev) => ({ ...prev, serviceDate: e.target.value }))
+              }
+            />
+            <FormField
+              as="select"
+              label="Service Type"
+              name="serviceType"
+              required
+              value={serviceForm.serviceType}
+              onChange={(e) =>
+                setServiceForm((prev) => ({ ...prev, serviceType: e.target.value }))
+              }
+              options={SERVICE_TYPES}
+            />
+            <FormField
+              as="select"
+              label="Technician"
+              name="technicianId"
+              required
+              value={serviceForm.technicianId}
+              onChange={(e) =>
+                setServiceForm((prev) => ({ ...prev, technicianId: e.target.value }))
+              }
+              options={[
+                { value: "", label: "Select technician" },
+                ...technicians.map((t) => ({ value: t.id, label: t.name })),
+              ]}
+            />
+            <FormField
+              label="Next Service Date"
+              name="nextServiceDate"
+              type="date"
+              value={serviceForm.nextServiceDate}
+              onChange={(e) =>
+                setServiceForm((prev) => ({ ...prev, nextServiceDate: e.target.value }))
+              }
+            />
+            <FormField
+              as="textarea"
+              label="Notes"
+              name="notes"
+              rows={3}
+              value={serviceForm.notes}
+              onChange={(e) =>
+                setServiceForm((prev) => ({ ...prev, notes: e.target.value }))
+              }
+              containerClassName="sm:col-span-2"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              disabled={isBusy("logService")}
+              onClick={() => setIsLogServiceOpen(false)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              type="button"
+              loading={isBusy("logService")}
+              loadingText="Logging..."
+              onClick={handleLogService}
+            >
+              Log Service
+            </SubmitButton>
+          </div>
         </div>
-      )}
+      </Modal>
 
       <ConfirmModal
         isOpen={isDeleteOpen}

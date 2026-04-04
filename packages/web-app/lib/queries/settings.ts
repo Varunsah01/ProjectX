@@ -19,17 +19,16 @@ export async function getSettingsDataForOrganization(
     plans,
     auditLogs,
   ] = await Promise.all([
-    options.includeBusinessProfile
-      ? db.organization.findUniqueOrThrow({
-          where: {
-            id: organizationId,
-          },
-        })
-      : Promise.resolve(null),
+    db.organization.findUniqueOrThrow({
+      where: {
+        id: organizationId,
+      },
+    }),
     options.includeTeamMembers
       ? db.user.findMany({
           where: {
             organizationId,
+            status: { not: "REMOVED" },
           },
           orderBy: {
             createdAt: "asc",
@@ -66,7 +65,7 @@ export async function getSettingsDataForOrganization(
   ]);
 
   return {
-    businessProfile: organization
+    businessProfile: options.includeBusinessProfile
       ? {
           businessName: organization.name,
           phone: organization.phone,
@@ -81,6 +80,7 @@ export async function getSettingsDataForOrganization(
     teamMembers: teamMembers.map(mapTeamMember),
     plans: plans.map(mapPlan),
     auditLogs: auditLogs.map(mapAuditLogEntry),
+    notificationSettings: (organization.notificationSettings as Record<string, unknown>) ?? {},
   };
 }
 

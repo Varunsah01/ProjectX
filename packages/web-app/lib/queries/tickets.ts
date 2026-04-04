@@ -1,6 +1,8 @@
 import { Prisma, TicketPriority, TicketStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
+  linkedJobSelect,
+  mapLinkedJob,
   mapTechnician,
   mapTicket,
   technicianSelect,
@@ -101,24 +103,30 @@ export async function getTicketDetailForOrganization(organizationId: string, id:
     return null;
   }
 
-  const availableTechnicians = await db.user.findMany({
-    where: {
-      organizationId,
-      role: "TECHNICIAN",
-      OR: [
-        { status: "available" },
-        { id: ticket.assignedToId ?? undefined },
-      ],
-    },
-    select: technicianSelect,
-    orderBy: {
-      name: "asc",
-    },
-  });
+  const [availableTechnicians, linkedJobs] = await Promise.all([
+    db.user.findMany({
+      where: {
+        organizationId,
+        role: "TECHNICIAN",
+        OR: [
+          { status: "available" },
+          { id: ticket.assignedToId ?? undefined },
+        ],
+      },
+      select: technicianSelect,
+      orderBy: { name: "asc" },
+    }),
+    db.job.findMany({
+      where: { ticketId: id, organizationId },
+      select: linkedJobSelect,
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return {
     ticket: mapTicket(ticket),
     availableTechnicians: availableTechnicians.map(mapTechnician),
+    linkedJobs: linkedJobs.map(mapLinkedJob),
   };
 }
 

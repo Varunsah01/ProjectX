@@ -15,6 +15,7 @@ export const createInvoiceSchema = z.object({
   type: z.enum(["recurring", "one_time", "service"]),
   items: z.array(invoiceItemSchema).min(1, "At least one line item is required"),
   notes: z.string().trim().optional().or(z.literal("")),
+  draft: z.boolean().optional(),
 });
 
 export const updateInvoiceSchema = createInvoiceSchema.partial().extend({

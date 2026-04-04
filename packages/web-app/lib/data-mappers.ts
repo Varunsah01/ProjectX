@@ -12,9 +12,11 @@ import type {
   AuditLogEntry,
   Contract,
   Customer,
+  CustomerNote,
   Invoice,
   InvoiceItem,
   Job,
+  LinkedJob,
   Plan,
   TeamMember,
   Technician,
@@ -372,6 +374,48 @@ export function mapTechnician(
     completedThisMonth: technician.completedThisMonth,
     joinDate: toDateString(technician.createdAt),
     skills: technician.skills,
+  };
+}
+
+export const linkedJobSelect = {
+  id: true,
+  jobNumber: true,
+  type: true,
+  status: true,
+  scheduledDate: true,
+  technician: {
+    select: { name: true },
+  },
+} satisfies Prisma.JobSelect;
+
+export function mapLinkedJob(
+  job: Prisma.JobGetPayload<{ select: typeof linkedJobSelect }>,
+): LinkedJob {
+  return {
+    id: job.id,
+    jobNumber: job.jobNumber,
+    type: enumToUi(job.type),
+    status: enumToUi(job.status),
+    technicianName: job.technician.name,
+    scheduledDate: toDateString(job.scheduledDate),
+  };
+}
+
+export const customerNoteInclude = {
+  user: {
+    select: { name: true },
+  },
+} satisfies Prisma.CustomerNoteInclude;
+
+export function mapCustomerNote(
+  note: Prisma.CustomerNoteGetPayload<{ include: typeof customerNoteInclude }>,
+): CustomerNote {
+  return {
+    id: note.id,
+    type: note.type,
+    note: note.note,
+    userName: note.user.name,
+    createdAt: toDateTimeString(note.createdAt),
   };
 }
 

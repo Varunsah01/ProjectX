@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import {
   assetDetailsInclude,
   contractDetailsInclude,
+  customerNoteInclude,
   customerSummaryInclude,
   invoiceDetailsInclude,
   mapAsset,
   mapContract,
   mapCustomer,
+  mapCustomerNote,
   mapInvoice,
   mapTicket,
   ticketDetailsInclude,
@@ -111,7 +113,7 @@ export async function getCustomerDetailForOrganization(
     return null;
   }
 
-  const [assets, invoices, tickets, contracts] = await Promise.all([
+  const [assets, invoices, tickets, contracts, notes] = await Promise.all([
     db.asset.findMany({
       where: { organizationId, customerId: id },
       include: assetDetailsInclude,
@@ -132,6 +134,11 @@ export async function getCustomerDetailForOrganization(
       include: contractDetailsInclude,
       orderBy: { startDate: "desc" },
     }),
+    db.customerNote.findMany({
+      where: { organizationId, customerId: id },
+      include: customerNoteInclude,
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   return {
@@ -140,6 +147,7 @@ export async function getCustomerDetailForOrganization(
     invoices: invoices.map(mapInvoice),
     tickets: tickets.map(mapTicket),
     contracts: contracts.map(mapContract),
+    notes: notes.map(mapCustomerNote),
   };
 }
 

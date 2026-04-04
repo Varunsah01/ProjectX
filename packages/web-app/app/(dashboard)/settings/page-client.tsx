@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { UserRole } from "@prisma/client";
+import { MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField } from "@/components/ui/FormField";
@@ -19,20 +20,25 @@ import {
 } from "@/lib/actions/plans";
 import {
   createTeamMemberAction,
+  removeTeamMemberAction,
   resetTeamMemberPasswordAction,
   updateBusinessProfileAction,
+  updateTeamMemberAction,
 } from "@/lib/actions/settings";
+import { updateNotificationSettingsAction } from "@/lib/actions/notifications-settings";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createTeamMemberSchema } from "@/lib/validations/settings";
 import { formatCurrency, formatDateTime, getInitials } from "@/lib/utils";
-import type { Plan, SettingsData } from "@/lib/types";
+import type { Plan, SettingsData, TeamMember } from "@/lib/types";
 
 export default function SettingsPageClient({
   data,
   currentRole,
+  currentUserId,
 }: {
   data: SettingsData;
   currentRole: UserRole;
+  currentUserId: string;
 }) {
   const tabs = [
     data.businessProfile
@@ -47,7 +53,13 @@ export default function SettingsPageClient({
           id: "team",
           label: "Team",
           count: data.teamMembers.length,
-          content: <TeamTab teamMembers={data.teamMembers} />,
+          content: (
+            <TeamTab
+              teamMembers={data.teamMembers}
+              currentUserId={currentUserId}
+              currentRole={currentRole}
+            />
+          ),
         }
       : null,
     {
@@ -59,7 +71,7 @@ export default function SettingsPageClient({
     {
       id: "notifications",
       label: "Notifications",
-      content: <NotificationsTab />,
+      content: <NotificationsTab initialNotificationSettings={data.notificationSettings} />,
     },
     currentRole === "ADMIN"
       ? {
@@ -250,13 +262,54 @@ const BLANK_MEMBER_FORM = {
   status: "active" as "active" | "inactive",
 };
 
-function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) {
+function TeamTab({
+  teamMembers,
+  currentUserId,
+  currentRole,
+}: {
+  teamMembers: SettingsData["teamMembers"];
+  currentUserId: string;
+  currentRole: UserRole;
+}) {
+  const router = useRouter();
+
+  // Create member
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState(BLANK_MEMBER_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isPending, startTransition] = useTransition();
   const [revealPassword, setRevealPassword] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+
+  // Kebab menu
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLTableCellElement>(null);
+
+  // Edit role modal
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
+  const [editForm, setEditForm] = useState({ role: "agent", status: "active" });
+
+  // Deactivate confirm
+  const [deactivateMember, setDeactivateMember] = useState<TeamMember | null>(null);
+
+  // Remove confirm
+  const [removeMember, setRemoveMember] = useState<TeamMember | null>(null);
+  const [removeConfirmText, setRemoveConfirmText] = useState("");
+
+  // Generic pending action
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    const close = () => setOpenMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, []);
+
+  useEffect(() => {
+    if (editMember) {
+      setEditForm({ role: editMember.role, status: editMember.status });
+    }
+  }, [editMember]);
 
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -270,7 +323,6 @@ function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) 
       toast.error("Please fix the highlighted fields");
       return;
     }
-
     startTransition(async () => {
       const result = await createTeamMemberAction(parsed.data);
       if (!result.success) {
@@ -299,6 +351,66 @@ function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) 
         setRevealPassword(result.data.generatedPassword);
       }
     });
+  };
+
+  const handleEditSave = async () => {
+    if (pendingAction || !editMember) return;
+    setPendingAction("edit");
+    try {
+      const result = await updateTeamMemberAction({
+        id: editMember.id,
+        role: editForm.role as never,
+        status: editForm.status as never,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to update member");
+        return;
+      }
+      toast.success("Member updated");
+      setEditMember(null);
+      router.refresh();
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleDeactivateConfirm = async () => {
+    if (pendingAction || !deactivateMember) return;
+    const goingInactive = deactivateMember.status === "active";
+    setPendingAction("deactivate");
+    try {
+      const result = await updateTeamMemberAction({
+        id: deactivateMember.id,
+        status: goingInactive ? "inactive" : "active",
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to update member");
+        return;
+      }
+      toast.success(goingInactive ? "Member deactivated" : "Member activated");
+      setDeactivateMember(null);
+      router.refresh();
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleRemoveConfirm = async () => {
+    if (pendingAction || !removeMember) return;
+    setPendingAction("remove");
+    try {
+      const result = await removeTeamMemberAction(removeMember.id);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to remove member");
+        return;
+      }
+      toast.success("Member removed");
+      setRemoveMember(null);
+      setRemoveConfirmText("");
+      router.refresh();
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   return (
@@ -334,49 +446,122 @@ function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {teamMembers.map((member) => (
-                <tr key={member.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-semibold text-brand-700">
-                        {getInitials(member.name)}
+              {teamMembers.map((member) => {
+                const isSelf = member.id === currentUserId;
+                const menuOpen = openMenuId === member.id;
+                return (
+                  <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-semibold text-brand-700">
+                          {getInitials(member.name)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-900">
+                              {member.name}
+                            </p>
+                            {isSelf && (
+                              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-600">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500">{member.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">
-                          {member.name}
-                        </p>
-                        <p className="text-xs text-slate-500">{member.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 capitalize">
-                      {member.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={member.status} />
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
-                    {formatDateTime(member.lastActive)}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      type="button"
-                      disabled={resettingId === member.id || isPending}
-                      onClick={() => handleResetPassword(member.id)}
-                      className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-                    >
-                      {resettingId === member.id ? "Resetting..." : "Reset Password"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 capitalize">
+                        {member.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={member.status} />
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {formatDateTime(member.lastActive)}
+                    </td>
+                    <td className="px-6 py-4 text-right" ref={menuRef}>
+                      {isSelf ? null : (
+                        <div
+                          className="relative inline-block"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            disabled={Boolean(pendingAction) || resettingId === member.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(menuOpen ? null : member.id);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                          {menuOpen && (
+                            <div className="absolute right-0 top-9 z-20 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditMember(member);
+                                  setOpenMenuId(null);
+                                }}
+                                className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Edit Role &amp; Status
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeactivateMember(member);
+                                  setOpenMenuId(null);
+                                }}
+                                className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                {member.status === "active" ? "Deactivate" : "Activate"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={resettingId === member.id || isPending}
+                                onClick={() => {
+                                  handleResetPassword(member.id);
+                                  setOpenMenuId(null);
+                                }}
+                                className="flex w-full items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {resettingId === member.id ? "Resetting..." : "Reset Password"}
+                              </button>
+                              {currentRole === "ADMIN" && (
+                                <>
+                                  <div className="my-1 border-t border-slate-100" />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRemoveMember(member);
+                                      setRemoveConfirmText("");
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                                  >
+                                    Remove Member
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Add member modal */}
       <Modal
         isOpen={isCreateOpen}
         onClose={() => {
@@ -458,6 +643,136 @@ function TeamTab({ teamMembers }: { teamMembers: SettingsData["teamMembers"] }) 
           >
             Create Member
           </SubmitButton>
+        </div>
+      </Modal>
+
+      {/* Edit role & status modal */}
+      <Modal
+        isOpen={Boolean(editMember)}
+        onClose={() => { if (!pendingAction) setEditMember(null); }}
+        title="Edit Member"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-slate-50 px-4 py-3">
+            <p className="text-sm font-medium text-slate-900">{editMember?.name}</p>
+            <p className="text-xs text-slate-500">{editMember?.email}</p>
+          </div>
+          <FormField
+            as="select"
+            label="Role"
+            name="role"
+            value={editForm.role}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
+            options={[
+              { value: "admin", label: "Admin" },
+              { value: "manager", label: "Manager" },
+              { value: "agent", label: "Agent" },
+              { value: "technician", label: "Technician" },
+            ]}
+          />
+          <FormField
+            as="select"
+            label="Status"
+            name="status"
+            value={editForm.status}
+            onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+          />
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              disabled={Boolean(pendingAction)}
+              onClick={() => setEditMember(null)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              type="button"
+              loading={pendingAction === "edit"}
+              loadingText="Saving..."
+              onClick={handleEditSave}
+            >
+              Save Changes
+            </SubmitButton>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Deactivate / Activate confirmation */}
+      <ConfirmModal
+        isOpen={Boolean(deactivateMember)}
+        onClose={() => { if (!pendingAction) setDeactivateMember(null); }}
+        onConfirm={handleDeactivateConfirm}
+        title={deactivateMember?.status === "active" ? "Deactivate Member" : "Activate Member"}
+        description={
+          deactivateMember?.status === "active"
+            ? `Deactivate ${deactivateMember?.name}? They will no longer be able to log in. Active sessions remain valid until they expire.`
+            : `Reactivate ${deactivateMember?.name}? They will be able to log in again.`
+        }
+        confirmLabel={deactivateMember?.status === "active" ? "Deactivate" : "Activate"}
+        loading={pendingAction === "deactivate"}
+      />
+
+      {/* Remove confirmation — type name to confirm */}
+      <Modal
+        isOpen={Boolean(removeMember)}
+        onClose={() => {
+          if (!pendingAction) {
+            setRemoveMember(null);
+            setRemoveConfirmText("");
+          }
+        }}
+        title="Remove Member"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            This permanently removes{" "}
+            <span className="font-semibold text-slate-900">{removeMember?.name}</span> from
+            your team. If they have historical records (jobs, audit logs), the account will
+            be deactivated instead of deleted.
+          </p>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Type <span className="font-semibold">{removeMember?.name}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={removeConfirmText}
+              onChange={(e) => setRemoveConfirmText(e.target.value)}
+              placeholder={removeMember?.name ?? ""}
+              disabled={Boolean(pendingAction)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-300 disabled:opacity-70"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              disabled={Boolean(pendingAction)}
+              onClick={() => {
+                setRemoveMember(null);
+                setRemoveConfirmText("");
+              }}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              type="button"
+              loading={pendingAction === "remove"}
+              loadingText="Removing..."
+              disabled={removeConfirmText !== removeMember?.name}
+              onClick={handleRemoveConfirm}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Remove Member
+            </SubmitButton>
+          </div>
         </div>
       </Modal>
 
@@ -746,20 +1061,37 @@ function PlanFormModal({
   );
 }
 
-function NotificationsTab() {
+function NotificationsTab({
+  initialNotificationSettings,
+}: {
+  initialNotificationSettings: Record<string, unknown>;
+}) {
+  const saved = initialNotificationSettings;
   const [settings, setSettings] = useState({
-    paymentReminders: true,
-    overdueAlerts: true,
-    complaintUpdates: true,
-    contractExpiry: true,
-    jobCompletion: true,
-    smsEnabled: true,
-    emailEnabled: true,
-    whatsappEnabled: false,
+    paymentReminders: (saved.paymentReminders as boolean) ?? true,
+    overdueAlerts: (saved.overdueAlerts as boolean) ?? true,
+    complaintUpdates: (saved.complaintUpdates as boolean) ?? true,
+    contractExpiry: (saved.contractExpiry as boolean) ?? true,
+    jobCompletion: (saved.jobCompletion as boolean) ?? true,
+    smsEnabled: (saved.smsEnabled as boolean) ?? true,
+    emailEnabled: (saved.emailEnabled as boolean) ?? true,
+    whatsappEnabled: (saved.whatsappEnabled as boolean) ?? false,
   });
+  const [isPending, startTransition] = useTransition();
 
   const toggle = (key: keyof typeof settings) =>
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const handleSave = () => {
+    startTransition(async () => {
+      const result = await updateNotificationSettingsAction(settings);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Preferences saved");
+    });
+  };
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -867,6 +1199,16 @@ function NotificationsTab() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleSave}
+          disabled={isPending}
+          className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isPending ? "Saving..." : "Save Preferences"}
+        </button>
       </div>
     </div>
   );
