@@ -21,6 +21,9 @@ const nextConfig = {
   output: "standalone",
   experimental: {
     outputFileTracingRoot: path.join(__dirname, "../../"),
+    outputFileTracingIncludes: {
+      "/**": ["../../node_modules/.prisma/client/**"],
+    },
     serverComponentsExternalPackages: ["@react-pdf/renderer"],
   },
   images: {
