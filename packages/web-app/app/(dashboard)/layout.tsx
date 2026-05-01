@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { SidebarProvider, useSidebar } from "@/components/layout/SidebarContext";
+import { EmailVerificationBanner } from "@/components/ui/EmailVerificationBanner";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebar();
@@ -16,6 +17,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         }`}
       >
         <Header />
+        <EmailVerificationBanner />
         <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>

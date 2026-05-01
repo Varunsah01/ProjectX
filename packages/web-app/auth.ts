@@ -31,7 +31,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const dbUser = await db.user.findUnique({
         where: { id: token.sub },
-        select: { tokenVersion: true, status: true },
+        select: { tokenVersion: true, status: true, emailVerified: true },
       });
 
       if (
@@ -47,6 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       token.tokenVersionCheckedAt = Date.now();
+      token.isEmailVerified = !!dbUser.emailVerified;
       return token;
     },
   },
@@ -83,6 +84,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             image: true,
             avatar: true,
             tokenVersion: true,
+            emailVerified: true,
           },
         });
 
@@ -104,6 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           organizationId: user.organizationId,
           image: user.image ?? user.avatar ?? null,
           tokenVersion: user.tokenVersion,
+          isEmailVerified: !!user.emailVerified,
         };
       },
     }),

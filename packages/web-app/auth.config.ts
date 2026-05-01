@@ -23,6 +23,10 @@ const authConfig = {
         token.tokenVersionCheckedAt = Date.now();
       }
 
+      if (user?.isEmailVerified !== undefined) {
+        token.isEmailVerified = !!user.isEmailVerified;
+      }
+
       return token;
     },
     session({ session, token }) {
@@ -33,6 +37,8 @@ const authConfig = {
         session.user.organizationId =
           (token.organizationId as string | undefined) ??
           session.user.organizationId;
+        session.user.isEmailVerified =
+          (token.isEmailVerified as boolean | undefined) ?? false;
       }
 
       return session;

@@ -10,7 +10,7 @@ const { auth } = NextAuth(authConfig);
 
 type AuthedRequest = NextRequest & { auth: Session | null };
 
-const publicRoutes = new Set(["/login", "/signup"]);
+const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"]);
 const csrfExemptPrefixes = [
   "/api/auth/",
   "/api/mobile/v1/",

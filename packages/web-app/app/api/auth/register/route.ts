@@ -1,8 +1,14 @@
+import * as React from "react";
 import { hash } from "bcrypt";
 import { UserRole } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { generateToken } from "@/lib/auth-tokens";
 import { db } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
+import { getAppUrl } from "@/lib/email-templates/_shared";
+import { EmailVerificationEmail } from "@/lib/email-templates/email-verification";
 import { notifyWelcomeUser } from "@/lib/notifications";
+import { renderEmailTemplate } from "@/lib/render-email-template";
 
 export async function POST(request: Request) {
   try {
@@ -85,6 +91,29 @@ export async function POST(request: Request) {
     });
 
     await notifyWelcomeUser(userId);
+
+    // Send email verification (fire-and-forget, don't block registration)
+    const verificationToken = await generateToken();
+    await db.emailVerificationToken.create({
+      data: {
+        userId,
+        selector: verificationToken.selector,
+        tokenHash: verificationToken.tokenHash,
+        expiresAt: verificationToken.expiresAt,
+      },
+    });
+
+    const verificationUrl = `${getAppUrl()}/api/auth/verify-email?token=${verificationToken.raw}`;
+    sendEmail(
+      email,
+      "Verify your email address",
+      await renderEmailTemplate(
+        React.createElement(EmailVerificationEmail, {
+          recipientName: name,
+          verificationUrl,
+        }),
+      ),
+    ).catch((err) => console.error("Failed to send verification email", err));
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -7,6 +7,7 @@ declare module "next-auth" {
       id: string;
       role: UserRole;
       organizationId: string;
+      isEmailVerified: boolean;
     };
   }
 
@@ -14,6 +15,7 @@ declare module "next-auth" {
     role?: UserRole;
     organizationId?: string;
     tokenVersion?: number;
+    isEmailVerified?: boolean;
   }
 }
 
@@ -23,5 +25,6 @@ declare module "next-auth/jwt" {
     organizationId?: string;
     tokenVersion?: number;
     tokenVersionCheckedAt?: number;
+    isEmailVerified?: boolean;
   }
 }
