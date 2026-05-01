@@ -42,6 +42,9 @@ export async function createPlanAction(input: unknown) {
         price: values.price,
         visitsCovered: values.visitsCovered,
         description: values.description,
+        hsnSac: values.hsnSac,
+        gstRatePercent: values.gstRatePercent,
+        gstApplicable: values.gstApplicable,
         isActive: values.isActive,
       },
     });
@@ -75,6 +78,9 @@ export async function updatePlanAction(input: unknown) {
         ...(values.price !== undefined ? { price: values.price } : {}),
         ...(values.visitsCovered !== undefined ? { visitsCovered: values.visitsCovered } : {}),
         ...(values.description !== undefined ? { description: values.description } : {}),
+        ...(values.hsnSac !== undefined ? { hsnSac: values.hsnSac } : {}),
+        ...(values.gstRatePercent !== undefined ? { gstRatePercent: values.gstRatePercent } : {}),
+        ...(values.gstApplicable !== undefined ? { gstApplicable: values.gstApplicable } : {}),
         ...(values.isActive !== undefined ? { isActive: values.isActive } : {}),
       },
     });

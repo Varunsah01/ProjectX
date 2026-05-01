@@ -13,6 +13,7 @@ import { logTestError, logTestEvent, logTestWarning } from "../services/test-log
 
 const TOKEN_STORAGE_KEY = "project-x.mobile.session-token";
 const USER_STORAGE_KEY = "project-x.mobile.session-user";
+const CSRF_STORAGE_KEY = "project-x.mobile.csrf-token";
 
 export type AuthSessionNotice = {
   tone: "warning" | "danger" | "info";
@@ -25,6 +26,8 @@ type AuthContextValue = {
   user: User | null;
   sessionNotice: AuthSessionNotice | null;
   signIn: (credentials: LoginRequest) => Promise<void>;
+  requestOtp: (phone: string) => Promise<{ expiresAt: string }>;
+  signInWithOtp: (input: { phone: string; code: string }) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   request: AuthenticatedRequest;
@@ -38,11 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [sessionNotice, setSessionNotice] = useState<AuthSessionNotice | null>(null);
 
-  const persistSession = useCallback(async (nextToken: string, nextUser: User) => {
-    await Promise.all([
+  const persistSession = useCallback(async (nextToken: string, nextUser: User, nextCsrfToken?: string) => {
+    const ops = [
       SecureStore.setItemAsync(TOKEN_STORAGE_KEY, nextToken),
       SecureStore.setItemAsync(USER_STORAGE_KEY, JSON.stringify(nextUser)),
-    ]);
+    ];
+    if (nextCsrfToken) {
+      ops.push(SecureStore.setItemAsync(CSRF_STORAGE_KEY, nextCsrfToken));
+    }
+    await Promise.all(ops);
     logTestEvent("auth", "session-persisted", {
       userId: nextUser.id,
       role: nextUser.role,
@@ -56,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
       SecureStore.deleteItemAsync(USER_STORAGE_KEY),
+      SecureStore.deleteItemAsync(CSRF_STORAGE_KEY),
     ]);
     logTestEvent("auth", "session-cleared");
   }, []);
@@ -92,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(storedToken);
       setUser(response.user);
       setSessionNotice(null);
-      await persistSession(storedToken, response.user);
+      await persistSession(storedToken, response.user, response.csrfToken ?? undefined);
       logTestEvent("auth", "refresh-verified", {
         userId: response.user.id,
       });
@@ -166,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       timeoutMs: 15000,
     });
 
-    await persistSession(response.token, response.user);
+    await persistSession(response.token, response.user, response.csrfToken);
     setToken(response.token);
     setUser(response.user);
     setSessionNotice(null);
@@ -175,6 +183,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: response.user.role,
     });
   }, [persistSession]);
+
+  const requestOtp = useCallback(async (phone: string) => {
+    logTestEvent("auth", "otp-request-start", { phone });
+    const response = await apiRequest<{ ok: true; expiresAt: string }>(
+      "/auth/otp/request",
+      {
+        method: "POST",
+        body: { phone },
+        timeoutMs: 15000,
+      },
+    );
+    logTestEvent("auth", "otp-request-success", { phone });
+    return { expiresAt: response.expiresAt };
+  }, []);
+
+  const signInWithOtp = useCallback(
+    async ({ phone, code }: { phone: string; code: string }) => {
+      logTestEvent("auth", "otp-verify-start", { phone });
+      const response = await apiRequest<LoginResponse>("/auth/otp/verify", {
+        method: "POST",
+        body: { phone, code },
+        timeoutMs: 15000,
+      });
+
+      await persistSession(response.token, response.user, response.csrfToken);
+      setToken(response.token);
+      setUser(response.user);
+      setSessionNotice(null);
+      logTestEvent("auth", "otp-verify-success", {
+        userId: response.user.id,
+      });
+    },
+    [persistSession],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -202,11 +244,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("You are not signed in.");
       }
 
+      const method = (options.method ?? "GET").toUpperCase();
+      const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
+      let headers = options.headers ?? {};
+
+      if (isMutation) {
+        const csrfToken = await SecureStore.getItemAsync(CSRF_STORAGE_KEY);
+        if (csrfToken) {
+          headers = { ...headers, "x-csrf-token": csrfToken };
+        }
+      }
+
       try {
         return await apiRequest<T>(path, {
           method: options.method,
           body: options.body,
-          headers: options.headers,
+          headers,
           retry: options.retry,
           retryDelayMs: options.retryDelayMs,
           timeoutMs: options.timeoutMs,
@@ -231,11 +284,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       sessionNotice,
       signIn,
+      requestOtp,
+      signInWithOtp,
       signOut,
       refreshSession,
       request,
     }),
-    [isLoading, request, refreshSession, sessionNotice, signIn, signOut, token, user],
+    [
+      isLoading,
+      request,
+      refreshSession,
+      requestOtp,
+      sessionNotice,
+      signIn,
+      signInWithOtp,
+      signOut,
+      token,
+      user,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -43,7 +43,11 @@ export function getApiTargetNotice() {
   return runtimeEnvDiagnostics.targetNotice;
 }
 
-export const MOBILE_API_BASE_URL = runtimeEnvDiagnostics.mobileApiBaseUrl;
+export const API_VERSION_PATH = "/v1";
+
+export const MOBILE_API_BASE_URL = runtimeEnvDiagnostics.mobileApiBaseUrl
+  ? `${runtimeEnvDiagnostics.mobileApiBaseUrl}${API_VERSION_PATH}`
+  : runtimeEnvDiagnostics.mobileApiBaseUrl;
 
 export type ApiMethod = "GET" | "POST" | "DELETE";
 

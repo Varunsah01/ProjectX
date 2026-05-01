@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import * as Sentry from "@sentry/react-native";
 import {
   ApiError,
   getErrorMessage,
@@ -175,6 +176,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           }
 
           setLastSyncError(getErrorMessage(error));
+          Sentry.captureException(error, {
+            tags: {
+              source: "offline-sync",
+              actionType: action.type,
+              actionId: action.id,
+              jobId: action.jobId,
+            },
+          });
           logTestError("sync", "replay-failed", {
             actionId: action.id,
             actionType: action.type,

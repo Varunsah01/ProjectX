@@ -1,39 +1,60 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { colors, spacing } from "../../constants/theme";
-import type { MainTabRouteName } from "../../app/navigation";
+import type { MainTabRouteName } from "../../navigation/types";
 
 const tabs: Array<{ label: string; route: MainTabRouteName }> = [
-  { label: "Home", route: "home" },
-  { label: "Jobs", route: "jobs" },
-  { label: "Complaints", route: "complaints" },
-  { label: "Profile", route: "profile" },
+  { label: "Home", route: "Home" },
+  { label: "Jobs", route: "Jobs" },
+  { label: "Complaints", route: "Complaints" },
+  { label: "Profile", route: "Profile" },
 ];
 
-export default function BottomTabBar({
-  activeTab,
-  onSelectTab,
-}: {
-  activeTab: MainTabRouteName;
-  onSelectTab: (tab: MainTabRouteName) => void;
-}) {
+export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
+  const activeRouteName = state.routes[state.index]?.name as
+    | MainTabRouteName
+    | undefined;
+
   return (
     <View style={styles.tabBar}>
-      {tabs.map((tab) => (
-        <Pressable
-          key={tab.route}
-          onPress={() => onSelectTab(tab.route)}
-          testID={`app-tab.${tab.route}`}
-          style={({ pressed }) => [
-            styles.tabButton,
-            activeTab === tab.route && styles.tabButtonActive,
-            pressed && styles.tabButtonPressed,
-          ]}
-        >
-          <Text style={[styles.tabLabel, activeTab === tab.route && styles.tabLabelActive]}>
-            {tab.label}
-          </Text>
-        </Pressable>
-      ))}
+      {tabs.map((tab) => {
+        const isActive = activeRouteName === tab.route;
+
+        return (
+          <Pressable
+            key={tab.route}
+            onPress={() => {
+              const targetRoute = state.routes.find(
+                (route) => route.name === tab.route,
+              );
+              const event = navigation.emit({
+                type: "tabPress",
+                target: targetRoute?.key,
+                canPreventDefault: true,
+              });
+
+              if (!isActive && !event.defaultPrevented) {
+                navigation.navigate(tab.route);
+              }
+            }}
+            testID={`app-tab.${tab.route.toLowerCase()}`}
+            style={({ pressed }) => [
+              styles.tabButton,
+              isActive && styles.tabButtonActive,
+              pressed && styles.tabButtonPressed,
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabLabel,
+                isActive && styles.tabLabelActive,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

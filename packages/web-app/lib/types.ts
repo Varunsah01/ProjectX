@@ -182,7 +182,9 @@ export interface Customer {
   email: string;
   address: string;
   city: string;
-  gst?: string;
+  gstin?: string;
+  billingState?: string;
+  shippingState?: string;
   status: CustomerStatus;
   category: string;
   totalDue: number;
@@ -216,6 +218,12 @@ export interface InvoiceItem {
   qty: number;
   rate: number;
   amount: number;
+  hsnSac?: string;
+  gstRatePercent?: number;
+  taxableAmount?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
 }
 
 export interface Invoice {
@@ -225,6 +233,13 @@ export interface Invoice {
   customerName: string;
   amount: number;
   paidAmount: number;
+  placeOfSupply?: string;
+  isInterState?: boolean;
+  subtotalAmount?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+  totalTaxAmount?: number;
   dueDate: string;
   issuedDate: string;
   status: InvoiceStatus;
@@ -351,6 +366,9 @@ export interface Plan {
   price: number;
   visitsCovered: number;
   description: string;
+  hsnSac: string;
+  gstRatePercent: number;
+  gstApplicable: boolean;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -493,8 +511,9 @@ export interface BusinessProfile {
   email: string;
   address: string;
   city: string;
-  state: string;
-  gst: string;
+  gstin: string;
+  placeOfBusinessState: string;
+  legalName?: string;
   logo?: string;
 }
 
@@ -504,6 +523,17 @@ export interface SettingsData {
   plans: Plan[];
   auditLogs: AuditLogEntry[];
   notificationSettings: Record<string, unknown>;
+}
+
+export interface WebhookEventEntry {
+  id: string;
+  provider: string;
+  eventId: string;
+  eventType: string;
+  receivedAt: string;
+  processedAt: string | null;
+  status: "received" | "processed" | "failed";
+  error: string | null;
 }
 
 export type PrismaCustomerStatusType = PrismaCustomerStatusValue;

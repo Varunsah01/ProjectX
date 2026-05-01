@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,11 +14,12 @@ import NoticeCard from "../../components/ui/NoticeCard";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ScreenHeader from "../../components/shell/ScreenHeader";
 import FullscreenState from "../../components/states/FullscreenState";
-import { colors, spacing } from "../../constants/theme";
+import { colors, radius, spacing } from "../../constants/theme";
 import { useAuth } from "../../hooks/useAuth";
 import { useComplaintDetail } from "../../hooks/useComplaintDetail";
 import { getErrorMessage } from "../../services/api";
 import {
+  createJobFromComplaint,
   fetchComplaintDetail,
   updateComplaintStatus,
 } from "../../services/complaints";
@@ -31,7 +33,11 @@ import {
 } from "../../utils/unsaved-changes";
 import { formatDate, formatDateTime } from "../../utils/format";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type ComplaintActionStatus = Extract<ComplaintStatus, "in_progress" | "on_hold" | "resolved">;
+
+// ─── Action config ────────────────────────────────────────────────────────────
 
 function getComplaintActionConfig(status: ComplaintStatus) {
   return {
@@ -48,6 +54,15 @@ function getComplaintActionConfig(status: ComplaintStatus) {
       status === "reopened",
   };
 }
+
+// ─── Today's date as YYYY-MM-DD ───────────────────────────────────────────────
+
+function todayDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ComplaintDetailScreen({
   complaintId,
@@ -71,11 +86,26 @@ export default function ComplaintDetailScreen({
     setComplaint,
     showingCachedData,
   } = useComplaintDetail(complaintId);
+
+  // Status update state
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [statusAction, setStatusAction] = useState<ComplaintActionStatus | null>(null);
   const submitting = statusAction !== null;
   const noteHasUnsavedChanges = note.trim().length > 0;
+
+  // Resolve confirmation
+  const [customerConfirmed, setCustomerConfirmed] = useState(false);
+
+  // Create-job inline form
+  const [createJobMode, setCreateJobMode] = useState(false);
+  const [createJobDate, setCreateJobDate] = useState(todayDateString);
+  const [createJobSubmitting, setCreateJobSubmitting] = useState(false);
+  const [createJobError, setCreateJobError] = useState<string | null>(null);
+
+  const anyBusy = submitting || createJobSubmitting;
+
+  // ─── Back guard: block back while submitting ────────────────────────────────
 
   useEffect(() => {
     onBackGuardChange?.(
@@ -87,6 +117,8 @@ export default function ComplaintDetailScreen({
       onBackGuardChange?.(false);
     };
   }, [onBackGuardChange, submitting]);
+
+  // ─── Back intercept: warn when note has unsaved content ────────────────────
 
   useEffect(() => {
     if (!noteHasUnsavedChanges || submitting) {
@@ -117,6 +149,8 @@ export default function ComplaintDetailScreen({
     [complaint],
   );
 
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
   async function handleOpenJob(jobId: string) {
     if (!noteHasUnsavedChanges) {
       onOpenJob(jobId);
@@ -131,8 +165,20 @@ export default function ComplaintDetailScreen({
   }
 
   async function handleUpdateStatus(status: ComplaintActionStatus) {
-    setStatusAction(status);
     setSubmitError(null);
+
+    if (status === "resolved") {
+      if (!note.trim()) {
+        setSubmitError("Add a resolution note describing what was done before resolving.");
+        return;
+      }
+      if (!customerConfirmed) {
+        setSubmitError("Confirm the customer has accepted the resolution before resolving.");
+        return;
+      }
+    }
+
+    setStatusAction(status);
 
     try {
       const updatedComplaint = await updateComplaintStatus(request, {
@@ -142,6 +188,7 @@ export default function ComplaintDetailScreen({
       });
 
       setNote("");
+      setCustomerConfirmed(false);
 
       if (updatedComplaint) {
         setComplaint(updatedComplaint);
@@ -158,6 +205,34 @@ export default function ComplaintDetailScreen({
       setStatusAction(null);
     }
   }
+
+  async function handleCreateJob() {
+    setCreateJobError(null);
+
+    const trimmedDate = createJobDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+      setCreateJobError("Enter the scheduled date as YYYY-MM-DD.");
+      return;
+    }
+
+    setCreateJobSubmitting(true);
+
+    try {
+      const newJob = await createJobFromComplaint(request, {
+        complaintId,
+        scheduledDate: trimmedDate,
+      });
+
+      setCreateJobMode(false);
+      onOpenJob(newJob.id);
+    } catch (err) {
+      setCreateJobError(getErrorMessage(err));
+    } finally {
+      setCreateJobSubmitting(false);
+    }
+  }
+
+  // ─── Loading / error states ─────────────────────────────────────────────────
 
   if (loading && !complaint) {
     return (
@@ -180,6 +255,10 @@ export default function ComplaintDetailScreen({
     );
   }
 
+  const isTerminal = complaint.status === "resolved" || complaint.status === "closed";
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <ScrollView
       style={styles.screen}
@@ -192,10 +271,11 @@ export default function ComplaintDetailScreen({
         title="Complaint Details"
         subtitle="Review the issue, linked jobs, and what to do next."
         backLabel="Back to Complaints"
-        backDisabled={submitting}
+        backDisabled={anyBusy}
         onBack={onBack}
       />
 
+      {/* Data freshness notices */}
       {showingCachedData && error ? (
         <NoticeCard
           tone="warning"
@@ -205,7 +285,6 @@ export default function ComplaintDetailScreen({
           onAction={() => void reload()}
         />
       ) : null}
-
       {!showingCachedData && error ? (
         <NoticeCard
           tone="danger"
@@ -216,6 +295,7 @@ export default function ComplaintDetailScreen({
         />
       ) : null}
 
+      {/* Action error */}
       {submitError ? (
         <NoticeCard
           tone="danger"
@@ -224,6 +304,7 @@ export default function ComplaintDetailScreen({
         />
       ) : null}
 
+      {/* ── Complaint summary ── */}
       <Card>
         <View style={styles.row}>
           <View style={styles.copy}>
@@ -237,12 +318,12 @@ export default function ComplaintDetailScreen({
             <StatusBadge value={complaint.status} />
           </View>
         </View>
-
         <Text style={styles.bodyText}>{complaint.description}</Text>
         <Text style={styles.metaText}>Logged: {formatDateTime(complaint.createdAt)}</Text>
         <Text style={styles.metaText}>Due by: {formatDateTime(complaint.slaDeadline)}</Text>
       </Card>
 
+      {/* ── Customer ── */}
       <Card>
         <Text style={styles.sectionTitle}>Customer</Text>
         <Text style={styles.bodyText}>{complaint.customer.name}</Text>
@@ -252,6 +333,7 @@ export default function ComplaintDetailScreen({
         </Text>
       </Card>
 
+      {/* ── Asset ── */}
       {complaint.asset ? (
         <Card>
           <Text style={styles.sectionTitle}>Asset</Text>
@@ -266,6 +348,7 @@ export default function ComplaintDetailScreen({
         </Card>
       ) : null}
 
+      {/* ── Timeline ── */}
       <Card>
         <Text style={styles.sectionTitle}>Timeline</Text>
         {complaint.timeline.length === 0 ? (
@@ -285,12 +368,61 @@ export default function ComplaintDetailScreen({
         )}
       </Card>
 
+      {/* ── Linked Jobs ── */}
       <Card>
         <Text style={styles.sectionTitle}>Linked Jobs</Text>
         {complaint.linkedJobs.length === 0 ? (
-          <Text style={styles.metaText}>
-            No jobs are linked to this complaint yet.
-          </Text>
+          <>
+            <Text style={styles.metaText}>No jobs are linked to this complaint yet.</Text>
+            {!isTerminal && !createJobMode ? (
+              <Button
+                label="Create Job"
+                variant="secondary"
+                onPress={() => setCreateJobMode(true)}
+                disabled={anyBusy}
+              />
+            ) : null}
+            {createJobMode ? (
+              <View style={styles.createJobForm}>
+                <Input
+                  label="Scheduled date"
+                  value={createJobDate}
+                  onChangeText={(v) => {
+                    setCreateJobDate(v);
+                    setCreateJobError(null);
+                  }}
+                  editable={!createJobSubmitting}
+                  placeholder="YYYY-MM-DD"
+                  helperText="Enter the date for this service visit."
+                />
+                {createJobError ? (
+                  <NoticeCard
+                    tone="danger"
+                    title="Couldn't Create Job"
+                    message={createJobError}
+                  />
+                ) : null}
+                <View style={styles.actionStack}>
+                  <Button
+                    label="Create & View Job"
+                    onPress={() => void handleCreateJob()}
+                    loading={createJobSubmitting}
+                    disabled={createJobSubmitting}
+                  />
+                  <Button
+                    label="Cancel"
+                    variant="ghost"
+                    onPress={() => {
+                      setCreateJobMode(false);
+                      setCreateJobError(null);
+                      setCreateJobDate(todayDateString());
+                    }}
+                    disabled={createJobSubmitting}
+                  />
+                </View>
+              </View>
+            ) : null}
+          </>
         ) : (
           complaint.linkedJobs.map((job) => (
             <View key={job.id} style={styles.linkedJobRow}>
@@ -304,7 +436,7 @@ export default function ComplaintDetailScreen({
                   label="View Job"
                   variant="secondary"
                   onPress={() => void handleOpenJob(job.id)}
-                  disabled={submitting}
+                  disabled={anyBusy}
                 />
               </View>
             </View>
@@ -312,7 +444,8 @@ export default function ComplaintDetailScreen({
         )}
       </Card>
 
-      {!["resolved", "closed"].includes(complaint.status) ? (
+      {/* ── Actions / closed state ── */}
+      {!isTerminal ? (
         <Card>
           <Text style={styles.sectionTitle}>Add Update</Text>
           <Input
@@ -326,8 +459,48 @@ export default function ComplaintDetailScreen({
             multiline
             autoCapitalize="sentences"
             placeholder="Write what you found, what changed, or why work is paused."
-            helperText="You need a live connection to save complaint updates."
+            helperText={
+              actionConfig?.canResolve
+                ? "Required when resolving. Describe what was done to close this complaint."
+                : "You need a live connection to save complaint updates."
+            }
           />
+
+          {/* Customer confirmation — shown only when resolution is possible */}
+          {actionConfig?.canResolve ? (
+            <Pressable
+              onPress={() => {
+                if (submitting) return;
+                setCustomerConfirmed((v) => !v);
+                setSubmitError(null);
+              }}
+              disabled={submitting}
+              style={({ pressed }) => [
+                styles.checkboxRow,
+                submitting && styles.checkboxRowDisabled,
+                pressed && !submitting && styles.checkboxRowPressed,
+              ]}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  customerConfirmed && styles.checkboxActive,
+                ]}
+              >
+                {customerConfirmed ? (
+                  <Text style={styles.checkboxTick}>✓</Text>
+                ) : null}
+              </View>
+              <View style={styles.checkboxCopy}>
+                <Text style={styles.sectionTitle}>Customer Confirmed</Text>
+                <Text style={styles.helperText}>
+                  Tick this after the customer confirms the complaint is resolved to their
+                  satisfaction.
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+
           <View style={styles.actionStack}>
             {actionConfig?.canStartWork ? (
               <Button
@@ -348,27 +521,45 @@ export default function ComplaintDetailScreen({
             ) : null}
             {actionConfig?.canResolve ? (
               <Button
-                label="Resolve"
+                label="Resolve Complaint"
                 variant="danger"
                 onPress={() => void handleUpdateStatus("resolved")}
                 loading={statusAction === "resolved"}
-                disabled={submitting}
+                disabled={submitting || !note.trim() || !customerConfirmed}
               />
             ) : null}
           </View>
+
+          {actionConfig?.canResolve && (!note.trim() || !customerConfirmed) ? (
+            <Text style={styles.resolveHint}>
+              {!note.trim() && !customerConfirmed
+                ? "Add a resolution note and confirm with the customer to enable resolve."
+                : !note.trim()
+                  ? "Add a resolution note to enable resolve."
+                  : "Confirm with the customer to enable resolve."}
+            </Text>
+          ) : null}
         </Card>
       ) : (
         <Card>
           <Text style={styles.sectionTitle}>Complaint Status</Text>
           <Text style={styles.metaText}>
-            This complaint is already {complaint.status === "closed" ? "closed" : "resolved"}.
-            No more phone updates are needed.
+            This complaint is{" "}
+            {complaint.status === "closed" ? "closed" : "resolved"}.{" "}
+            No further updates are needed.
           </Text>
+          {complaint.resolvedAt ? (
+            <Text style={styles.metaText}>
+              Resolved: {formatDateTime(complaint.resolvedAt)}
+            </Text>
+          ) : null}
         </Card>
       )}
     </ScrollView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: {
@@ -416,6 +607,11 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: colors.textMuted,
   },
+  helperText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textMuted,
+  },
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -453,7 +649,53 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.sm,
   },
+  createJobForm: {
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+  },
   actionStack: {
     gap: spacing.sm,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  checkboxRowPressed: {
+    opacity: 0.9,
+  },
+  checkboxRowDisabled: {
+    opacity: 0.6,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxActive: {
+    borderColor: colors.success,
+    backgroundColor: colors.success,
+  },
+  checkboxTick: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  checkboxCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  resolveHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+    fontStyle: "italic",
   },
 });

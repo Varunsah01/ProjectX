@@ -18,6 +18,11 @@ const authConfig = {
         token.organizationId = user.organizationId;
       }
 
+      if (user?.tokenVersion !== undefined) {
+        token.tokenVersion = user.tokenVersion;
+        token.tokenVersionCheckedAt = Date.now();
+      }
+
       return token;
     },
     session({ session, token }) {

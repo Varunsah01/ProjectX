@@ -6,6 +6,8 @@ export const invoiceItemSchema = z.object({
   qty: z.number().int().min(1, "Qty must be at least 1"),
   rate: z.number().min(0, "Rate must be positive"),
   amount: z.number().min(0, "Amount must be positive"),
+  hsnSac: z.string().trim().optional().or(z.literal("")),
+  gstRatePercent: z.number().min(0).max(28).optional(),
 });
 
 export const createInvoiceSchema = z.object({

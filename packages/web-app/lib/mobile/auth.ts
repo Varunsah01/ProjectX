@@ -50,6 +50,7 @@ export interface MobileSessionUser {
 type MobileSessionResult = {
   token: string;
   user: MobileSessionUser;
+  csrfToken: string | null;
 };
 
 type TechnicianIdentifierType = "phone" | "employee_id";
@@ -163,6 +164,16 @@ async function findTechnicianByIdentifier(
   return findTechnicianByEmployeeId(identifier);
 }
 
+export async function findActiveTechnicianByPhone(phone: string) {
+  const user = await findTechnicianByPhone(phone);
+
+  if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {
+    return null;
+  }
+
+  return buildMobileUser(user);
+}
+
 export async function authenticateTechnician({
   identifierType,
   identifier,
@@ -200,6 +211,7 @@ export async function authenticateTechnician({
 
 export async function createMobileSession(userId: string) {
   const sessionToken = randomBytes(32).toString("hex");
+  const csrfToken = randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + MOBILE_SESSION_MAX_AGE_MS);
 
   await db.session.create({
@@ -207,10 +219,11 @@ export async function createMobileSession(userId: string) {
       sessionToken,
       userId,
       expires,
+      csrfToken,
     },
   });
 
-  return sessionToken;
+  return { sessionToken, csrfToken };
 }
 
 export async function getMobileSession(request: Request): Promise<MobileSessionResult | null> {
@@ -226,6 +239,7 @@ export async function getMobileSession(request: Request): Promise<MobileSessionR
       sessionToken: true,
       expires: true,
       userId: true,
+      csrfToken: true,
     },
   });
 
@@ -252,6 +266,7 @@ export async function getMobileSession(request: Request): Promise<MobileSessionR
   return {
     token,
     user: buildMobileUser(user),
+    csrfToken: session.csrfToken,
   };
 }
 
@@ -267,4 +282,17 @@ export async function clearMobileSession(token: string | null | undefined) {
 
 export function getMobileSessionToken(request: Request) {
   return getAuthorizationToken(request);
+}
+
+export function validateMobileCsrf(
+  request: Request,
+  session: MobileSessionResult,
+): boolean {
+  const headerToken = request.headers.get("x-csrf-token");
+
+  if (!headerToken || !session.csrfToken) {
+    return false;
+  }
+
+  return headerToken === session.csrfToken;
 }

@@ -24,6 +24,8 @@ import { getApiConfigError, getApiTargetNotice, getErrorMessage } from "../../se
 import type { LoginIdentifierType } from "../../types/api";
 import { logTestWarning } from "../../services/test-logger";
 
+type AuthMethod = "password" | "otp";
+
 const identifierOptions: Array<{ value: LoginIdentifierType; label: string }> = [
   { value: "employee_id", label: "Employee ID" },
   { value: "phone", label: "Phone Number" },
@@ -70,8 +72,19 @@ function getPasswordError(secret: string) {
   return null;
 }
 
+function getOtpCodeError(code: string) {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    return "Enter the 6-digit code we sent.";
+  }
+  if (!/^\d{6}$/.test(trimmed)) {
+    return "Code must be 6 digits.";
+  }
+  return null;
+}
+
 export default function LoginScreen() {
-  const { signIn, sessionNotice } = useAuth();
+  const { signIn, requestOtp, signInWithOtp, sessionNotice } = useAuth();
   const [identifierType, setIdentifierType] = useState<LoginIdentifierType>("employee_id");
   const [identifier, setIdentifier] = useState<string>("");
   const [secret, setSecret] = useState<string>("");
@@ -79,6 +92,10 @@ export default function LoginScreen() {
   const [showValidation, setShowValidation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backNotice, setBackNotice] = useState<string | null>(null);
+  const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
+  const [otpStep, setOtpStep] = useState<"phone" | "code">("phone");
+  const [otpCode, setOtpCode] = useState<string>("");
+  const [otpInfo, setOtpInfo] = useState<string | null>(null);
   const apiConfigError = getApiConfigError();
   const apiTargetNotice = getApiTargetNotice();
   const lastBackPressAtRef = useRef(0);
@@ -86,7 +103,17 @@ export default function LoginScreen() {
 
   const identifierError = getIdentifierError(identifierType, identifier);
   const secretError = getPasswordError(secret);
-  const canSubmit = !apiConfigError && !identifierError && !secretError;
+  const otpCodeError = getOtpCodeError(otpCode);
+
+  const usingOtp = identifierType === "phone" && authMethod === "otp";
+  const canSubmitPassword = !apiConfigError && !identifierError && !secretError;
+  const canRequestOtp = !apiConfigError && !identifierError;
+  const canVerifyOtp = !apiConfigError && !identifierError && !otpCodeError;
+  const canSubmit = usingOtp
+    ? otpStep === "code"
+      ? canVerifyOtp
+      : canRequestOtp
+    : canSubmitPassword;
 
   const identifierHelperText =
     identifierType === "employee_id"
@@ -134,7 +161,7 @@ export default function LoginScreen() {
     setShowValidation(true);
     setError(null);
 
-    if (!canSubmit) {
+    if (!canSubmitPassword) {
       return;
     }
 
@@ -159,11 +186,97 @@ export default function LoginScreen() {
     }
   }
 
+  async function handleRequestOtp() {
+    setShowValidation(true);
+    setError(null);
+    setOtpInfo(null);
+
+    if (!canRequestOtp) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await requestOtp(identifier.trim());
+      setOtpStep("code");
+      setOtpCode("");
+      setShowValidation(false);
+      setOtpInfo("We sent a 6-digit code to your phone. It expires in 5 minutes.");
+    } catch (otpError) {
+      logTestWarning("auth", "otp-request-screen-error", {
+        errorMessage: otpError instanceof Error ? otpError.message : "Unknown error",
+      });
+      setError(getErrorMessage(otpError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleVerifyOtp() {
+    setShowValidation(true);
+    setError(null);
+
+    if (!canVerifyOtp) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await signInWithOtp({
+        phone: identifier.trim(),
+        code: otpCode.trim(),
+      });
+    } catch (otpError) {
+      logTestWarning("auth", "otp-verify-screen-error", {
+        errorMessage: otpError instanceof Error ? otpError.message : "Unknown error",
+      });
+      setError(getErrorMessage(otpError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function handleIdentifierTypeChange(nextType: LoginIdentifierType) {
     setIdentifierType(nextType);
     setIdentifier("");
     setError(null);
     setShowValidation(false);
+    if (nextType !== "phone") {
+      setAuthMethod("password");
+      setOtpStep("phone");
+      setOtpCode("");
+      setOtpInfo(null);
+    }
+  }
+
+  function handleAuthMethodChange(nextMethod: AuthMethod) {
+    setAuthMethod(nextMethod);
+    setError(null);
+    setShowValidation(false);
+    setOtpStep("phone");
+    setOtpCode("");
+    setSecret("");
+    setOtpInfo(null);
+  }
+
+  function handleResetOtpStep() {
+    setOtpStep("phone");
+    setOtpCode("");
+    setOtpInfo(null);
+    setError(null);
+    setShowValidation(false);
+  }
+
+  function handlePrimaryPress() {
+    if (usingOtp) {
+      if (otpStep === "phone") {
+        void handleRequestOtp();
+      } else {
+        void handleVerifyOtp();
+      }
+      return;
+    }
+    void handleSignIn();
   }
 
   return (
@@ -231,12 +344,6 @@ export default function LoginScreen() {
             />
           ) : null}
 
-          <NoticeCard
-            tone="info"
-            title="Sign-In Method"
-            message="Use your password to sign in. One-time codes are not available in this build."
-          />
-
           <View style={styles.group}>
             <Text style={styles.groupLabel}>Sign in with</Text>
             <View style={styles.optionRow}>
@@ -252,6 +359,26 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          {identifierType === "phone" ? (
+            <View style={styles.group}>
+              <Text style={styles.groupLabel}>Verification</Text>
+              <View style={styles.optionRow}>
+                <OptionPill
+                  label="Password"
+                  active={authMethod === "password"}
+                  disabled={submitting}
+                  onPress={() => handleAuthMethodChange("password")}
+                />
+                <OptionPill
+                  label="One-time Code"
+                  active={authMethod === "otp"}
+                  disabled={submitting}
+                  onPress={() => handleAuthMethodChange("otp")}
+                />
+              </View>
+            </View>
+          ) : null}
+
           <Input
             label={identifierType === "phone" ? "Phone Number" : "Employee ID"}
             value={identifier}
@@ -264,41 +391,91 @@ export default function LoginScreen() {
             keyboardType={identifierType === "phone" ? "phone-pad" : "default"}
             autoComplete={identifierType === "phone" ? "tel" : "off"}
             textContentType={identifierType === "phone" ? "telephoneNumber" : "none"}
-            editable={!submitting}
+            editable={!submitting && !(usingOtp && otpStep === "code")}
             error={showValidation ? identifierError ?? undefined : undefined}
             helperText={identifierHelperText}
             returnKeyType="next"
           />
 
-          <Input
-            label="Password"
-            value={secret}
-            testID="login.password-input"
-            onChangeText={(value) => {
-              setSecret(value);
-              setError(null);
-            }}
-            secureTextEntry
-            placeholder="Enter password"
-            keyboardType="default"
-            autoComplete="password"
-            textContentType="password"
-            editable={!submitting}
-            error={showValidation ? secretError ?? undefined : undefined}
-            helperText="Enter your account password."
-            returnKeyType="done"
-            onSubmitEditing={() => void handleSignIn()}
-          />
+          {usingOtp ? (
+            <>
+              {otpInfo ? (
+                <NoticeCard tone="info" title="Code Sent" message={otpInfo} />
+              ) : null}
+              {otpStep === "code" ? (
+                <Input
+                  label="One-time Code"
+                  value={otpCode}
+                  testID="login.otp-input"
+                  onChangeText={(value) => {
+                    setOtpCode(value);
+                    setError(null);
+                  }}
+                  placeholder="123456"
+                  keyboardType="number-pad"
+                  autoComplete="sms-otp"
+                  textContentType="oneTimeCode"
+                  editable={!submitting}
+                  error={showValidation ? otpCodeError ?? undefined : undefined}
+                  helperText="Codes expire after 5 minutes."
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleVerifyOtp()}
+                />
+              ) : null}
+            </>
+          ) : (
+            <Input
+              label="Password"
+              value={secret}
+              testID="login.password-input"
+              onChangeText={(value) => {
+                setSecret(value);
+                setError(null);
+              }}
+              secureTextEntry
+              placeholder="Enter password"
+              keyboardType="default"
+              autoComplete="password"
+              textContentType="password"
+              editable={!submitting}
+              error={showValidation ? secretError ?? undefined : undefined}
+              helperText="Enter your account password."
+              returnKeyType="done"
+              onSubmitEditing={() => void handleSignIn()}
+            />
+          )}
 
           {error ? <NoticeCard tone="danger" title="Can't Sign In" message={error} /> : null}
 
           <Button
-            label="Sign In"
-            onPress={() => void handleSignIn()}
+            label={
+              usingOtp
+                ? otpStep === "phone"
+                  ? "Send Code"
+                  : "Verify & Sign In"
+                : "Sign In"
+            }
+            onPress={() => handlePrimaryPress()}
             loading={submitting}
             disabled={!canSubmit}
-            testID="login.submit-button"
+            testID={
+              usingOtp
+                ? otpStep === "phone"
+                  ? "login.otp-request-button"
+                  : "login.otp-verify-button"
+                : "login.submit-button"
+            }
           />
+
+          {usingOtp && otpStep === "code" ? (
+            <Pressable
+              disabled={submitting}
+              onPress={handleResetOtpStep}
+              style={({ pressed }) => [styles.linkButton, pressed && styles.linkButtonPressed]}
+            >
+              <Text style={styles.linkButtonText}>Use a different number</Text>
+            </Pressable>
+          ) : null}
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -448,5 +625,17 @@ const styles = StyleSheet.create({
   },
   optionPillTextActive: {
     color: colors.brand,
+  },
+  linkButton: {
+    alignSelf: "center",
+    paddingVertical: spacing.xs,
+  },
+  linkButtonPressed: {
+    opacity: 0.7,
+  },
+  linkButtonText: {
+    color: colors.brand,
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

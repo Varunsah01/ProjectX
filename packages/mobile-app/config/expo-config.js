@@ -3,6 +3,7 @@ const MOBILE_EAS_PROJECT_ID = "30428968-87d8-456b-a15b-a272b07c4cfd";
 const mobileExpoConfig = {
   name: "ProjectX Field",
   slug: "project-x",
+  scheme: "recuring",
   extra: {
     eas: {
       projectId: MOBILE_EAS_PROJECT_ID,

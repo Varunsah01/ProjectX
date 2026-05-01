@@ -1,8 +1,24 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { generateRecurringInvoices } from "@/lib/cron/recurring-invoices";
+import { logger } from "@/lib/log";
+import { rateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
+
+function getRequestOrigin(request: Request) {
+  const origin = request.headers.get("origin")?.trim();
+  if (origin) {
+    return origin;
+  }
+
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) {
+    return forwarded;
+  }
+
+  return "anonymous";
+}
 
 function authorizeCronRequest(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -34,11 +50,42 @@ function authorizeCronRequest(request: Request) {
 }
 
 async function handleGenerateInvoices(request: Request) {
+  const limitResult = await rateLimit(
+    `cron:generate-invoices:${getRequestOrigin(request)}`,
+    { limit: 5, windowMs: 60 * 60 * 1000 },
+  );
+
+  if (!limitResult.allowed) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((limitResult.resetAt - Date.now()) / 1000),
+    );
+    const response = NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      { status: 429 },
+    );
+    response.headers.set("Retry-After", String(retryAfterSeconds));
+    response.headers.set("X-RateLimit-Limit", String(limitResult.limit));
+    response.headers.set("X-RateLimit-Remaining", String(limitResult.remaining));
+    response.headers.set(
+      "X-RateLimit-Reset",
+      String(Math.ceil(limitResult.resetAt / 1000)),
+    );
+    return response;
+  }
+
   const authorization = authorizeCronRequest(request);
 
   if (!authorization.ok) {
     return authorization.response;
   }
+
+  const start = Date.now();
+  const runDate = new Date().toISOString();
+  logger.info(
+    { event: "cron.start", name: "generate-invoices", runDate },
+    "cron starting",
+  );
 
   try {
     const result = await generateRecurringInvoices();
@@ -56,13 +103,38 @@ async function handleGenerateInvoices(request: Request) {
       revalidatePath(`/invoices/${invoiceId}`);
     }
 
+    logger.info(
+      {
+        event: "cron.finish",
+        name: "generate-invoices",
+        runDate,
+        durationMs: Date.now() - start,
+        status: 200,
+        stats: {
+          count: result.count,
+          contractCount: result.contractIds.length,
+          invoiceCount: result.invoiceIds.length,
+        },
+      },
+      "cron finished",
+    );
+
     return NextResponse.json({
       success: true,
       count: result.count,
       contractCount: result.contractIds.length,
     });
   } catch (error) {
-    console.error("Recurring invoice generation failed", error);
+    logger.error(
+      {
+        event: "cron.error",
+        name: "generate-invoices",
+        runDate,
+        durationMs: Date.now() - start,
+        err: error,
+      },
+      "cron failed",
+    );
 
     return NextResponse.json(
       {

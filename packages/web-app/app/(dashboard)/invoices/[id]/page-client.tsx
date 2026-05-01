@@ -20,6 +20,7 @@ import { bulkSendInvoiceRemindersAction } from "@/lib/actions/bulk";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateInvoiceSchema } from "@/lib/validations/invoice";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { computeGstForLine, isInterStateSupply } from "@/lib/tax/gst";
 import type { Invoice } from "@/lib/types";
 
 interface LineItem {
@@ -27,6 +28,8 @@ interface LineItem {
   description: string;
   qty: number;
   rate: number;
+  hsnSac: string;
+  gstRatePercent: number;
 }
 
 interface InvoiceFormState {
@@ -50,6 +53,8 @@ function getInitialFormState(invoice: Invoice) {
       description: item.description,
       qty: item.qty,
       rate: item.rate,
+      hsnSac: item.hsnSac ?? "",
+      gstRatePercent: item.gstRatePercent ?? 18,
     })),
   };
 }
@@ -57,9 +62,11 @@ function getInitialFormState(invoice: Invoice) {
 export default function InvoiceDetailPageClient({
   invoice,
   customers,
+  orgState,
 }: {
   invoice: Invoice | null;
-  customers: Array<{ id: string; name: string }>;
+  customers: Array<{ id: string; name: string; billingState?: string | null }>;
+  orgState: string;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -76,7 +83,7 @@ export default function InvoiceDetailPageClient({
           type: "recurring" as const,
           status: "issued" as const,
           notes: "",
-          items: [{ description: "", qty: 1, rate: 0 }],
+          items: [{ description: "", qty: 1, rate: 0, hsnSac: "", gstRatePercent: 18 }],
         },
   );
 
@@ -132,7 +139,7 @@ export default function InvoiceDetailPageClient({
   const addItem = () =>
     setForm((prev) => ({
       ...prev,
-      items: [...prev.items, { description: "", qty: 1, rate: 0 }],
+      items: [...prev.items, { description: "", qty: 1, rate: 0, hsnSac: "", gstRatePercent: 18 }],
     }));
 
   const removeItem = (index: number) =>
@@ -183,6 +190,8 @@ export default function InvoiceDetailPageClient({
         qty: item.qty,
         rate: item.rate,
         amount: item.qty * item.rate,
+        hsnSac: item.hsnSac,
+        gstRatePercent: item.gstRatePercent,
       })),
     });
 
@@ -246,7 +255,33 @@ export default function InvoiceDetailPageClient({
 
   const canSendReminder = ["issued", "overdue", "partial"].includes(invoice.status);
 
-  const formTotal = form.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+  const formSubtotal = form.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+
+  // Compute live tax preview in edit mode
+  const selectedCustomer = customers.find((c) => c.id === form.customerId);
+  const buyerState = selectedCustomer?.billingState || "";
+  const supplierState = orgState || "";
+  const canShowEditTax = supplierState.length === 2 && buyerState.length === 2;
+  const editInterState = canShowEditTax && isInterStateSupply(supplierState, buyerState);
+
+  let editCgst = 0;
+  let editSgst = 0;
+  let editIgst = 0;
+  if (canShowEditTax) {
+    for (const item of form.items) {
+      const gst = computeGstForLine({
+        taxableAmount: item.qty * item.rate,
+        gstRatePercent: item.gstRatePercent,
+        supplierState,
+        buyerState,
+      });
+      editCgst += gst.cgst;
+      editSgst += gst.sgst;
+      editIgst += gst.igst;
+    }
+  }
+  const editTotalTax = editCgst + editSgst + editIgst;
+  const formTotal = formSubtotal + editTotalTax;
 
   return (
     <div>
@@ -452,10 +487,11 @@ export default function InvoiceDetailPageClient({
                 <h3 className="mb-3 text-sm font-medium text-slate-700">Line Items</h3>
                 <div className="space-y-3">
                   {form.items.map((item, index) => (
-                    <div key={item.id ?? index} className="flex items-start gap-3">
-                      <div className="flex-1">
+                    <div key={item.id ?? index} className="flex items-start gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[180px]">
                         <input
                           type="text"
+                          placeholder="Description"
                           value={item.description}
                           onChange={(e) => updateItem(index, "description", e.target.value)}
                           className={getFormControlClassName({
@@ -468,9 +504,19 @@ export default function InvoiceDetailPageClient({
                           </p>
                         )}
                       </div>
-                      <div className="w-20">
+                      <div className="w-24">
+                        <input
+                          type="text"
+                          placeholder="HSN/SAC"
+                          value={item.hsnSac}
+                          onChange={(e) => updateItem(index, "hsnSac", e.target.value)}
+                          className={getFormControlClassName({})}
+                        />
+                      </div>
+                      <div className="w-16">
                         <input
                           type="number"
+                          placeholder="Qty"
                           min={1}
                           value={item.qty}
                           onChange={(e) =>
@@ -480,17 +526,13 @@ export default function InvoiceDetailPageClient({
                             error: errors[`items.${index}.qty`],
                           })}
                         />
-                        {errors[`items.${index}.qty`] && (
-                          <p className="mt-1.5 text-sm text-red-600">
-                            {errors[`items.${index}.qty`]}
-                          </p>
-                        )}
                       </div>
-                      <div className="w-28">
+                      <div className="w-24">
                         <input
                           type="number"
+                          placeholder="Rate"
                           min={0}
-                          value={item.rate}
+                          value={item.rate || ""}
                           onChange={(e) =>
                             updateItem(index, "rate", parseFloat(e.target.value) || 0)
                           }
@@ -498,11 +540,19 @@ export default function InvoiceDetailPageClient({
                             error: errors[`items.${index}.rate`],
                           })}
                         />
-                        {errors[`items.${index}.rate`] && (
-                          <p className="mt-1.5 text-sm text-red-600">
-                            {errors[`items.${index}.rate`]}
-                          </p>
-                        )}
+                      </div>
+                      <div className="w-20">
+                        <input
+                          type="number"
+                          placeholder="GST %"
+                          min={0}
+                          max={28}
+                          value={item.gstRatePercent}
+                          onChange={(e) =>
+                            updateItem(index, "gstRatePercent", parseFloat(e.target.value) || 0)
+                          }
+                          className={getFormControlClassName({})}
+                        />
                       </div>
                       <div className="w-24 py-2 text-right text-sm font-medium text-slate-900">
                         {formatCurrency(item.qty * item.rate)}
@@ -599,34 +649,52 @@ export default function InvoiceDetailPageClient({
               </div>
 
               <div className="py-6">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold uppercase text-slate-500">
-                      <th className="pb-3">Description</th>
-                      <th className="pb-3 text-center">Qty</th>
-                      <th className="pb-3 text-right">Rate</th>
-                      <th className="pb-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {invoice.items.map((item, index) => (
-                      <tr key={item.id ?? index}>
-                        <td className="py-3 text-sm text-slate-700">
-                          {item.description}
-                        </td>
-                        <td className="py-3 text-center text-sm text-slate-600">
-                          {item.qty}
-                        </td>
-                        <td className="py-3 text-right text-sm text-slate-600">
-                          {formatCurrency(item.rate)}
-                        </td>
-                        <td className="py-3 text-right text-sm font-medium text-slate-900">
-                          {formatCurrency(item.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(() => {
+                  const hasHsnSac = invoice.items.some((item) => item.hsnSac);
+                  const hasGstBreakdown = invoice.subtotalAmount != null;
+                  return (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs font-semibold uppercase text-slate-500">
+                          <th className="pb-3">Description</th>
+                          {hasHsnSac && <th className="pb-3">HSN/SAC</th>}
+                          <th className="pb-3 text-center">Qty</th>
+                          <th className="pb-3 text-right">Rate</th>
+                          {hasGstBreakdown && <th className="pb-3 text-right">GST %</th>}
+                          <th className="pb-3 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {invoice.items.map((item, index) => (
+                          <tr key={item.id ?? index}>
+                            <td className="py-3 text-sm text-slate-700">
+                              {item.description}
+                            </td>
+                            {hasHsnSac && (
+                              <td className="py-3 text-sm text-slate-600">
+                                {item.hsnSac || "—"}
+                              </td>
+                            )}
+                            <td className="py-3 text-center text-sm text-slate-600">
+                              {item.qty}
+                            </td>
+                            <td className="py-3 text-right text-sm text-slate-600">
+                              {formatCurrency(item.rate)}
+                            </td>
+                            {hasGstBreakdown && (
+                              <td className="py-3 text-right text-sm text-slate-600">
+                                {item.gstRatePercent != null ? `${item.gstRatePercent}%` : "—"}
+                              </td>
+                            )}
+                            <td className="py-3 text-right text-sm font-medium text-slate-900">
+                              {formatCurrency(item.taxableAmount ?? item.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
 
               {invoice.notes && (
@@ -639,12 +707,52 @@ export default function InvoiceDetailPageClient({
               <div className="border-t border-slate-200 pt-4">
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Subtotal</span>
-                      <span className="text-slate-900">
-                        {formatCurrency(invoice.amount)}
-                      </span>
-                    </div>
+                    {invoice.subtotalAmount != null ? (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Subtotal</span>
+                          <span className="text-slate-900">
+                            {formatCurrency(invoice.subtotalAmount)}
+                          </span>
+                        </div>
+                        {invoice.isInterState ? (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">IGST</span>
+                            <span className="text-slate-900">
+                              {formatCurrency(invoice.igstAmount ?? 0)}
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">CGST</span>
+                              <span className="text-slate-900">
+                                {formatCurrency(invoice.cgstAmount ?? 0)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">SGST</span>
+                              <span className="text-slate-900">
+                                {formatCurrency(invoice.sgstAmount ?? 0)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex justify-between border-t border-slate-100 pt-2 text-sm font-semibold">
+                          <span className="text-slate-900">Total</span>
+                          <span className="text-slate-900">
+                            {formatCurrency(invoice.amount)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Total</span>
+                        <span className="text-slate-900">
+                          {formatCurrency(invoice.amount)}
+                        </span>
+                      </div>
+                    )}
                     {invoice.paidAmount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Paid</span>
@@ -670,6 +778,31 @@ export default function InvoiceDetailPageClient({
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <h3 className="mb-3 font-semibold text-slate-900">Summary</h3>
             <div className="space-y-3 text-sm">
+              {isEditing && canShowEditTax && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Subtotal</span>
+                    <span className="font-medium">{formatCurrency(formSubtotal)}</span>
+                  </div>
+                  {editInterState ? (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">IGST</span>
+                      <span className="font-medium">{formatCurrency(editIgst)}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">CGST</span>
+                        <span className="font-medium">{formatCurrency(editCgst)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">SGST</span>
+                        <span className="font-medium">{formatCurrency(editSgst)}</span>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Total Amount</span>
                 <span className="font-medium">

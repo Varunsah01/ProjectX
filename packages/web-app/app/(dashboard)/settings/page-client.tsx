@@ -171,12 +171,71 @@ function BusinessProfileTab({
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            GST Number
+            GSTIN
           </label>
           <input
             type="text"
-            value={form.gst}
-            onChange={(e) => update("gst", e.target.value)}
+            value={form.gstin}
+            onChange={(e) => update("gstin", e.target.value.toUpperCase())}
+            placeholder="e.g. 29ABCDE1234F1Z5"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Place of Business State
+          </label>
+          <select
+            value={form.placeOfBusinessState}
+            onChange={(e) => update("placeOfBusinessState", e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+          >
+            <option value="">Select State</option>
+            <option value="01">01 - Jammu &amp; Kashmir</option>
+            <option value="02">02 - Himachal Pradesh</option>
+            <option value="03">03 - Punjab</option>
+            <option value="04">04 - Chandigarh</option>
+            <option value="05">05 - Uttarakhand</option>
+            <option value="06">06 - Haryana</option>
+            <option value="07">07 - Delhi</option>
+            <option value="08">08 - Rajasthan</option>
+            <option value="09">09 - Uttar Pradesh</option>
+            <option value="10">10 - Bihar</option>
+            <option value="11">11 - Sikkim</option>
+            <option value="12">12 - Arunachal Pradesh</option>
+            <option value="13">13 - Nagaland</option>
+            <option value="14">14 - Manipur</option>
+            <option value="15">15 - Mizoram</option>
+            <option value="16">16 - Tripura</option>
+            <option value="17">17 - Meghalaya</option>
+            <option value="18">18 - Assam</option>
+            <option value="19">19 - West Bengal</option>
+            <option value="20">20 - Jharkhand</option>
+            <option value="21">21 - Odisha</option>
+            <option value="22">22 - Chhattisgarh</option>
+            <option value="23">23 - Madhya Pradesh</option>
+            <option value="24">24 - Gujarat</option>
+            <option value="25">25 - Daman &amp; Diu</option>
+            <option value="26">26 - Dadra &amp; Nagar Haveli</option>
+            <option value="27">27 - Maharashtra</option>
+            <option value="29">29 - Karnataka</option>
+            <option value="30">30 - Goa</option>
+            <option value="32">32 - Kerala</option>
+            <option value="33">33 - Tamil Nadu</option>
+            <option value="34">34 - Puducherry</option>
+            <option value="36">36 - Telangana</option>
+            <option value="37">37 - Andhra Pradesh</option>
+            <option value="38">38 - Ladakh</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Legal Name
+          </label>
+          <input
+            type="text"
+            value={form.legalName || ""}
+            onChange={(e) => update("legalName", e.target.value)}
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
           />
         </div>
@@ -793,6 +852,9 @@ const BLANK_PLAN_FORM = {
   price: 0,
   duration: 12,
   visitsCovered: 0,
+  hsnSac: "",
+  gstRatePercent: 18,
+  gstApplicable: true,
   isActive: true,
 };
 
@@ -879,7 +941,7 @@ function PlansTab({ plans }: { plans: SettingsData["plans"] }) {
                     {formatCurrency(plan.price)}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {plan.duration} months · {plan.visitsCovered} visits
+                    {plan.duration} months · {plan.visitsCovered} visits · GST {plan.gstRatePercent}%
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -951,6 +1013,9 @@ function PlanFormModal({
               price: plan.price,
               duration: plan.duration,
               visitsCovered: plan.visitsCovered,
+              hsnSac: plan.hsnSac,
+              gstRatePercent: plan.gstRatePercent,
+              gstApplicable: plan.gstApplicable,
               isActive: plan.isActive,
             }
           : BLANK_PLAN_FORM,
@@ -1013,6 +1078,22 @@ function PlanFormModal({
           onChange={(e) => update("visitsCovered", parseInt(e.target.value, 10) || 0)}
         />
         <FormField
+          label="HSN/SAC Code"
+          name="hsnSac"
+          required
+          value={form.hsnSac}
+          onChange={(e) => update("hsnSac", e.target.value)}
+          description="Harmonized System / Service Accounting Code"
+        />
+        <FormField
+          label="GST Rate (%)"
+          name="gstRatePercent"
+          type="number"
+          required
+          value={String(form.gstRatePercent)}
+          onChange={(e) => update("gstRatePercent", parseFloat(e.target.value) || 0)}
+        />
+        <FormField
           as="textarea"
           label="Description"
           name="description"
@@ -1023,21 +1104,39 @@ function PlanFormModal({
           containerClassName="sm:col-span-2"
         />
       </div>
-      <div className="mt-4 flex items-center gap-3">
-        <span className="text-sm font-medium text-slate-700">Active</span>
-        <button
-          type="button"
-          onClick={() => update("isActive", !form.isActive)}
-          className={`relative h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:ring-offset-2 ${
-            form.isActive ? "bg-brand-600" : "bg-slate-200"
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              form.isActive ? "translate-x-5" : ""
+      <div className="mt-4 flex items-center gap-5">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-slate-700">GST Applicable</span>
+          <button
+            type="button"
+            onClick={() => update("gstApplicable", !form.gstApplicable)}
+            className={`relative h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:ring-offset-2 ${
+              form.gstApplicable ? "bg-brand-600" : "bg-slate-200"
             }`}
-          />
-        </button>
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                form.gstApplicable ? "translate-x-5" : ""
+              }`}
+            />
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-slate-700">Active</span>
+          <button
+            type="button"
+            onClick={() => update("isActive", !form.isActive)}
+            className={`relative h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:ring-offset-2 ${
+              form.isActive ? "bg-brand-600" : "bg-slate-200"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                form.isActive ? "translate-x-5" : ""
+              }`}
+            />
+          </button>
+        </div>
       </div>
       <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
         <button

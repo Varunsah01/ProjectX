@@ -1,12 +1,32 @@
 import { z } from "zod";
 
+const GSTIN_REGEX =
+  /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 export const createCustomerSchema = z.object({
   name: z.string().trim().min(1, "Customer name is required"),
   phone: z.string().trim().min(1, "Phone is required"),
   email: z.string().trim().email("Invalid email").or(z.literal("")),
   address: z.string().trim().min(1, "Address is required"),
   city: z.string().trim().min(1, "City is required"),
-  gst: z.string().trim().optional().or(z.literal("")),
+  gstin: z
+    .string()
+    .trim()
+    .regex(GSTIN_REGEX, "Invalid GSTIN format (e.g. 29ABCDE1234F1Z5)")
+    .optional()
+    .or(z.literal("")),
+  billingState: z
+    .string()
+    .trim()
+    .length(2, "State code must be 2 digits")
+    .optional()
+    .or(z.literal("")),
+  shippingState: z
+    .string()
+    .trim()
+    .length(2, "State code must be 2 digits")
+    .optional()
+    .or(z.literal("")),
   category: z.string().trim().min(1, "Category is required"),
   status: z.enum(["active", "inactive", "suspended"]).default("active"),
 });

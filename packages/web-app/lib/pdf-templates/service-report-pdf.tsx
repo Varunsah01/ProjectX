@@ -19,7 +19,7 @@ export interface ServiceReportPdfData {
     name: string;
     address: string;
     city: string;
-    gst?: string | null;
+    gstin?: string | null;
     email: string;
     phone: string;
   };
@@ -145,7 +145,7 @@ export function ServiceReportPdfDocument({
                   {data.organization.address}, {data.organization.city}
                 </Text>
                 <Text style={pdfStyles.muted}>
-                  GST: {data.organization.gst || "-"} | Email: {data.organization.email}
+                  GSTIN: {data.organization.gstin || "-"} | Email: {data.organization.email}
                 </Text>
                 <Text style={pdfStyles.muted}>Phone: {data.organization.phone}</Text>
               </View>

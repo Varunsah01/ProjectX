@@ -1,4 +1,4 @@
-import type { Prisma, UserRole } from "@prisma/client";
+import type { Prisma, UserRole, WebhookEvent } from "@prisma/client";
 import {
   enumToUi,
   roleToUi,
@@ -22,6 +22,7 @@ import type {
   Technician,
   Ticket,
   TicketTimelineEntry,
+  WebhookEventEntry,
 } from "@/lib/types";
 
 export const customerSummaryInclude = {
@@ -77,6 +78,8 @@ export const invoiceDetailsInclude = {
     select: {
       id: true,
       name: true,
+      billingState: true,
+      gstin: true,
     },
   },
   items: true,
@@ -179,7 +182,9 @@ export function mapCustomer(
     email: customer.email,
     address: customer.address,
     city: customer.city,
-    gst: customer.gst ?? undefined,
+    gstin: customer.gstin ?? undefined,
+    billingState: customer.billingState ?? undefined,
+    shippingState: customer.shippingState ?? undefined,
     status: enumToUi(customer.status),
     category: customer.category,
     totalDue,
@@ -219,6 +224,12 @@ export function mapInvoiceItem(item: Prisma.InvoiceItemGetPayload<object>): Invo
     qty: item.qty,
     rate: item.rate,
     amount: item.amount,
+    hsnSac: item.hsnSac ?? undefined,
+    gstRatePercent: item.gstRatePercent != null ? Number(item.gstRatePercent) : undefined,
+    taxableAmount: item.taxableAmount ?? undefined,
+    cgstAmount: item.cgstAmount ?? undefined,
+    sgstAmount: item.sgstAmount ?? undefined,
+    igstAmount: item.igstAmount ?? undefined,
   };
 }
 
@@ -232,6 +243,13 @@ export function mapInvoice(
     customerName: invoice.customer.name,
     amount: invoice.amount,
     paidAmount: invoice.paidAmount,
+    placeOfSupply: invoice.placeOfSupply ?? undefined,
+    isInterState: invoice.isInterState ?? undefined,
+    subtotalAmount: invoice.subtotalAmount ?? undefined,
+    cgstAmount: invoice.cgstAmount ?? undefined,
+    sgstAmount: invoice.sgstAmount ?? undefined,
+    igstAmount: invoice.igstAmount ?? undefined,
+    totalTaxAmount: invoice.totalTaxAmount ?? undefined,
     dueDate: toDateString(invoice.dueDate),
     issuedDate: toDateString(invoice.issuedDate),
     status: enumToUi(invoice.status),
@@ -348,6 +366,9 @@ export function mapPlan(plan: Prisma.PlanGetPayload<object>): Plan {
     price: plan.price,
     visitsCovered: plan.visitsCovered,
     description: plan.description,
+    hsnSac: plan.hsnSac,
+    gstRatePercent: Number(plan.gstRatePercent),
+    gstApplicable: plan.gstApplicable,
     isActive: plan.isActive,
     createdAt: toDateTimeString(plan.createdAt),
     updatedAt: toDateTimeString(plan.updatedAt),
@@ -453,6 +474,19 @@ export function mapAuditLogEntry(
     userName: log.user.name,
     userEmail: log.user.email,
     changes: safelyParseJson<Record<string, unknown>>(log.changes, {}),
+  };
+}
+
+export function mapWebhookEvent(row: WebhookEvent): WebhookEventEntry {
+  return {
+    id: row.id,
+    provider: row.provider,
+    eventId: row.eventId,
+    eventType: row.eventType,
+    receivedAt: row.receivedAt.toISOString(),
+    processedAt: row.processedAt?.toISOString() ?? null,
+    status: row.status.toLowerCase() as WebhookEventEntry["status"],
+    error: row.error,
   };
 }
 

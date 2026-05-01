@@ -7,6 +7,12 @@ export const createPlanSchema = z.object({
   price: z.number().min(0, "Price must be positive"),
   visitsCovered: z.number().int().min(0, "Visits must be positive"),
   description: z.string().trim().min(1, "Description is required"),
+  hsnSac: z.string().trim().min(1, "HSN/SAC code is required"),
+  gstRatePercent: z
+    .number()
+    .min(0, "GST rate must be 0 or above")
+    .max(28, "GST rate cannot exceed 28%"),
+  gstApplicable: z.boolean().default(true),
   isActive: z.boolean().default(true),
 });
 

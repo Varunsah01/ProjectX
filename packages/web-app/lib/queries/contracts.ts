@@ -121,6 +121,8 @@ export async function getContractDetailForOrganization(organizationId: string, i
         select: {
           id: true,
           name: true,
+          billingState: true,
+          gstin: true,
         },
       },
       items: true,

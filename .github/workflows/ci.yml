@@ -1,7 +1,7 @@
 name: CI
 
 # Branch protection recommendations:
-# - Require these status checks before merging to main: lint, type-check, build-web, build-landing, test.
+# - Require these status checks before merging to main: lint, type-check, build-web, build-landing, test-web, test-mobile, test-integration, audit-tenant.
 # - Require branches to be up to date before merging.
 # - Require at least 1 approving review.
 # - Restrict direct pushes to main.
@@ -169,8 +169,8 @@ jobs:
         working-directory: packages/landing
         run: npx next build
 
-  test:
-    name: test
+  audit-tenant:
+    name: audit-tenant
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -194,19 +194,117 @@ jobs:
         if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: Detect test files
-        id: detect-tests
-        run: |
-          if find packages -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.spec.ts' -o -name '*.spec.tsx' -o -name '*.test.js' -o -name '*.spec.js' \) | grep -q .; then
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
 
-      - name: Run tests
-        if: steps.detect-tests.outputs.has_tests == 'true'
-        run: npm test --workspaces --if-present
+      - name: Run tenant isolation audit
+        working-directory: packages/web-app
+        run: npx tsx scripts/audit-tenant-isolation.ts
 
-      - name: Skip tests
-        if: steps.detect-tests.outputs.has_tests != 'true'
-        run: echo "No tests found. Skipping."
+  test-web:
+    name: test-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
+
+      - name: Run web-app unit tests
+        run: npm test --workspace=packages/web-app
+
+  test-mobile:
+    name: test-mobile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Run mobile-app unit tests
+        run: npm test --workspace=packages/mobile-app
+
+  test-integration:
+    name: test-integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recuring_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
+
+      - name: Apply database schema
+        run: npx prisma db push --schema packages/web-app/prisma/schema.prisma --skip-generate
+
+      - name: Run integration tests
+        working-directory: packages/web-app
+        run: npx vitest run --config vitest.integration.config.ts

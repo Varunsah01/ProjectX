@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { readFile, rm, unlink } from "node:fs/promises";
 import path from "node:path";
+import type { Prisma } from "@prisma/client";
 import type { MobileSessionUser } from "@/lib/mobile/auth";
+import { db } from "@/lib/db";
+import {
+  StorageNotConfiguredError,
+  getPresignedGetUrl,
+  isStorageConfigured,
+} from "@/lib/storage/s3";
 
 export type MobileJobProofType =
   | "before_photo"
@@ -11,7 +18,22 @@ export type MobileJobProofType =
 
 export type MobileJobProofSource = "camera" | "gallery" | "remote";
 
-export interface MobileJobProofRecord {
+type StoredProofMetadata = {
+  id: string;
+  key: string;
+  type: MobileJobProofType;
+  label: string;
+  source: MobileJobProofSource;
+  createdAt: string;
+  fileName?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  sizeBytes?: number;
+  clientProofId?: string;
+};
+
+type LegacyProofRecord = {
   id: string;
   jobId: string;
   organizationId: string;
@@ -28,77 +50,61 @@ export interface MobileJobProofRecord {
   sizeBytes?: number;
   storagePath: string;
   clientProofId?: string;
+};
+
+export type MobileJobProofResponse = {
+  id: string;
+  jobId: string;
+  type: MobileJobProofType;
+  label: string;
+  createdAt: string;
+  uri?: string;
+  source: MobileJobProofSource;
+  fileName?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  sizeBytes?: number;
+};
+
+const legacyJobProofDataDir = path.join(
+  process.cwd(),
+  ".data",
+  "mobile-job-proofs",
+);
+
+function getLegacyJobProofIndexPath(jobId: string) {
+  return path.join(legacyJobProofDataDir, `${jobId}.json`);
 }
 
-const jobProofDataDir = path.join(process.cwd(), ".data", "mobile-job-proofs");
-const jobProofFilesDir = path.join(process.cwd(), "public", "mobile-proofs");
-
-function getJobProofIndexPath(jobId: string) {
-  return path.join(jobProofDataDir, `${jobId}.json`);
-}
-
-function getJobProofFileExtension(fileName?: string | null, mimeType?: string | null) {
-  const normalizedFileName = fileName?.trim();
-
-  if (normalizedFileName) {
-    const extension = path.extname(normalizedFileName).toLowerCase();
-
-    if (extension) {
-      return extension;
-    }
-  }
-
-  switch (mimeType?.toLowerCase()) {
-    case "image/png":
-      return ".png";
-    case "image/webp":
-      return ".webp";
-    case "image/heic":
-      return ".heic";
-    default:
-      return ".jpg";
-  }
-}
-
-function sanitizeFileName(value?: string | null) {
-  const trimmedValue = value?.trim();
-
-  if (!trimmedValue) {
-    return undefined;
-  }
-
-  return trimmedValue.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
-
-async function ensureJobProofDirs(jobId: string) {
-  await mkdir(jobProofDataDir, { recursive: true });
-  await mkdir(path.join(jobProofFilesDir, jobId), { recursive: true });
-}
-
-async function readJobProofIndex(jobId: string) {
+async function readLegacyProofIndex(jobId: string): Promise<LegacyProofRecord[]> {
   try {
-    const payload = await readFile(getJobProofIndexPath(jobId), "utf8");
-    const parsed = JSON.parse(payload) as MobileJobProofRecord[];
+    const payload = await readFile(getLegacyJobProofIndexPath(jobId), "utf8");
+    const parsed = JSON.parse(payload) as LegacyProofRecord[];
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return [];
     }
-
     throw error;
   }
 }
 
-async function writeJobProofIndex(jobId: string, proofs: MobileJobProofRecord[]) {
-  await ensureJobProofDirs(jobId);
-  await writeFile(
-    getJobProofIndexPath(jobId),
-    JSON.stringify(proofs, null, 2),
-    "utf8",
+function parseStoredMetadata(value: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(value)) {
+    return [] as StoredProofMetadata[];
+  }
+
+  return value.filter(
+    (entry): entry is StoredProofMetadata =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      typeof (entry as StoredProofMetadata).id === "string" &&
+      typeof (entry as StoredProofMetadata).key === "string",
   );
 }
 
-function mapStoredProof(record: MobileJobProofRecord) {
+function mapLegacyProof(record: LegacyProofRecord): MobileJobProofResponse {
   return {
     id: record.id,
     jobId: record.jobId,
@@ -115,107 +121,213 @@ function mapStoredProof(record: MobileJobProofRecord) {
   };
 }
 
+async function mapStoredProofToResponse(
+  jobId: string,
+  metadata: StoredProofMetadata,
+): Promise<MobileJobProofResponse> {
+  let uri: string | undefined;
+
+  try {
+    uri = await getPresignedGetUrl(metadata.key);
+  } catch (error) {
+    if (!(error instanceof StorageNotConfiguredError)) {
+      throw error;
+    }
+    uri = undefined;
+  }
+
+  return {
+    id: metadata.id,
+    jobId,
+    type: metadata.type,
+    label: metadata.label,
+    createdAt: metadata.createdAt,
+    uri,
+    source: metadata.source,
+    fileName: metadata.fileName,
+    mimeType: metadata.mimeType,
+    width: metadata.width,
+    height: metadata.height,
+    sizeBytes: metadata.sizeBytes,
+  };
+}
+
 export async function listStoredJobProofs(
   sessionUser: MobileSessionUser,
   jobId: string,
-) {
-  const proofs = await readJobProofIndex(jobId);
+): Promise<MobileJobProofResponse[]> {
+  const job = await db.job.findFirst({
+    where: {
+      id: jobId,
+      organizationId: sessionUser.organizationId,
+      technicianId: sessionUser.id,
+    },
+    select: {
+      id: true,
+      proofKeys: true,
+      proofMetadata: true,
+    },
+  });
 
-  return proofs
+  const stored = job ? parseStoredMetadata(job.proofMetadata) : [];
+  const remote = await Promise.all(
+    stored.map((metadata) => mapStoredProofToResponse(jobId, metadata)),
+  );
+
+  const legacyRecords = await readLegacyProofIndex(jobId);
+  const legacy = legacyRecords
     .filter(
-      (proof) =>
-        proof.organizationId === sessionUser.organizationId &&
-        proof.technicianId === sessionUser.id,
+      (record) =>
+        record.organizationId === sessionUser.organizationId &&
+        record.technicianId === sessionUser.id,
     )
-    .map(mapStoredProof);
+    .map(mapLegacyProof);
+
+  return [...remote, ...legacy];
 }
 
 export async function saveStoredJobProof({
   sessionUser,
   jobId,
-  origin,
+  key,
   clientProofId,
   type,
   label,
   source,
   createdAt,
-  file,
   fileName,
   mimeType,
   width,
   height,
+  sizeBytes,
 }: {
   sessionUser: MobileSessionUser;
   jobId: string;
-  origin: string;
+  key: string;
   clientProofId?: string;
   type: MobileJobProofType;
   label: string;
   source: MobileJobProofSource;
   createdAt?: string;
-  file: File;
   fileName?: string;
   mimeType?: string;
   width?: number;
   height?: number;
-}) {
-  await ensureJobProofDirs(jobId);
+  sizeBytes?: number;
+}): Promise<MobileJobProofResponse> {
+  const expectedPrefix = `org/${sessionUser.organizationId}/job-proof/${jobId}/`;
 
-  const proofs = await readJobProofIndex(jobId);
-  const existingProof =
-    clientProofId
-      ? proofs.find(
-          (proof) =>
-            proof.clientProofId === clientProofId &&
-            proof.organizationId === sessionUser.organizationId &&
-            proof.technicianId === sessionUser.id,
-        )
-      : undefined;
-
-  if (existingProof) {
-    return mapStoredProof(existingProof);
+  if (!key.startsWith(expectedPrefix)) {
+    throw new Error("Proof key does not belong to this job.");
   }
 
-  const proofId = randomUUID();
-  const safeFileName = sanitizeFileName(fileName) ?? sanitizeFileName(file.name);
-  const extension = getJobProofFileExtension(safeFileName, mimeType ?? file.type);
-  const relativeStoragePath = path.join("mobile-proofs", jobId, `${proofId}${extension}`);
-  const absoluteStoragePath = path.join(process.cwd(), "public", relativeStoragePath);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const effectiveMimeType = mimeType?.trim() || file.type || undefined;
+  const job = await db.job.findFirst({
+    where: {
+      id: jobId,
+      organizationId: sessionUser.organizationId,
+      technicianId: sessionUser.id,
+    },
+    select: {
+      id: true,
+      proofKeys: true,
+      proofMetadata: true,
+    },
+  });
 
-  await writeFile(absoluteStoragePath, buffer);
+  if (!job) {
+    throw new Error("Job not found.");
+  }
 
-  const record: MobileJobProofRecord = {
-    id: proofId,
-    jobId,
-    organizationId: sessionUser.organizationId,
-    technicianId: sessionUser.id,
+  const existing = parseStoredMetadata(job.proofMetadata);
+
+  if (clientProofId) {
+    const duplicate = existing.find(
+      (record) => record.clientProofId === clientProofId,
+    );
+
+    if (duplicate) {
+      return mapStoredProofToResponse(jobId, duplicate);
+    }
+  }
+
+  const newRecord: StoredProofMetadata = {
+    id: randomUUID(),
+    key,
     type,
     label: label.trim(),
-    createdAt: createdAt?.trim() || new Date().toISOString(),
-    uri: new URL(`/${relativeStoragePath.replace(/\\/g, "/")}`, origin).toString(),
     source,
-    fileName: safeFileName,
-    mimeType: effectiveMimeType,
+    createdAt: createdAt?.trim() || new Date().toISOString(),
+    fileName,
+    mimeType,
     width,
     height,
-    sizeBytes: buffer.byteLength,
-    storagePath: absoluteStoragePath,
+    sizeBytes,
     clientProofId,
   };
 
-  proofs.push(record);
-  await writeJobProofIndex(jobId, proofs);
-  return mapStoredProof(record);
+  const nextMetadata = [...existing, newRecord];
+  const nextKeys = job.proofKeys.includes(key)
+    ? job.proofKeys
+    : [...job.proofKeys, key];
+
+  await db.job.update({
+    where: { id: job.id },
+    data: {
+      proofKeys: nextKeys,
+      proofMetadata: nextMetadata as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  return mapStoredProofToResponse(jobId, newRecord);
 }
 
 export async function deleteStoredJobProof(
   sessionUser: MobileSessionUser,
   jobId: string,
   proofId: string,
-) {
-  const proofs = await readJobProofIndex(jobId);
+): Promise<boolean> {
+  const job = await db.job.findFirst({
+    where: {
+      id: jobId,
+      organizationId: sessionUser.organizationId,
+      technicianId: sessionUser.id,
+    },
+    select: {
+      id: true,
+      proofKeys: true,
+      proofMetadata: true,
+    },
+  });
+
+  if (job) {
+    const stored = parseStoredMetadata(job.proofMetadata);
+    const target = stored.find((record) => record.id === proofId);
+
+    if (target) {
+      const nextMetadata = stored.filter((record) => record.id !== proofId);
+      const nextKeys = job.proofKeys.filter((key) => key !== target.key);
+
+      await db.job.update({
+        where: { id: job.id },
+        data: {
+          proofKeys: nextKeys,
+          proofMetadata: nextMetadata as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      return true;
+    }
+  }
+
+  return deleteLegacyJobProof(sessionUser, jobId, proofId);
+}
+
+async function deleteLegacyJobProof(
+  sessionUser: MobileSessionUser,
+  jobId: string,
+  proofId: string,
+): Promise<boolean> {
+  const proofs = await readLegacyProofIndex(jobId);
   const proof = proofs.find(
     (record) =>
       record.id === proofId &&
@@ -228,7 +340,7 @@ export async function deleteStoredJobProof(
   }
 
   const nextProofs = proofs.filter((record) => record.id !== proofId);
-  await writeJobProofIndex(jobId, nextProofs);
+  await writeLegacyProofIndex(jobId, nextProofs);
 
   try {
     await unlink(proof.storagePath);
@@ -239,8 +351,25 @@ export async function deleteStoredJobProof(
   }
 
   if (nextProofs.length === 0) {
-    await rm(getJobProofIndexPath(jobId), { force: true });
+    await rm(getLegacyJobProofIndexPath(jobId), { force: true });
   }
 
   return true;
+}
+
+async function writeLegacyProofIndex(
+  jobId: string,
+  records: LegacyProofRecord[],
+) {
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(legacyJobProofDataDir, { recursive: true });
+  await writeFile(
+    getLegacyJobProofIndexPath(jobId),
+    JSON.stringify(records, null, 2),
+    "utf8",
+  );
+}
+
+export function isProofStorageConfigured(): boolean {
+  return isStorageConfigured();
 }

@@ -20,7 +20,9 @@ export default function NewCustomerPage() {
     email: "",
     address: "",
     city: "",
-    gst: "",
+    gstin: "",
+    billingState: "",
+    shippingState: "",
     category: "Residential",
   });
 
@@ -139,13 +141,56 @@ export default function NewCustomerPage() {
             ]}
           />
           <FormField
-            label="GST Number"
-            name="gst"
-            value={form.gst}
-            onChange={(e) => update("gst", e.target.value)}
-            placeholder="Optional"
-            error={errors.gst}
-            containerClassName="sm:col-span-2"
+            label="GSTIN"
+            name="gstin"
+            value={form.gstin}
+            onChange={(e) => update("gstin", e.target.value.toUpperCase())}
+            placeholder="e.g. 29ABCDE1234F1Z5"
+            error={errors.gstin}
+          />
+          <FormField
+            as="select"
+            label="Billing State"
+            name="billingState"
+            value={form.billingState}
+            onChange={(e) => update("billingState", e.target.value)}
+            error={errors.billingState}
+            options={[
+              { value: "", label: "Select State" },
+              { value: "01", label: "01 - Jammu & Kashmir" },
+              { value: "02", label: "02 - Himachal Pradesh" },
+              { value: "03", label: "03 - Punjab" },
+              { value: "04", label: "04 - Chandigarh" },
+              { value: "05", label: "05 - Uttarakhand" },
+              { value: "06", label: "06 - Haryana" },
+              { value: "07", label: "07 - Delhi" },
+              { value: "08", label: "08 - Rajasthan" },
+              { value: "09", label: "09 - Uttar Pradesh" },
+              { value: "10", label: "10 - Bihar" },
+              { value: "11", label: "11 - Sikkim" },
+              { value: "12", label: "12 - Arunachal Pradesh" },
+              { value: "13", label: "13 - Nagaland" },
+              { value: "14", label: "14 - Manipur" },
+              { value: "15", label: "15 - Mizoram" },
+              { value: "16", label: "16 - Tripura" },
+              { value: "17", label: "17 - Meghalaya" },
+              { value: "18", label: "18 - Assam" },
+              { value: "19", label: "19 - West Bengal" },
+              { value: "20", label: "20 - Jharkhand" },
+              { value: "21", label: "21 - Odisha" },
+              { value: "22", label: "22 - Chhattisgarh" },
+              { value: "23", label: "23 - Madhya Pradesh" },
+              { value: "24", label: "24 - Gujarat" },
+              { value: "27", label: "27 - Maharashtra" },
+              { value: "29", label: "29 - Karnataka" },
+              { value: "30", label: "30 - Goa" },
+              { value: "32", label: "32 - Kerala" },
+              { value: "33", label: "33 - Tamil Nadu" },
+              { value: "34", label: "34 - Puducherry" },
+              { value: "36", label: "36 - Telangana" },
+              { value: "37", label: "37 - Andhra Pradesh" },
+              { value: "38", label: "38 - Ladakh" },
+            ]}
           />
         </div>
 

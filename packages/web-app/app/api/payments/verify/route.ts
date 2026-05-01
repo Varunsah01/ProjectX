@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/log";
 import { getInvoiceDetailForOrganization } from "@/lib/queries/invoices";
 import {
   finalizeCapturedPayment,
@@ -11,6 +12,8 @@ import {
 
 export const runtime = "nodejs";
 
+const ROUTE_NAME = "payments.verify";
+
 const verifyPaymentSchema = z.object({
   invoiceId: z.string().uuid("Invalid invoice id"),
   razorpayOrderId: z.string().trim().min(1, "Missing Razorpay order id"),
@@ -19,6 +22,7 @@ const verifyPaymentSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const start = Date.now();
   try {
     const user = await getCurrentUser();
 
@@ -77,19 +81,52 @@ export async function POST(request: Request) {
       result.invoiceId,
     );
 
+    logger.info(
+      {
+        event: `${ROUTE_NAME}.finish`,
+        route: "/api/payments/verify",
+        method: "POST",
+        status: 200,
+        durationMs: Date.now() - start,
+        invoiceId: result.invoiceId,
+      },
+      "payment verified",
+    );
+
     return NextResponse.json({
       success: true,
       data: detail,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      logger.info(
+        {
+          event: `${ROUTE_NAME}.finish`,
+          route: "/api/payments/verify",
+          method: "POST",
+          status: 400,
+          durationMs: Date.now() - start,
+          reason: "validation_failed",
+        },
+        "payment verification rejected",
+      );
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid payment verification request" },
         { status: 400 },
       );
     }
 
-    console.error("Verify Razorpay payment failed", error);
+    logger.error(
+      {
+        event: `${ROUTE_NAME}.error`,
+        route: "/api/payments/verify",
+        method: "POST",
+        status: 500,
+        durationMs: Date.now() - start,
+        err: error,
+      },
+      "payment verification failed",
+    );
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to verify payment" },

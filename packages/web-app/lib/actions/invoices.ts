@@ -17,6 +17,7 @@ import {
   recordInvoicePaymentSchema,
   updateInvoiceSchema,
 } from "@/lib/validations/invoice";
+import { recalculateInvoice } from "@/lib/tax/invoice-totals";
 
 const listInvoicesSchema = z.object({
   search: z.string().optional(),
@@ -63,8 +64,40 @@ export async function createInvoiceAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createInvoiceSchema.parse(input);
-    const total = values.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+
+    // Fetch org and customer for GST computation
+    const [org, customer] = await Promise.all([
+      db.organization.findUniqueOrThrow({
+        where: { id: user.organizationId },
+        select: { placeOfBusinessState: true },
+      }),
+      db.customer.findUniqueOrThrow({
+        where: { id: values.customerId },
+        select: { billingState: true },
+      }),
+    ]);
+
+    const supplierState = org.placeOfBusinessState || "";
+    const buyerState = customer.billingState || "";
+
+    // Build line items with GST info
+    const recalcItems = values.items.map((item) => ({
+      qty: item.qty,
+      rate: item.rate,
+      hsnSac: item.hsnSac || "",
+      gstRatePercent: item.gstRatePercent ?? 0,
+    }));
+
+    // Compute tax if both states are known
+    const canComputeGst = supplierState.length === 2 && buyerState.length === 2;
+    const result = canComputeGst
+      ? recalculateInvoice({ items: recalcItems, supplierState, buyerState })
+      : null;
+
+    const subtotal = values.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+    const total = result ? result.totalAmount : subtotal;
     const status = values.draft ? "DRAFT" : "ISSUED";
+
     const invoice = await db.invoice.create({
       data: {
         organizationId: user.organizationId,
@@ -73,19 +106,35 @@ export async function createInvoiceAction(input: unknown) {
         contractId: values.contractId || null,
         amount: total,
         paidAmount: 0,
+        placeOfSupply: result?.placeOfSupply ?? null,
+        isInterState: result?.isInterState ?? null,
+        subtotalAmount: result?.subtotalAmount ?? subtotal,
+        cgstAmount: result?.cgstAmount ?? null,
+        sgstAmount: result?.sgstAmount ?? null,
+        igstAmount: result?.igstAmount ?? null,
+        totalTaxAmount: result?.totalTaxAmount ?? null,
         dueDate: parseDateInput(values.dueDate),
         issuedDate: new Date(),
         status,
         type: values.type.toUpperCase() as never,
         notes: cleanOptional(values.notes),
         items: {
-          create: values.items.map((item) => ({
-            organizationId: user.organizationId,
-            description: item.description,
-            qty: item.qty,
-            rate: item.rate,
-            amount: item.qty * item.rate,
-          })),
+          create: values.items.map((item, i) => {
+            const lineResult = result?.items[i];
+            return {
+              organizationId: user.organizationId,
+              description: item.description,
+              qty: item.qty,
+              rate: item.rate,
+              amount: item.qty * item.rate,
+              hsnSac: item.hsnSac || null,
+              gstRatePercent: item.gstRatePercent ?? null,
+              taxableAmount: lineResult?.taxableAmount ?? item.qty * item.rate,
+              cgstAmount: lineResult?.cgstAmount ?? null,
+              sgstAmount: lineResult?.sgstAmount ?? null,
+              igstAmount: lineResult?.igstAmount ?? null,
+            };
+          }),
         },
       },
     });
@@ -146,6 +195,70 @@ export async function updateInvoiceAction(input: unknown) {
       return actionFailure("Invoice not found");
     }
 
+    // If items are being updated, recalculate totals
+    let taxUpdate: Record<string, unknown> = {};
+    if (values.items) {
+      const [org, customer] = await Promise.all([
+        db.organization.findUniqueOrThrow({
+          where: { id: user.organizationId },
+          select: { placeOfBusinessState: true },
+        }),
+        db.customer.findUniqueOrThrow({
+          where: { id: values.customerId || existing.customerId },
+          select: { billingState: true },
+        }),
+      ]);
+
+      const supplierState = org.placeOfBusinessState || "";
+      const buyerState = customer.billingState || "";
+
+      const recalcItems = values.items.map((item) => ({
+        qty: item.qty,
+        rate: item.rate,
+        hsnSac: item.hsnSac || "",
+        gstRatePercent: item.gstRatePercent ?? 0,
+      }));
+
+      const canComputeGst = supplierState.length === 2 && buyerState.length === 2;
+      const result = canComputeGst
+        ? recalculateInvoice({ items: recalcItems, supplierState, buyerState })
+        : null;
+
+      const subtotal = values.items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+
+      taxUpdate = {
+        amount: result ? result.totalAmount : subtotal,
+        placeOfSupply: result?.placeOfSupply ?? null,
+        isInterState: result?.isInterState ?? null,
+        subtotalAmount: result?.subtotalAmount ?? subtotal,
+        cgstAmount: result?.cgstAmount ?? null,
+        sgstAmount: result?.sgstAmount ?? null,
+        igstAmount: result?.igstAmount ?? null,
+        totalTaxAmount: result?.totalTaxAmount ?? null,
+      };
+
+      await db.invoiceItem.deleteMany({ where: { invoiceId: values.id, organizationId: user.organizationId } });
+      await db.invoiceItem.createMany({
+        data: values.items.map((item, i) => {
+          const lineResult = result?.items[i];
+          return {
+            organizationId: user.organizationId,
+            invoiceId: values.id,
+            description: item.description,
+            qty: item.qty,
+            rate: item.rate,
+            amount: item.qty * item.rate,
+            hsnSac: item.hsnSac || null,
+            gstRatePercent: item.gstRatePercent ?? null,
+            taxableAmount: lineResult?.taxableAmount ?? item.qty * item.rate,
+            cgstAmount: lineResult?.cgstAmount ?? null,
+            sgstAmount: lineResult?.sgstAmount ?? null,
+            igstAmount: lineResult?.igstAmount ?? null,
+          };
+        }),
+      });
+    }
+
     await db.invoice.update({
       where: { id: values.id },
       data: {
@@ -156,22 +269,9 @@ export async function updateInvoiceAction(input: unknown) {
         ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
         ...(values.paidAmount !== undefined ? { paidAmount: values.paidAmount } : {}),
         ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
+        ...taxUpdate,
       },
     });
-
-    if (values.items) {
-      await db.invoiceItem.deleteMany({ where: { invoiceId: values.id, organizationId: user.organizationId } });
-      await db.invoiceItem.createMany({
-        data: values.items.map((item) => ({
-          organizationId: user.organizationId,
-          invoiceId: values.id,
-          description: item.description,
-          qty: item.qty,
-          rate: item.rate,
-          amount: item.qty * item.rate,
-        })),
-      });
-    }
 
     const detail = await getInvoiceDetailForOrganization(user.organizationId, values.id);
     revalidatePath("/invoices");

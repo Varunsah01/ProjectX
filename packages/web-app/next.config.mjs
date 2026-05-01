@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const contentSecurityPolicy = [
@@ -8,16 +9,17 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
-  "font-src 'self' data: https:",
-  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+  "font-src 'self' data:",
+  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.ingest.sentry.io https://*.upstash.io",
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
 ].join("; ");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["@project-x/shared"],
   experimental: {
     outputFileTracingRoot: path.join(__dirname, "../../"),
     outputFileTracingIncludes: {
@@ -56,4 +58,10 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  disableLogger: true,
+  hideSourceMaps: true,
+  widenClientFileUpload: false,
+  sourcemaps: { disable: true },
+});

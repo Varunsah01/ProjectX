@@ -72,8 +72,9 @@ export async function getSettingsDataForOrganization(
           email: organization.email,
           address: organization.address,
           city: organization.city,
-          state: "",
-          gst: organization.gst ?? "",
+          gstin: organization.gstin ?? "",
+          placeOfBusinessState: organization.placeOfBusinessState ?? "",
+          legalName: organization.legalName ?? undefined,
           logo: organization.logo ?? undefined,
         }
       : null,

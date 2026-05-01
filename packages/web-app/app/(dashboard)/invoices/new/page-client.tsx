@@ -10,17 +10,22 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import { createInvoiceAction } from "@/lib/actions/invoices";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createInvoiceSchema } from "@/lib/validations/invoice";
+import { computeGstForLine, isInterStateSupply } from "@/lib/tax/gst";
 
 interface LineItem {
   description: string;
   qty: number;
   rate: number;
+  hsnSac: string;
+  gstRatePercent: number;
 }
 
 export default function NewInvoicePageClient({
   customers,
+  orgState,
 }: {
-  customers: Array<{ id: string; name: string }>;
+  customers: Array<{ id: string; name: string; billingState?: string | null }>;
+  orgState: string;
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState<"issue" | "draft" | null>(null);
@@ -29,11 +34,11 @@ export default function NewInvoicePageClient({
   const [dueDate, setDueDate] = useState("");
   const [type, setType] = useState("recurring");
   const [items, setItems] = useState<LineItem[]>([
-    { description: "", qty: 1, rate: 0 },
+    { description: "", qty: 1, rate: 0, hsnSac: "", gstRatePercent: 18 },
   ]);
 
   const addItem = () =>
-    setItems((prev) => [...prev, { description: "", qty: 1, rate: 0 }]);
+    setItems((prev) => [...prev, { description: "", qty: 1, rate: 0, hsnSac: "", gstRatePercent: 18 }]);
 
   const removeItem = (index: number) =>
     setItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
@@ -51,7 +56,33 @@ export default function NewInvoicePageClient({
     setErrors((prev) => clearFormError(prev, `items.${index}.${field}`));
   };
 
-  const total = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+  // Compute live tax preview
+  const selectedCustomer = customers.find((c) => c.id === customerId);
+  const buyerState = selectedCustomer?.billingState || "";
+  const supplierState = orgState || "";
+  const canShowTax = supplierState.length === 2 && buyerState.length === 2;
+  const interState = canShowTax && isInterStateSupply(supplierState, buyerState);
+
+  const subtotal = items.reduce((sum, item) => sum + item.qty * item.rate, 0);
+
+  let totalCgst = 0;
+  let totalSgst = 0;
+  let totalIgst = 0;
+  if (canShowTax) {
+    for (const item of items) {
+      const gst = computeGstForLine({
+        taxableAmount: item.qty * item.rate,
+        gstRatePercent: item.gstRatePercent,
+        supplierState,
+        buyerState,
+      });
+      totalCgst += gst.cgst;
+      totalSgst += gst.sgst;
+      totalIgst += gst.igst;
+    }
+  }
+  const totalTax = totalCgst + totalSgst + totalIgst;
+  const grandTotal = subtotal + totalTax;
 
   const handleCreate = async (draft: boolean) => {
     if (submitting) return;
@@ -168,8 +199,8 @@ export default function NewInvoicePageClient({
           <h3 className="mb-3 text-sm font-medium text-slate-700">Line Items</h3>
           <div className="space-y-3">
             {items.map((item, index) => (
-              <div key={index} className="flex items-start gap-3">
-                <div className="flex-1">
+              <div key={index} className="flex items-start gap-3 flex-wrap">
+                <div className="flex-1 min-w-[180px]">
                   <input
                     type="text"
                     placeholder="Description"
@@ -187,7 +218,18 @@ export default function NewInvoicePageClient({
                     </p>
                   )}
                 </div>
-                <div className="w-20">
+                <div className="w-24">
+                  <input
+                    type="text"
+                    placeholder="HSN/SAC"
+                    value={item.hsnSac}
+                    onChange={(e) =>
+                      updateItem(index, "hsnSac", e.target.value)
+                    }
+                    className={getFormControlClassName({})}
+                  />
+                </div>
+                <div className="w-16">
                   <input
                     type="number"
                     placeholder="Qty"
@@ -200,13 +242,8 @@ export default function NewInvoicePageClient({
                       error: errors[`items.${index}.qty`],
                     })}
                   />
-                  {errors[`items.${index}.qty`] && (
-                    <p className="mt-1.5 text-sm text-red-600">
-                      {errors[`items.${index}.qty`]}
-                    </p>
-                  )}
                 </div>
-                <div className="w-28">
+                <div className="w-24">
                   <input
                     type="number"
                     placeholder="Rate"
@@ -219,11 +256,19 @@ export default function NewInvoicePageClient({
                       error: errors[`items.${index}.rate`],
                     })}
                   />
-                  {errors[`items.${index}.rate`] && (
-                    <p className="mt-1.5 text-sm text-red-600">
-                      {errors[`items.${index}.rate`]}
-                    </p>
-                  )}
+                </div>
+                <div className="w-20">
+                  <input
+                    type="number"
+                    placeholder="GST %"
+                    min={0}
+                    max={28}
+                    value={item.gstRatePercent}
+                    onChange={(e) =>
+                      updateItem(index, "gstRatePercent", parseFloat(e.target.value) || 0)
+                    }
+                    className={getFormControlClassName({})}
+                  />
                 </div>
                 <div className="w-24 py-2 text-right text-sm font-medium text-slate-900">
                   Rs {(item.qty * item.rate).toLocaleString("en-IN")}
@@ -254,11 +299,34 @@ export default function NewInvoicePageClient({
         </div>
 
         <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
-          <div className="w-48">
-            <div className="flex justify-between text-lg font-bold">
+          <div className="w-56 space-y-1">
+            <div className="flex justify-between text-sm text-slate-600">
+              <span>Subtotal</span>
+              <span>Rs {subtotal.toLocaleString("en-IN")}</span>
+            </div>
+            {canShowTax && (
+              interState ? (
+                <div className="flex justify-between text-sm text-slate-600">
+                  <span>IGST</span>
+                  <span>Rs {totalIgst.toLocaleString("en-IN")}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>CGST</span>
+                    <span>Rs {totalCgst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>SGST</span>
+                    <span>Rs {totalSgst.toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              )
+            )}
+            <div className="flex justify-between text-lg font-bold border-t border-slate-200 pt-1">
               <span className="text-slate-900">Total</span>
               <span className="text-slate-900">
-                Rs {total.toLocaleString("en-IN")}
+                Rs {grandTotal.toLocaleString("en-IN")}
               </span>
             </div>
           </div>

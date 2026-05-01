@@ -20,7 +20,7 @@ export async function getNotificationsAction() {
     if (!user?.organizationId) return actionFailure("Unauthorized");
 
     const rows = await db.notification.findMany({
-      where: { userId: user.id },
+      where: { organizationId: user.organizationId, userId: user.id },
       select: {
         id: true,
         type: true,
@@ -51,7 +51,7 @@ export async function markNotificationsReadAction(ids: string[]) {
     if (!user?.organizationId) return actionFailure("Unauthorized");
 
     await db.notification.updateMany({
-      where: { id: { in: ids }, userId: user.id },
+      where: { organizationId: user.organizationId, id: { in: ids }, userId: user.id },
       data: { read: true },
     });
 
@@ -67,7 +67,7 @@ export async function markAllNotificationsReadAction() {
     if (!user?.organizationId) return actionFailure("Unauthorized");
 
     await db.notification.updateMany({
-      where: { userId: user.id, read: false },
+      where: { organizationId: user.organizationId, userId: user.id, read: false },
       data: { read: true },
     });
 

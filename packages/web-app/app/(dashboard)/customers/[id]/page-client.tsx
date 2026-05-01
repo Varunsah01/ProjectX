@@ -25,7 +25,9 @@ type CustomerDetail = {
     email: string;
     address: string;
     city: string;
-    gst?: string;
+    gstin?: string;
+    billingState?: string;
+    shippingState?: string;
     status: string;
     category: string;
     totalDue: number;
@@ -46,7 +48,9 @@ function getInitialFormState(detail: CustomerDetail["customer"]) {
     email: detail.email,
     address: detail.address,
     city: detail.city,
-    gst: detail.gst ?? "",
+    gstin: detail.gstin ?? "",
+    billingState: detail.billingState ?? "",
+    shippingState: detail.shippingState ?? "",
     category: detail.category,
     status: detail.status as "active" | "inactive" | "suspended",
   };
@@ -70,7 +74,9 @@ export default function CustomerDetailPageClient({
       email: "",
       address: "",
       city: "",
-      gst: "",
+      gstin: "",
+      billingState: "",
+      shippingState: "",
       status: "active",
       category: "Residential",
       totalDue: 0,
@@ -318,11 +324,12 @@ export default function CustomerDetailPageClient({
                       ]}
                     />
                     <FormField
-                      label="GST Number"
-                      name="gst"
-                      value={form.gst}
-                      onChange={(e) => updateField("gst", e.target.value)}
-                      error={errors.gst}
+                      label="GSTIN"
+                      name="gstin"
+                      value={form.gstin}
+                      onChange={(e) => updateField("gstin", e.target.value.toUpperCase())}
+                      error={errors.gstin}
+                      placeholder="e.g. 29ABCDE1234F1Z5"
                     />
                     <FormField
                       as="select"
@@ -395,10 +402,10 @@ export default function CustomerDetailPageClient({
                     <MapPin className="h-4 w-4 text-slate-400" />
                     {customer.address}, {customer.city}
                   </div>
-                  {customer.gst && (
+                  {customer.gstin && (
                     <div className="flex items-center gap-2 text-sm text-slate-600">
                       <Building className="h-4 w-4 text-slate-400" />
-                      GST: {customer.gst}
+                      GSTIN: {customer.gstin}
                     </div>
                   )}
                 </div>

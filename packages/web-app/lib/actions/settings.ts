@@ -41,7 +41,9 @@ export async function updateBusinessProfileAction(input: unknown) {
         email: values.email,
         address: values.address,
         city: values.city,
-        gst: values.gst || null,
+        gstin: values.gstin || null,
+        placeOfBusinessState: values.placeOfBusinessState || null,
+        legalName: values.legalName || null,
         logo: values.logo || null,
       },
     });
@@ -92,7 +94,11 @@ export async function resetTeamMemberPasswordAction(input: { id: string }) {
 
     const generatedPassword = generatePassword();
     const passwordHash = await bcrypt.hash(generatedPassword, 10);
-    await db.user.update({ where: { id: input.id }, data: { passwordHash } });
+    await db.user.update({
+      where: { id: input.id },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    });
+    await db.session.deleteMany({ where: { userId: input.id } });
 
     return actionSuccess({ generatedPassword });
   } catch (error) {
@@ -118,6 +124,7 @@ export async function removeTeamMemberAction(id: string) {
 
     const activeJobs = await db.job.count({
       where: {
+        organizationId: user.organizationId,
         technicianId: id,
         status: { in: ["PENDING", "ASSIGNED", "EN_ROUTE", "IN_PROGRESS"] },
       },
@@ -131,18 +138,22 @@ export async function removeTeamMemberAction(id: string) {
 
     // Check for historical records to decide hard vs soft delete
     const [jobCount, timelineCount, auditCount, noteCount] = await Promise.all([
-      db.job.count({ where: { technicianId: id } }),
-      db.ticketTimeline.count({ where: { byUserId: id } }),
-      db.auditLog.count({ where: { userId: id } }),
-      db.customerNote.count({ where: { userId: id } }),
+      db.job.count({ where: { organizationId: user.organizationId, technicianId: id } }),
+      db.ticketTimeline.count({ where: { organizationId: user.organizationId, byUserId: id } }),
+      db.auditLog.count({ where: { organizationId: user.organizationId, userId: id } }),
+      db.customerNote.count({ where: { organizationId: user.organizationId, userId: id } }),
     ]);
 
     if (jobCount > 0 || timelineCount > 0 || auditCount > 0 || noteCount > 0) {
       // Soft-delete: preserve historical records, filter from team list
-      await db.user.update({ where: { id }, data: { status: "REMOVED" } });
+      await db.user.update({
+        where: { id },
+        data: { status: "REMOVED", tokenVersion: { increment: 1 } },
+      });
     } else {
       await db.user.delete({ where: { id } });
     }
+    await db.session.deleteMany({ where: { userId: id } });
 
     revalidatePath("/settings");
     return actionSuccess({ id });
@@ -163,6 +174,8 @@ export async function updateTeamMemberAction(input: unknown) {
       return actionFailure("Team member not found");
     }
 
+    const shouldInvalidateSessions = Boolean(values.password || values.role);
+
     await db.user.update({
       where: { id: values.id },
       data: {
@@ -171,8 +184,13 @@ export async function updateTeamMemberAction(input: unknown) {
         ...(values.role !== undefined ? { role: values.role.toUpperCase() as never } : {}),
         ...(values.status !== undefined ? { status: values.status } : {}),
         ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
+        ...(shouldInvalidateSessions ? { tokenVersion: { increment: 1 } } : {}),
       },
     });
+
+    if (shouldInvalidateSessions) {
+      await db.session.deleteMany({ where: { userId: values.id } });
+    }
 
     revalidatePath("/settings");
     return actionSuccess({ id: values.id });

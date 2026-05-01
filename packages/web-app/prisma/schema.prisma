@@ -63,6 +63,12 @@ enum InvoiceType {
   SERVICE
 }
 
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
 enum TicketPriority {
   LOW
   MEDIUM
@@ -97,18 +103,20 @@ enum JobStatus {
 }
 
 model Organization {
-  id              String           @id @default(uuid()) @db.Uuid
-  name            String
-  slug            String           @unique
-  logo            String?
-  phone           String
-  email           String
-  address         String
-  city            String
-  gst                  String?
+  id                   String           @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String           @unique
+  logo                 String?
+  phone                String
+  email                String
+  address              String
+  city                 String
+  gstin                String?
+  placeOfBusinessState String?          @map("place_of_business_state")
+  legalName            String?          @map("legal_name")
   notificationSettings Json?            @default("{}") @map("notification_settings")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
   users           User[]
   customers       Customer[]
   assets          Asset[]
@@ -149,6 +157,7 @@ model User {
   avgRating          Float            @default(0) @map("avg_rating")
   completedThisWeek  Int              @default(0) @map("completed_this_week")
   completedThisMonth Int              @default(0) @map("completed_this_month")
+  tokenVersion       Int              @default(0) @map("token_version")
   lastActiveAt       DateTime?        @map("last_active_at")
   createdAt          DateTime         @default(now()) @map("created_at")
   organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -191,10 +200,47 @@ model Session {
   sessionToken String   @unique @map("session_token")
   userId       String   @db.Uuid @map("user_id")
   expires      DateTime
+  csrfToken    String?  @map("csrf_token")
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
   @@index([userId])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CLOSED
+}
+
+model Lead {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  phone     String
+  company   String
+  message   String?
+  source    String     @default("book-demo")
+  status    LeadStatus @default(NEW)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("leads")
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model OtpChallenge {
+  id        String   @id @default(uuid()) @db.Uuid
+  phone     String
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("otp_challenges")
+  @@unique([phone, expiresAt])
+  @@index([phone, createdAt(sort: Desc)])
 }
 
 model VerificationToken {
@@ -214,7 +260,9 @@ model Customer {
   email          String
   address        String
   city           String
-  gst            String?
+  gstin          String?
+  billingState   String?        @map("billing_state")
+  shippingState  String?        @map("shipping_state")
   status         CustomerStatus
   category       String
   createdAt      DateTime       @default(now()) @map("created_at")
@@ -308,6 +356,9 @@ model Plan {
   price          Int
   visitsCovered  Int            @map("visits_covered")
   description    String
+  hsnSac         String         @map("hsn_sac")
+  gstRatePercent Decimal        @db.Decimal(5, 2) @map("gst_rate_percent")
+  gstApplicable  Boolean        @default(true) @map("gst_applicable")
   isActive       Boolean        @default(true) @map("is_active")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
@@ -328,6 +379,13 @@ model Invoice {
   contractId     String?        @db.Uuid @map("contract_id")
   amount         Int
   paidAmount     Int            @default(0) @map("paid_amount")
+  placeOfSupply  String?        @map("place_of_supply")
+  isInterState   Boolean?       @map("is_inter_state")
+  subtotalAmount Int?           @map("subtotal_amount")
+  cgstAmount     Int?           @map("cgst_amount")
+  sgstAmount     Int?           @map("sgst_amount")
+  igstAmount     Int?           @map("igst_amount")
+  totalTaxAmount Int?           @map("total_tax_amount")
   dueDate        DateTime       @db.Date @map("due_date")
   issuedDate     DateTime       @db.Date @map("issued_date")
   status         InvoiceStatus
@@ -357,6 +415,12 @@ model InvoiceItem {
   qty            Int
   rate           Int
   amount         Int
+  hsnSac         String?      @map("hsn_sac")
+  gstRatePercent Decimal?     @db.Decimal(5, 2) @map("gst_rate_percent")
+  taxableAmount  Int?         @map("taxable_amount")
+  cgstAmount     Int?         @map("cgst_amount")
+  sgstAmount     Int?         @map("sgst_amount")
+  igstAmount     Int?         @map("igst_amount")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
@@ -382,6 +446,23 @@ model Payment {
   @@index([createdAt])
 }
 
+model WebhookEvent {
+  id          String             @id @default(uuid()) @db.Uuid
+  provider    String
+  eventId     String             @unique @map("event_id")
+  eventType   String             @map("event_type")
+  payload     Json
+  receivedAt  DateTime           @default(now()) @map("received_at")
+  processedAt DateTime?          @map("processed_at")
+  status      WebhookEventStatus @default(RECEIVED)
+  error       String?
+
+  @@map("webhook_events")
+  @@index([provider, eventType, receivedAt(sort: Desc)])
+  @@index([status])
+  @@index([receivedAt(sort: Desc)])
+}
+
 model Ticket {
   id             String         @id @default(uuid()) @db.Uuid
   organizationId String         @db.Uuid @map("organization_id")
@@ -396,6 +477,8 @@ model Ticket {
   assignedToId   String?        @db.Uuid @map("assigned_to_id")
   slaDeadline    DateTime       @map("sla_deadline")
   resolvedAt     DateTime?      @map("resolved_at")
+  proofKeys      String[]       @default([]) @map("proof_keys")
+  proofMetadata  Json           @default("[]") @map("proof_metadata")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -444,6 +527,8 @@ model Job {
   completedAt    DateTime?    @map("completed_at")
   notes          String?
   serviceReport  String?      @map("service_report")
+  proofKeys      String[]     @default([]) @map("proof_keys")
+  proofMetadata  Json         @default("[]") @map("proof_metadata")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

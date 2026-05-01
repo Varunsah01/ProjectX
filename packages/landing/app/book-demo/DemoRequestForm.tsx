@@ -19,7 +19,7 @@ type FormData = {
 };
 
 type FormErrors = Partial<Record<keyof FormData, string>>;
-type FormStatus = "idle" | "submitting" | "success";
+type FormStatus = "idle" | "submitting" | "success" | "error";
 
 // ─── Select options ───────────────────────────────────────────────────────────
 
@@ -190,6 +190,7 @@ export function DemoRequestForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setStatus("idle");
 
     const errs = validate(data);
     if (Object.keys(errs).length > 0) {
@@ -205,20 +206,22 @@ export function DemoRequestForm() {
 
     setStatus("submitting");
 
-    // TODO: Replace this with your real submission endpoint.
-    // Options: POST to /api/demo-request (a Next.js Route Handler),
-    // Formspree (https://formspree.io), EmailJS, or a CRM webhook.
-    //
-    // Example with fetch:
-    // await fetch("/api/demo-request", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify(data),
-    // });
+    try {
+      const res = await fetch("/api/demo-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
 
-    await new Promise((resolve) => setTimeout(resolve, 1400));
+      if (!res.ok) {
+        setStatus("error");
+        return;
+      }
 
-    setStatus("success");
+      setStatus("success");
+    } catch {
+      setStatus("error");
+    }
   };
 
   if (status === "success") {
@@ -226,6 +229,7 @@ export function DemoRequestForm() {
   }
 
   const busy = status === "submitting";
+  const isError = status === "error";
 
   return (
     <form
@@ -414,6 +418,13 @@ export function DemoRequestForm() {
             className={cn(inputCls(!!errors.message), "resize-none")}
           />
         </Field>
+
+        {/* Submission error */}
+        {status === "error" && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Something went wrong. Please try again or email us directly.
+          </div>
+        )}
 
         {/* Submit */}
         <div className="pt-1">

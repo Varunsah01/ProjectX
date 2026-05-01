@@ -1,24 +1,6 @@
-import { NextResponse } from "next/server";
-import { getMobileSession } from "@/lib/mobile/auth";
+import { GET as v1GET } from "../../v1/auth/me/route";
+import { withDeprecation } from "@/lib/mobile/deprecation";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  try {
-    const session = await getMobileSession(request);
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    return NextResponse.json({
-      user: session.user,
-    });
-  } catch (error) {
-    console.error("Mobile session lookup failed", error);
-    return NextResponse.json(
-      { error: "Unable to load session." },
-      { status: 500 },
-    );
-  }
-}
+export const GET = withDeprecation(v1GET);

@@ -13,7 +13,7 @@ interface ImportRow {
   email: string;
   address: string;
   city: string;
-  gst: string;
+  gstin: string;
   category: string;
 }
 
@@ -42,15 +42,16 @@ const HEADER_ALIASES: Record<string, keyof ImportRow> = {
   "email address": "email",
   address: "address",
   city: "city",
-  gst: "gst",
-  "gst number": "gst",
-  "gst no": "gst",
+  gstin: "gstin",
+  gst: "gstin",
+  "gst number": "gstin",
+  "gst no": "gstin",
   category: "category",
   type: "category",
 };
 
 const TEMPLATE_CSV = [
-  "Name,Phone,Email,Address,City,GST,Category",
+  "Name,Phone,Email,Address,City,GSTIN,Category",
   "John Doe,9876543210,john@example.com,123 Main St,Mumbai,,Residential",
   "Acme Corp,9123456789,billing@acme.com,456 Park Ave,Delhi,29ABCDE1234F1Z5,Commercial",
 ].join("\r\n");
@@ -83,7 +84,7 @@ function normalizeRawRow(raw: Record<string, string>): ImportRow {
     email: "",
     address: "",
     city: "",
-    gst: "",
+    gstin: "",
     category: "",
   };
   for (const [key, val] of Object.entries(raw)) {
@@ -210,7 +211,7 @@ export function ImportModal({
           email: row.email,
           address: row.address,
           city: row.city,
-          gst: row.gst,
+          gstin: row.gstin,
           category: row.category,
         })),
       );
@@ -288,7 +289,7 @@ export function ImportModal({
             Upload a <span className="font-medium">.csv</span> or{" "}
             <span className="font-medium">.xlsx</span> file. Required columns:{" "}
             <span className="font-medium">Name</span>,{" "}
-            <span className="font-medium">Phone</span>. Optional: Email, Address, City, GST,
+            <span className="font-medium">Phone</span>. Optional: Email, Address, City, GSTIN,
             Category.
           </p>
 

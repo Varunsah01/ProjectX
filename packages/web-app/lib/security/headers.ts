@@ -6,12 +6,12 @@ export const cspHeader = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
-  "font-src 'self' data: https:",
-  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+  "font-src 'self' data:",
+  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.ingest.sentry.io https://*.upstash.io",
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
 ].join("; ");
 
 export function applySecurityHeaders(response: NextResponse) {

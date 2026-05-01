@@ -1,15 +1,19 @@
-import NextAuth from "next-auth";
-import { NextResponse } from "next/server";
+import NextAuth, { type Session } from "next-auth";
+import { NextResponse, type NextRequest } from "next/server";
 import authConfig from "@/auth.config";
+import { requestContext } from "@/lib/request-context";
 import { applySecurityHeaders } from "@/lib/security/headers";
-import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { rateLimit } from "@/lib/security/rate-limit";
 import { canAccessPath } from "@/lib/security/rbac";
 
 const { auth } = NextAuth(authConfig);
 
+type AuthedRequest = NextRequest & { auth: Session | null };
+
 const publicRoutes = new Set(["/login", "/signup"]);
 const csrfExemptPrefixes = [
   "/api/auth/",
+  "/api/mobile/v1/",
   "/api/mobile/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
@@ -39,7 +43,17 @@ function buildApiError(message: string, status: number) {
   );
 }
 
-export default auth((request) => {
+export default auth(async (request) => {
+  const requestId = crypto.randomUUID();
+
+  return requestContext.run({ requestId }, async () => {
+    const response = await handle(request as AuthedRequest);
+    response.headers.set("x-request-id", requestId);
+    return response;
+  });
+});
+
+async function handle(request: AuthedRequest): Promise<NextResponse> {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
@@ -56,22 +70,33 @@ export default auth((request) => {
     isApiRoute &&
     !isExemptPath(pathname, rateLimitExemptPrefixes)
   ) {
-    const rateLimit = consumeRateLimit({
-      key: `${requestIp}:${pathname}:${request.method.toUpperCase()}`,
-      limit: isMutationMethod(request.method) ? 30 : 120,
-      windowMs: 60_000,
-    });
+    const limit = isMutationMethod(request.method) ? 30 : 120;
+    const rateLimitResult = await rateLimit(
+      `${requestIp}:${pathname}:${request.method.toUpperCase()}`,
+      {
+        limit,
+        windowMs: 60_000,
+      },
+    );
 
-    if (!rateLimit.allowed) {
+    if (!rateLimitResult.allowed) {
       const response = buildApiError(
         "Too many requests. Please try again shortly.",
         429,
       );
-      response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
-      response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000),
+      );
+      response.headers.set("Retry-After", String(retryAfterSeconds));
+      response.headers.set("X-RateLimit-Limit", String(rateLimitResult.limit));
+      response.headers.set(
+        "X-RateLimit-Remaining",
+        String(rateLimitResult.remaining),
+      );
       response.headers.set(
         "X-RateLimit-Reset",
-        String(Math.ceil(rateLimit.resetAt / 1000)),
+        String(Math.ceil(rateLimitResult.resetAt / 1000)),
       );
       return response;
     }
@@ -141,7 +166,7 @@ export default auth((request) => {
     },
   });
   return applySecurityHeaders(response);
-});
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],

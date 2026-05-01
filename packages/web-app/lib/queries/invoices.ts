@@ -236,6 +236,7 @@ export async function getInvoiceFormOptionsForOrganization(organizationId: strin
     select: {
       id: true,
       name: true,
+      billingState: true,
     },
   });
 

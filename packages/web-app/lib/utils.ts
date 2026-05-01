@@ -67,6 +67,9 @@ export function getStatusColor(status: string): string {
     expired: "bg-red-100 text-red-700",
     expiring_soon: "bg-amber-100 text-amber-700",
     renewed: "bg-green-100 text-green-700",
+    received: "bg-blue-100 text-blue-700",
+    processed: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
   };
   return colors[status] || "bg-slate-100 text-slate-600";
 }
@@ -103,6 +106,9 @@ export function getStatusDotColor(status: string): string {
     high: "bg-orange-500",
     medium: "bg-amber-500",
     low: "bg-blue-500",
+    received: "bg-blue-500",
+    processed: "bg-green-500",
+    failed: "bg-red-500",
   };
   return dots[status] || "bg-slate-400";
 }

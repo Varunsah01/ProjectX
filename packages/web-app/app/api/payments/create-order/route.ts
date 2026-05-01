@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/log";
 import { createPaymentOrder, createPendingPayment } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
+
+const ROUTE_NAME = "payments.create-order";
 
 const createOrderSchema = z.object({
   invoiceId: z.string().uuid("Invalid invoice id"),
@@ -14,6 +17,7 @@ const createOrderSchema = z.object({
 const payableStatuses = new Set(["ISSUED", "OVERDUE", "PARTIAL"]);
 
 export async function POST(request: Request) {
+  const start = Date.now();
   try {
     const user = await getCurrentUser();
 
@@ -82,6 +86,19 @@ export async function POST(request: Request) {
       amount,
     });
 
+    logger.info(
+      {
+        event: `${ROUTE_NAME}.finish`,
+        route: "/api/payments/create-order",
+        method: "POST",
+        status: 200,
+        durationMs: Date.now() - start,
+        invoiceId: invoice.id,
+        razorpayOrderId: order.id,
+      },
+      "payment order created",
+    );
+
     return NextResponse.json({
       success: true,
       data: {
@@ -98,13 +115,34 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      logger.info(
+        {
+          event: `${ROUTE_NAME}.finish`,
+          route: "/api/payments/create-order",
+          method: "POST",
+          status: 400,
+          durationMs: Date.now() - start,
+          reason: "validation_failed",
+        },
+        "payment order rejected",
+      );
       return NextResponse.json(
         { error: error.issues[0]?.message ?? "Invalid payment request" },
         { status: 400 },
       );
     }
 
-    console.error("Create Razorpay order failed", error);
+    logger.error(
+      {
+        event: `${ROUTE_NAME}.error`,
+        route: "/api/payments/create-order",
+        method: "POST",
+        status: 500,
+        durationMs: Date.now() - start,
+        err: error,
+      },
+      "payment order failed",
+    );
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to create payment order" },

@@ -43,7 +43,7 @@ export async function GET(
             name: true,
             address: true,
             city: true,
-            gst: true,
+            gstin: true,
             email: true,
             phone: true,
           },

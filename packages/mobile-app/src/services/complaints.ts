@@ -4,6 +4,7 @@ import type {
   ComplaintDetail as ComplaintDetailDto,
   ComplaintStatus,
   ComplaintSummary as ComplaintSummaryDto,
+  CreateJobFromComplaintResponse,
   DetailResponse,
   ListResponse,
   MutationResponse,
@@ -143,6 +144,30 @@ export async function sendComplaintStatusUpdate(
   }
 
   return null;
+}
+
+export async function createJobFromComplaint(
+  request: AuthenticatedRequest,
+  input: {
+    complaintId: string;
+    scheduledDate: string;
+    notes?: string;
+  },
+) {
+  const response = await request<DetailResponse<CreateJobFromComplaintResponse>>(
+    `/complaints/${input.complaintId}/jobs`,
+    {
+      method: "POST",
+      body: {
+        scheduledDate: input.scheduledDate,
+        notes: input.notes?.trim() || undefined,
+      },
+      retry: 0,
+      timeoutMs: 15000,
+    },
+  );
+
+  return response.data;
 }
 
 export async function updateComplaintStatus(

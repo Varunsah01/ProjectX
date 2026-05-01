@@ -16,15 +16,10 @@ import {
 } from "./offline-sync";
 import { createLocalJobProof } from "./jobs";
 import { cleanupManagedProofFile, ensureProofFileAvailable } from "./proof-files";
+import { uploadProof, StorageNotConfiguredOnServerError } from "./uploads";
 import { logTestEvent, logTestWarning } from "./test-logger";
 
 export type SavedJobProofStatus = "pending" | "uploading" | "uploaded";
-
-type ReactNativeUploadFile = {
-  uri: string;
-  name: string;
-  type: string;
-};
 
 function mapJobProof(dto: JobProofDto): JobProof {
   return {
@@ -69,39 +64,27 @@ export function dedupeJobProofs(proofs: JobProof[]) {
   return Array.from(dedupedProofs.values());
 }
 
-async function buildUploadFormData(draft: ProofDraft) {
-  await ensureProofFileAvailable(draft.uri);
-  const formData = new FormData();
-  formData.append("type", draft.type);
-  formData.append("label", draft.label);
-  formData.append("source", draft.source);
-  formData.append("clientProofId", draft.id);
-  formData.append("createdAt", draft.createdAt);
+function inferExtension(draft: ProofDraft) {
+  const fromFileName = draft.fileName?.toLowerCase().match(/\.([a-z0-9]{1,8})$/);
 
-  if (draft.fileName) {
-    formData.append("fileName", draft.fileName);
+  if (fromFileName) {
+    return fromFileName[1];
   }
 
-  if (draft.mimeType) {
-    formData.append("mimeType", draft.mimeType);
+  switch (draft.mimeType?.toLowerCase()) {
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/heic":
+      return "heic";
+    default:
+      return "jpg";
   }
+}
 
-  if (draft.width) {
-    formData.append("width", String(draft.width));
-  }
-
-  if (draft.height) {
-    formData.append("height", String(draft.height));
-  }
-
-  const uploadFile: ReactNativeUploadFile = {
-    uri: draft.uri,
-    name: draft.fileName ?? `${draft.id}.jpg`,
-    type: draft.mimeType ?? "image/jpeg",
-  };
-
-  formData.append("file", uploadFile as unknown as Blob);
-  return formData;
+function inferContentType(draft: ProofDraft) {
+  return draft.mimeType?.trim() || "image/jpeg";
 }
 
 export async function listJobProofs(
@@ -131,6 +114,8 @@ export async function uploadJobProof(
   jobId: string,
   draft: ProofDraft,
 ) {
+  await ensureProofFileAvailable(draft.uri);
+
   try {
     logTestEvent("proof", "upload-start", {
       jobId,
@@ -138,11 +123,34 @@ export async function uploadJobProof(
       source: draft.source,
       type: draft.type,
     });
+
+    const contentType = inferContentType(draft);
+    const ext = inferExtension(draft);
+
+    const { key } = await uploadProof(request, {
+      localUri: draft.uri,
+      kind: "job-proof",
+      resourceId: jobId,
+      contentType,
+      ext,
+    });
+
     const response = await request<DetailResponse<JobProofDto>>(`/jobs/${jobId}/proofs`, {
       method: "POST",
-      body: await buildUploadFormData(draft),
+      body: {
+        key,
+        type: draft.type,
+        source: draft.source,
+        label: draft.label,
+        clientProofId: draft.id,
+        createdAt: draft.createdAt,
+        fileName: draft.fileName,
+        mimeType: contentType,
+        width: draft.width,
+        height: draft.height,
+      },
       retry: 1,
-      timeoutMs: 20000,
+      timeoutMs: 15000,
     });
 
     const savedProof = mapJobProof(response.data);
@@ -155,6 +163,14 @@ export async function uploadJobProof(
       uri: savedProof.uri ?? draft.uri,
     };
   } catch (error) {
+    if (error instanceof StorageNotConfiguredOnServerError) {
+      logTestWarning("proof", "upload-storage-not-configured", {
+        jobId,
+        proofId: draft.id,
+      });
+      throw error;
+    }
+
     if (!shouldQueueOfflineMutation(error)) {
       throw error;
     }
