@@ -515,6 +515,16 @@ export interface BusinessProfile {
   placeOfBusinessState: string;
   legalName?: string;
   logo?: string;
+  logoPreviewUrl?: string;
+  signatureUrl?: string;
+  signaturePreviewUrl?: string;
+  pan?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  upiId?: string;
+  invoiceTerms?: string;
 }
 
 export interface SettingsData {

@@ -3,6 +3,7 @@ import { mapAuditLogEntry, mapPlan, mapTeamMember } from "@/lib/data-mappers";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { getOrganizationContext } from "@/lib/query-utils";
 import { hasPermission } from "@/lib/security/rbac";
+import { getPresignedGetUrl, isStorageConfigured } from "@/lib/storage/s3";
 import type { SettingsData } from "@/lib/types";
 
 export async function getSettingsDataForOrganization(
@@ -64,6 +65,17 @@ export async function getSettingsDataForOrganization(
       : Promise.resolve([]),
   ]);
 
+  let logoPreviewUrl: string | undefined;
+  let signaturePreviewUrl: string | undefined;
+  if (options.includeBusinessProfile && isStorageConfigured()) {
+    if (organization.logo) {
+      logoPreviewUrl = await getPresignedGetUrl(organization.logo).catch(() => undefined);
+    }
+    if (organization.signatureUrl) {
+      signaturePreviewUrl = await getPresignedGetUrl(organization.signatureUrl).catch(() => undefined);
+    }
+  }
+
   return {
     businessProfile: options.includeBusinessProfile
       ? {
@@ -76,6 +88,16 @@ export async function getSettingsDataForOrganization(
           placeOfBusinessState: organization.placeOfBusinessState ?? "",
           legalName: organization.legalName ?? undefined,
           logo: organization.logo ?? undefined,
+          logoPreviewUrl,
+          signatureUrl: organization.signatureUrl ?? undefined,
+          signaturePreviewUrl,
+          pan: organization.pan ?? undefined,
+          bankName: organization.bankName ?? undefined,
+          bankAccountNumber: organization.bankAccountNumber ?? undefined,
+          bankIfsc: organization.bankIfsc ?? undefined,
+          bankBranch: organization.bankBranch ?? undefined,
+          upiId: organization.upiId ?? undefined,
+          invoiceTerms: organization.invoiceTerms ?? undefined,
         }
       : null,
     teamMembers: teamMembers.map(mapTeamMember),

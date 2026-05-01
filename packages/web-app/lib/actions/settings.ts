@@ -45,6 +45,14 @@ export async function updateBusinessProfileAction(input: unknown) {
         placeOfBusinessState: values.placeOfBusinessState || null,
         legalName: values.legalName || null,
         logo: values.logo || null,
+        signatureUrl: values.signatureUrl || null,
+        pan: values.pan || null,
+        bankName: values.bankName || null,
+        bankAccountNumber: values.bankAccountNumber || null,
+        bankIfsc: values.bankIfsc || null,
+        bankBranch: values.bankBranch || null,
+        upiId: values.upiId || null,
+        invoiceTerms: values.invoiceTerms || null,
       },
     });
 

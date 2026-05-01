@@ -114,6 +114,14 @@ model Organization {
   gstin                String?
   placeOfBusinessState String?          @map("place_of_business_state")
   legalName            String?          @map("legal_name")
+  signatureUrl         String?          @map("signature_url")
+  pan                  String?
+  bankName             String?          @map("bank_name")
+  bankAccountNumber    String?          @map("bank_account_number")
+  bankIfsc             String?          @map("bank_ifsc")
+  bankBranch           String?          @map("bank_branch")
+  upiId                String?          @map("upi_id")
+  invoiceTerms         String?          @map("invoice_terms")
   notificationSettings Json?            @default("{}") @map("notification_settings")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")

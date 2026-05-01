@@ -23,6 +23,24 @@ export const updateBusinessProfileSchema = z.object({
     .or(z.literal("")),
   legalName: z.string().trim().optional().or(z.literal("")),
   logo: z.string().trim().optional().or(z.literal("")),
+  signatureUrl: z.string().trim().optional().or(z.literal("")),
+  pan: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, "Invalid PAN format (e.g. ABCDE1234F)")
+    .optional()
+    .or(z.literal("")),
+  bankName: z.string().trim().max(100).optional().or(z.literal("")),
+  bankAccountNumber: z.string().trim().max(20).optional().or(z.literal("")),
+  bankIfsc: z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC format (e.g. SBIN0001234)")
+    .optional()
+    .or(z.literal("")),
+  bankBranch: z.string().trim().max(100).optional().or(z.literal("")),
+  upiId: z.string().trim().max(100).optional().or(z.literal("")),
+  invoiceTerms: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
 export const createTeamMemberSchema = z.object({

@@ -7,6 +7,7 @@ import { MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField } from "@/components/ui/FormField";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PasswordRevealModal } from "@/components/ui/PasswordRevealModal";
@@ -239,7 +240,120 @@ function BusinessProfileTab({
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            PAN
+          </label>
+          <input
+            type="text"
+            value={form.pan || ""}
+            onChange={(e) => update("pan", e.target.value.toUpperCase())}
+            placeholder="e.g. ABCDE1234F"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+          />
+        </div>
       </div>
+
+      <div className="mt-6 border-t border-slate-100 pt-6">
+        <h4 className="text-sm font-semibold text-slate-900 mb-4">Logo & Signature</h4>
+        <div className="flex gap-6 flex-wrap">
+          <ImageUpload
+            kind="logo"
+            currentKey={form.logo}
+            previewUrl={initialProfile.logoPreviewUrl}
+            onUploaded={(key) => update("logo", key)}
+            label="Business Logo"
+          />
+          <ImageUpload
+            kind="signature"
+            currentKey={form.signatureUrl}
+            previewUrl={initialProfile.signaturePreviewUrl}
+            onUploaded={(key) => update("signatureUrl", key)}
+            label="Authorized Signature"
+          />
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-slate-100 pt-6">
+        <h4 className="text-sm font-semibold text-slate-900 mb-4">Bank Details</h4>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Bank Name
+            </label>
+            <input
+              type="text"
+              value={form.bankName || ""}
+              onChange={(e) => update("bankName", e.target.value)}
+              placeholder="e.g. State Bank of India"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Account Number
+            </label>
+            <input
+              type="text"
+              value={form.bankAccountNumber || ""}
+              onChange={(e) => update("bankAccountNumber", e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              IFSC Code
+            </label>
+            <input
+              type="text"
+              value={form.bankIfsc || ""}
+              onChange={(e) => update("bankIfsc", e.target.value.toUpperCase())}
+              placeholder="e.g. SBIN0001234"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Branch
+            </label>
+            <input
+              type="text"
+              value={form.bankBranch || ""}
+              onChange={(e) => update("bankBranch", e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              UPI ID
+            </label>
+            <input
+              type="text"
+              value={form.upiId || ""}
+              onChange={(e) => update("upiId", e.target.value)}
+              placeholder="e.g. business@upi"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-slate-100 pt-6">
+        <h4 className="text-sm font-semibold text-slate-900 mb-4">Invoice Settings</h4>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Terms & Conditions
+          </label>
+          <textarea
+            rows={3}
+            value={form.invoiceTerms || ""}
+            onChange={(e) => update("invoiceTerms", e.target.value)}
+            placeholder="Payment terms and conditions to appear on invoices"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+          />
+        </div>
+      </div>
+
       <div className="mt-6 border-t border-slate-100 pt-6 flex items-center gap-3">
         <button
           onClick={() =>

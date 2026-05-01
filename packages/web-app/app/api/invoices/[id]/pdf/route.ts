@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { InvoicePdfDocument } from "@/lib/pdf-templates/invoice-pdf";
 import { sanitizeFilename } from "@/lib/pdf-templates/shared";
+import { getPresignedGetUrl, isStorageConfigured } from "@/lib/storage/s3";
 
 export const runtime = "nodejs";
 
@@ -30,9 +31,18 @@ export async function GET(
             address: true,
             city: true,
             gstin: true,
+            pan: true,
+            legalName: true,
             email: true,
             phone: true,
             logo: true,
+            signatureUrl: true,
+            bankName: true,
+            bankAccountNumber: true,
+            bankIfsc: true,
+            bankBranch: true,
+            upiId: true,
+            invoiceTerms: true,
           },
         },
         customer: {
@@ -41,6 +51,8 @@ export async function GET(
             address: true,
             city: true,
             gstin: true,
+            billingState: true,
+            shippingState: true,
             email: true,
             phone: true,
           },
@@ -57,10 +69,31 @@ export async function GET(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
+    // Resolve presigned GET URLs for images
+    let logoUrl: string | null = null;
+    let signatureUrl: string | null = null;
+
+    if (isStorageConfigured()) {
+      if (invoice.organization.logo) {
+        logoUrl = await getPresignedGetUrl(invoice.organization.logo).catch(
+          () => null,
+        );
+      }
+      if (invoice.organization.signatureUrl) {
+        signatureUrl = await getPresignedGetUrl(
+          invoice.organization.signatureUrl,
+        ).catch(() => null);
+      }
+    }
+
     const pdfBuffer = await renderToBuffer(
       InvoicePdfDocument({
         data: {
-          organization: invoice.organization,
+          organization: {
+            ...invoice.organization,
+            logoUrl,
+            signatureUrl,
+          },
           customer: invoice.customer,
           invoice: {
             invoiceNumber: invoice.invoiceNumber,
@@ -78,7 +111,10 @@ export async function GET(
             notes: invoice.notes,
             items: invoice.items.map((item) => ({
               ...item,
-              gstRatePercent: item.gstRatePercent != null ? Number(item.gstRatePercent) : null,
+              gstRatePercent:
+                item.gstRatePercent != null
+                  ? Number(item.gstRatePercent)
+                  : null,
             })),
           },
         },
