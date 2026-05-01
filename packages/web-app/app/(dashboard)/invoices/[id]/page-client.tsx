@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CreditCard, Download, Edit, Plus, Send, Trash2 } from "lucide-react";
+import { CreditCard, Download, Edit, Plus, RefreshCcw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FormField, getFormControlClassName } from "@/components/ui/FormField";
@@ -16,6 +16,8 @@ import {
   updateInvoiceAction,
 } from "@/lib/actions/invoices";
 import { RecordPaymentModal } from "../RecordPaymentModal";
+import { RefundModal } from "../RefundModal";
+import type { Payment } from "@/lib/types";
 import { bulkSendInvoiceRemindersAction } from "@/lib/actions/bulk";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateInvoiceSchema } from "@/lib/validations/invoice";
@@ -72,6 +74,7 @@ export default function InvoiceDetailPageClient({
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [refundPayment, setRefundPayment] = useState<Payment | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [form, setForm] = useState<InvoiceFormState>(
@@ -469,6 +472,8 @@ export default function InvoiceDetailPageClient({
                     { value: "paid", label: "Paid" },
                     { value: "overdue", label: "Overdue" },
                     { value: "cancelled", label: "Cancelled" },
+                    { value: "partially_refunded", label: "Partially Refunded" },
+                    { value: "refunded", label: "Refunded" },
                   ]}
                 />
                 <FormField
@@ -824,6 +829,75 @@ export default function InvoiceDetailPageClient({
             </div>
           </div>
 
+          {invoice.payments && invoice.payments.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <h3 className="mb-3 font-semibold text-slate-900">Payments &amp; Refunds</h3>
+              <div className="space-y-4">
+                {invoice.payments.map((payment) => {
+                  const refundable = payment.amount - payment.refundedAmountPaisa;
+                  const canRefund = payment.status === "captured" && refundable > 0;
+                  return (
+                    <div
+                      key={payment.id}
+                      className="rounded-lg border border-slate-100 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-slate-500">
+                            {payment.razorpayPaymentId ?? "Pending capture"}
+                          </p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {formatCurrency(payment.amount / 100)}
+                          </p>
+                          <p className="mt-0.5 text-xs capitalize text-slate-500">
+                            {payment.status} · {payment.method}
+                          </p>
+                          {payment.refundedAmountPaisa > 0 && (
+                            <p className="mt-0.5 text-xs text-purple-600">
+                              Refunded: {formatCurrency(payment.refundedAmountPaisa / 100)}
+                            </p>
+                          )}
+                        </div>
+                        {canRefund && (
+                          <button
+                            type="button"
+                            disabled={Boolean(pendingAction)}
+                            onClick={() => setRefundPayment(payment)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            Refund
+                          </button>
+                        )}
+                      </div>
+                      {payment.refunds.length > 0 && (
+                        <ul className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                          {payment.refunds.map((refund) => (
+                            <li
+                              key={refund.id}
+                              className="flex items-start justify-between text-xs"
+                            >
+                              <div>
+                                <p className="font-medium text-slate-900">
+                                  {formatCurrency(refund.amountPaisa / 100)}
+                                </p>
+                                <p className="text-slate-500">{refund.reason}</p>
+                                <p className="text-slate-400">
+                                  by {refund.initiatedByName} · {formatDate(refund.createdAt)}
+                                </p>
+                              </div>
+                              <StatusBadge status={refund.status} />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-xl border border-slate-200 bg-white p-6">
             <h3 className="mb-3 font-semibold text-slate-900">Activity</h3>
             <div className="space-y-3">
@@ -869,6 +943,18 @@ export default function InvoiceDetailPageClient({
         onClose={() => setIsPaymentOpen(false)}
         onSuccess={() => router.refresh()}
       />
+
+      {refundPayment && (
+        <RefundModal
+          payment={refundPayment}
+          isOpen={Boolean(refundPayment)}
+          onClose={() => setRefundPayment(null)}
+          onSuccess={() => {
+            setRefundPayment(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

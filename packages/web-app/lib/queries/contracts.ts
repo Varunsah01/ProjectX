@@ -2,6 +2,7 @@ import { Prisma, ContractStatus, ContractType } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   contractDetailsInclude,
+  invoiceDetailsInclude,
   jobDetailsInclude,
   mapContract,
   mapInvoice,
@@ -116,17 +117,7 @@ export async function getContractDetailForOrganization(organizationId: string, i
       organizationId,
       contractId: contract.id,
     },
-    include: {
-      customer: {
-        select: {
-          id: true,
-          name: true,
-          billingState: true,
-          gstin: true,
-        },
-      },
-      items: true,
-    },
+    include: invoiceDetailsInclude,
     orderBy: {
       issuedDate: "desc",
     },

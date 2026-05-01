@@ -107,7 +107,11 @@ export type InvoiceStatus =
   | "paid"
   | "overdue"
   | "partial"
-  | "cancelled";
+  | "cancelled"
+  | "partially_refunded"
+  | "refunded";
+
+export type RefundStatus = "pending" | "processed" | "failed";
 
 export type InvoiceType = "recurring" | "one_time" | "service";
 
@@ -226,6 +230,29 @@ export interface InvoiceItem {
   igstAmount?: number;
 }
 
+export interface Refund {
+  id: string;
+  razorpayRefundId?: string;
+  amountPaisa: number;
+  reason: string;
+  status: RefundStatus;
+  initiatedByName: string;
+  createdAt: string;
+  processedAt?: string;
+}
+
+export interface Payment {
+  id: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId: string;
+  amount: number;
+  refundedAmountPaisa: number;
+  status: string;
+  method: string;
+  createdAt: string;
+  refunds: Refund[];
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -249,6 +276,7 @@ export interface Invoice {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  payments?: Payment[];
 }
 
 export interface TicketTimelineEntry {

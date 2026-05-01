@@ -10,6 +10,7 @@ import { InvoiceOverdueEmail } from "@/lib/email-templates/invoice-overdue";
 import { InvoiceReminderEmail } from "@/lib/email-templates/invoice-reminder";
 import { JobCompletedEmail } from "@/lib/email-templates/job-completed";
 import { JobScheduledEmail } from "@/lib/email-templates/job-scheduled";
+import { RefundProcessedEmail } from "@/lib/email-templates/refund-processed";
 import { TicketCreatedEmail } from "@/lib/email-templates/ticket-created";
 import { TicketResolvedEmail } from "@/lib/email-templates/ticket-resolved";
 import { WelcomeEmail } from "@/lib/email-templates/welcome";
@@ -498,6 +499,56 @@ export async function notifyJobCompleted(jobId: string) {
           completedAt: formatDateTime(job.completedAt ?? new Date()),
           summary: job.serviceReport ?? job.notes ?? undefined,
           jobUrl: `${getAppUrl()}/jobs/${job.id}`,
+        }),
+      ),
+    ]);
+  });
+}
+
+export async function notifyRefundProcessed(refundId: string) {
+  return safelyRun("notifyRefundProcessed", async () => {
+    const refund = await db.refund.findUnique({
+      where: { id: refundId },
+      include: {
+        payment: {
+          include: {
+            invoice: {
+              include: {
+                organization: true,
+                customer: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!refund) {
+      return;
+    }
+
+    const invoice = refund.payment.invoice;
+    const invoiceUrl = `${getAppUrl()}/invoices/${invoice.id}`;
+
+    await Promise.all([
+      createInAppNotifications({
+        organizationId: invoice.organizationId,
+        userIds: await getInternalRecipients(invoice.organizationId),
+        type: "refund_processed",
+        title: `Refund processed for ${invoice.invoiceNumber}`,
+        message: `A refund of ₹${(refund.amountPaisa / 100).toFixed(2)} was processed for ${invoice.customer.name}.`,
+        link: `/invoices/${invoice.id}`,
+      }),
+      sendEmail(
+        invoice.customer.email,
+        `Refund processed for ${invoice.invoiceNumber}`,
+        await renderComponent(RefundProcessedEmail, {
+          customerName: invoice.customer.name,
+          organizationName: invoice.organization.name,
+          invoiceNumber: invoice.invoiceNumber,
+          refundAmount: refund.amountPaisa / 100,
+          reason: refund.reason,
+          invoiceUrl,
         }),
       ),
     ]);

@@ -83,6 +83,26 @@ export const invoiceDetailsInclude = {
     },
   },
   items: true,
+  payments: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      refunds: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          initiatedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.InvoiceInclude;
 
 export const ticketDetailsInclude = {
@@ -259,6 +279,26 @@ export function mapInvoice(
     notes: invoice.notes ?? undefined,
     createdAt: toDateTimeString(invoice.createdAt),
     updatedAt: toDateTimeString(invoice.updatedAt),
+    payments: invoice.payments.map((payment) => ({
+      id: payment.id,
+      razorpayPaymentId: payment.razorpayPaymentId ?? undefined,
+      razorpayOrderId: payment.razorpayOrderId,
+      amount: payment.amount,
+      refundedAmountPaisa: payment.refundedAmountPaisa,
+      status: payment.status,
+      method: payment.method,
+      createdAt: toDateTimeString(payment.createdAt),
+      refunds: payment.refunds.map((refund) => ({
+        id: refund.id,
+        razorpayRefundId: refund.razorpayRefundId ?? undefined,
+        amountPaisa: refund.amountPaisa,
+        reason: refund.reason,
+        status: refund.status.toLowerCase() as "pending" | "processed" | "failed",
+        initiatedByName: refund.initiatedBy.name,
+        createdAt: toDateTimeString(refund.createdAt),
+        processedAt: refund.processedAt ? toDateTimeString(refund.processedAt) : undefined,
+      })),
+    })),
   };
 }
 

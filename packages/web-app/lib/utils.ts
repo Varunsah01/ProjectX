@@ -70,6 +70,8 @@ export function getStatusColor(status: string): string {
     received: "bg-blue-100 text-blue-700",
     processed: "bg-green-100 text-green-700",
     failed: "bg-red-100 text-red-700",
+    refunded: "bg-purple-100 text-purple-700",
+    partially_refunded: "bg-purple-100 text-purple-700",
   };
   return colors[status] || "bg-slate-100 text-slate-600";
 }
@@ -109,6 +111,8 @@ export function getStatusDotColor(status: string): string {
     received: "bg-blue-500",
     processed: "bg-green-500",
     failed: "bg-red-500",
+    refunded: "bg-purple-500",
+    partially_refunded: "bg-purple-500",
   };
   return dots[status] || "bg-slate-400";
 }

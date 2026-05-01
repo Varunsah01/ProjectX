@@ -22,7 +22,18 @@ export const createInvoiceSchema = z.object({
 
 export const updateInvoiceSchema = createInvoiceSchema.partial().extend({
   id: z.string().uuid("Invalid invoice id"),
-  status: z.enum(["draft", "issued", "paid", "overdue", "partial", "cancelled"]).optional(),
+  status: z
+    .enum([
+      "draft",
+      "issued",
+      "paid",
+      "overdue",
+      "partial",
+      "cancelled",
+      "partially_refunded",
+      "refunded",
+    ])
+    .optional(),
   paidAmount: z.number().min(0).optional(),
 });
 
