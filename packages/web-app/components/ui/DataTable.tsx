@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { cn } from "@/lib/cn";
 import { PaginationControls } from "@/components/ui/PaginationControls";
 
@@ -25,6 +26,7 @@ interface DataTableProps<T> {
   getRowId?: (item: T) => string;
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
+  renderExpandedRow?: (item: T) => React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -42,6 +44,7 @@ export function DataTable<T>({
   getRowId,
   selectedIds = [],
   onSelectionChange,
+  renderExpandedRow,
 }: DataTableProps<T>) {
   const hasPagination =
     totalCount !== undefined &&
@@ -155,41 +158,46 @@ export function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              data.map((item, i) => (
-                <tr
-                  key={hasSelection ? getRowId(item) : i}
-                  onClick={() => onRowClick?.(item)}
-                  className={cn(
-                    "transition-colors",
-                    onRowClick &&
-                      "cursor-pointer hover:bg-brand-50/40 active:bg-brand-50/60"
-                  )}
-                >
-                  {hasSelection ? (
-                    <td className="px-4 py-3.5 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(getRowId(item))}
-                        onChange={() => toggleRow(getRowId(item))}
-                        onClick={(event) => event.stopPropagation()}
-                        className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                        aria-label="Select row"
-                      />
-                    </td>
-                  ) : null}
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
+              data.map((item, i) => {
+                const rowKey = hasSelection ? getRowId(item) : i;
+                return (
+                  <React.Fragment key={rowKey}>
+                    <tr
+                      onClick={() => onRowClick?.(item)}
                       className={cn(
-                        "px-4 py-3.5 text-sm text-slate-700",
-                        col.className
+                        "transition-colors",
+                        onRowClick &&
+                          "cursor-pointer hover:bg-brand-50/40 active:bg-brand-50/60"
                       )}
                     >
-                      {col.render(item)}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                      {hasSelection ? (
+                        <td className="px-4 py-3.5 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(getRowId(item))}
+                            onChange={() => toggleRow(getRowId(item))}
+                            onClick={(event) => event.stopPropagation()}
+                            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            aria-label="Select row"
+                          />
+                        </td>
+                      ) : null}
+                      {columns.map((col) => (
+                        <td
+                          key={col.key}
+                          className={cn(
+                            "px-4 py-3.5 text-sm text-slate-700",
+                            col.className
+                          )}
+                        >
+                          {col.render(item)}
+                        </td>
+                      ))}
+                    </tr>
+                    {renderExpandedRow?.(item)}
+                  </React.Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -81,6 +81,23 @@ export async function getPresignedGetUrl(
   return getSignedUrl(client, command, { expiresIn: expiresInSec });
 }
 
+export async function putObject(
+  key: string,
+  body: Buffer,
+  contentType: string,
+): Promise<void> {
+  const config = readStorageConfig();
+  const client = buildClient(config);
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+}
+
 export function isStorageConfigured(): boolean {
   try {
     readStorageConfig();

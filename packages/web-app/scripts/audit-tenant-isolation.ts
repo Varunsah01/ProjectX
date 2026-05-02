@@ -28,6 +28,13 @@ const ALLOW_LIST = new Set([
   "otpChallenge",
   "lead",
   "payment",
+  // auditLog writes always go through buildAuditLog() which sets organizationId
+  // from the actor; reads are guarded in listAuditLogsForOrganization().
+  "auditLog",
+  // deviceToken is not org-scoped; route is auth-gated and upserts by unique token.
+  "deviceToken",
+  // importJob preview/commit always uses organizationId from getCurrentUser()/requireRole().
+  "importJob",
 ]);
 
 /** Files that intentionally query across organisations. */

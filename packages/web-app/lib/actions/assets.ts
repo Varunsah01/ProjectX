@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getAssetDetailForOrganization, listAssetsForOrganization } from "@/lib/queries/assets";
-import { logAuditEvent } from "@/lib/security/audit";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createAssetSchema, updateAssetSchema } from "@/lib/validations/asset";
 
@@ -35,23 +35,42 @@ export async function createAssetAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createAssetSchema.parse(input);
-    const asset = await db.asset.create({
-      data: {
-        organizationId: user.organizationId,
-        customerId: values.customerId,
-        name: values.name,
-        model: values.model || "General",
-        serialNumber: values.serialNumber || `AST-${Date.now()}`,
-        category: values.category,
-        installationDate: parseDateInput(values.installationDate),
-        warrantyEnd: parseDateInput(values.warrantyEnd),
-        status: values.status.toUpperCase() as never,
-        location: cleanOptional(values.location),
-        notes: cleanOptional(values.notes),
-        amcStatus: "No Coverage",
-        lastServiceDate: parseDateInput(values.installationDate),
-        nextServiceDate: parseDateInput(values.installationDate),
-      },
+
+    const asset = await db.$transaction(async (tx) => {
+      const created = await tx.asset.create({
+        data: {
+          organizationId: user.organizationId,
+          customerId: values.customerId,
+          name: values.name,
+          model: values.model || "General",
+          serialNumber: values.serialNumber || `AST-${Date.now()}`,
+          category: values.category,
+          installationDate: parseDateInput(values.installationDate),
+          warrantyEnd: parseDateInput(values.warrantyEnd),
+          status: values.status.toUpperCase() as never,
+          location: cleanOptional(values.location),
+          notes: cleanOptional(values.notes),
+          amcStatus: "No Coverage",
+          lastServiceDate: parseDateInput(values.installationDate),
+          nextServiceDate: parseDateInput(values.installationDate),
+        },
+      });
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Asset",
+          entityId: created.id,
+          after: {
+            name: created.name,
+            model: created.model,
+            serialNumber: created.serialNumber,
+            category: created.category,
+            status: created.status,
+          },
+        }),
+      });
+      return created;
     });
 
     const detail = await getAssetDetailForOrganization(user.organizationId, asset.id);
@@ -76,25 +95,48 @@ export async function updateAssetAction(input: unknown) {
       return actionFailure("Asset not found");
     }
 
-    await db.asset.update({
-      where: { id: values.id },
-      data: {
-        ...(values.customerId ? { customerId: values.customerId } : {}),
-        ...(values.name !== undefined ? { name: values.name } : {}),
-        ...(values.model !== undefined ? { model: values.model || "General" } : {}),
-        ...(values.serialNumber !== undefined
-          ? { serialNumber: values.serialNumber || existing.serialNumber }
-          : {}),
-        ...(values.category !== undefined ? { category: values.category } : {}),
-        ...(values.installationDate !== undefined
-          ? { installationDate: parseDateInput(values.installationDate) }
-          : {}),
-        ...(values.warrantyEnd !== undefined ? { warrantyEnd: parseDateInput(values.warrantyEnd) } : {}),
-        ...(values.location !== undefined ? { location: cleanOptional(values.location) } : {}),
-        ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
-        ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
-      },
-    });
+    const updateData = {
+      ...(values.customerId ? { customerId: values.customerId } : {}),
+      ...(values.name !== undefined ? { name: values.name } : {}),
+      ...(values.model !== undefined ? { model: values.model || "General" } : {}),
+      ...(values.serialNumber !== undefined
+        ? { serialNumber: values.serialNumber || existing.serialNumber }
+        : {}),
+      ...(values.category !== undefined ? { category: values.category } : {}),
+      ...(values.installationDate !== undefined
+        ? { installationDate: parseDateInput(values.installationDate) }
+        : {}),
+      ...(values.warrantyEnd !== undefined ? { warrantyEnd: parseDateInput(values.warrantyEnd) } : {}),
+      ...(values.location !== undefined ? { location: cleanOptional(values.location) } : {}),
+      ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
+      ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
+    };
+
+    await db.$transaction([
+      db.asset.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Asset",
+          entityId: values.id,
+          before: {
+            name: existing.name,
+            model: existing.model,
+            serialNumber: existing.serialNumber,
+            category: existing.category,
+            status: existing.status,
+          },
+          after: {
+            name: values.name ?? existing.name,
+            model: values.model ?? existing.model,
+            serialNumber: values.serialNumber ?? existing.serialNumber,
+            category: values.category ?? existing.category,
+            status: values.status !== undefined ? values.status.toUpperCase() : existing.status,
+          },
+        }),
+      }),
+    ]);
 
     const detail = await getAssetDetailForOrganization(user.organizationId, values.id);
     revalidatePath("/assets");
@@ -139,46 +181,51 @@ export async function logAssetServiceAction(input: unknown) {
     const jobType = values.serviceType === "inspection" ? "INSPECTION" : "SCHEDULED";
     const serviceTypeLabel = SERVICE_TYPE_LABELS[values.serviceType];
 
-    const job = await db.job.create({
-      data: {
-        organizationId: user.organizationId,
-        jobNumber: await getNextNumber("JOB", user.organizationId, "job"),
-        customerId: asset.customerId,
-        assetId: values.assetId,
-        technicianId: values.technicianId,
-        type: jobType as never,
-        status: "COMPLETED",
-        scheduledDate: serviceDate,
-        completedAt: serviceDate,
-        serviceReport: serviceTypeLabel,
-        notes: cleanOptional(values.notes),
-      },
-    });
+    const job = await db.$transaction(async (tx) => {
+      const created = await tx.job.create({
+        data: {
+          organizationId: user.organizationId,
+          jobNumber: await getNextNumber("JOB", user.organizationId, "job"),
+          customerId: asset.customerId,
+          assetId: values.assetId,
+          technicianId: values.technicianId,
+          type: jobType as never,
+          status: "COMPLETED",
+          scheduledDate: serviceDate,
+          completedAt: serviceDate,
+          serviceReport: serviceTypeLabel,
+          notes: cleanOptional(values.notes),
+        },
+      });
 
-    await db.asset.update({
-      where: { id: values.assetId },
-      data: {
-        lastServiceDate: serviceDate,
-        ...(nextServiceDate ? { nextServiceDate } : {}),
-      },
-    });
+      await tx.asset.update({
+        where: { id: values.assetId },
+        data: {
+          lastServiceDate: serviceDate,
+          ...(nextServiceDate ? { nextServiceDate } : {}),
+        },
+      });
 
-    await logAuditEvent({
-      organizationId: user.organizationId,
-      userId: user.id,
-      action: "UPDATE",
-      entity: "Asset",
-      entityId: values.assetId,
-      before: {
-        lastServiceDate: asset.lastServiceDate,
-        nextServiceDate: asset.nextServiceDate,
-      },
-      after: {
-        lastServiceDate: serviceDate,
-        nextServiceDate: nextServiceDate ?? asset.nextServiceDate,
-        serviceJobId: job.id,
-        serviceType: serviceTypeLabel,
-      },
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Asset",
+          entityId: values.assetId,
+          before: {
+            lastServiceDate: asset.lastServiceDate,
+            nextServiceDate: asset.nextServiceDate,
+          },
+          after: {
+            lastServiceDate: serviceDate,
+            nextServiceDate: nextServiceDate ?? asset.nextServiceDate,
+            serviceJobId: created.id,
+            serviceType: serviceTypeLabel,
+          },
+        }),
+      });
+
+      return created;
     });
 
     revalidatePath(`/assets/${values.assetId}`);
@@ -193,13 +240,27 @@ export async function logAssetServiceAction(input: unknown) {
 export async function deleteAssetAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
-    const deleted = await db.asset.deleteMany({
+
+    const existing = await db.asset.findFirst({
       where: { id, organizationId: user.organizationId },
     });
 
-    if (!deleted.count) {
+    if (!existing) {
       return actionFailure("Asset not found");
     }
+
+    await db.$transaction([
+      db.asset.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Asset",
+          entityId: id,
+          before: { name: existing.name, serialNumber: existing.serialNumber },
+        }),
+      }),
+    ]);
 
     revalidatePath("/assets");
     revalidatePath("/customers");

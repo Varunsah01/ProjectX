@@ -109,6 +109,7 @@ const pagePrefixesByRole: Record<UserRole, string[]> = {
     "/jobs",
     "/technicians",
     "/reports",
+    "/import",
   ],
   TECHNICIAN: ["/jobs", "/complaints"],
 };

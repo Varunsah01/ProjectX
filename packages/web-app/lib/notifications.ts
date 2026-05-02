@@ -14,6 +14,7 @@ import { RefundProcessedEmail } from "@/lib/email-templates/refund-processed";
 import { TicketCreatedEmail } from "@/lib/email-templates/ticket-created";
 import { TicketResolvedEmail } from "@/lib/email-templates/ticket-resolved";
 import { WelcomeEmail } from "@/lib/email-templates/welcome";
+import { sendPushToUser } from "@/lib/notifications/push";
 import { renderEmailTemplate } from "@/lib/render-email-template";
 
 const internalRoles = [UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT] as const;
@@ -460,6 +461,11 @@ export async function notifyJobAssigned(jobId: string) {
           jobUrl: `${getAppUrl()}/jobs/${job.id}`,
         }),
       ),
+      sendPushToUser(job.technicianId, {
+        title: `Job ${job.jobNumber} assigned`,
+        body: `You have been assigned a job for ${job.customer.name}.`,
+        data: { type: "job", id: job.id },
+      }),
     ]);
   });
 }
@@ -587,6 +593,100 @@ export async function notifyWelcomeUser(userId: string) {
           dashboardUrl: getAppUrl(),
         }),
       ),
+    ]);
+  });
+}
+
+export async function notifyJobRescheduled(jobId: string) {
+  return safelyRun("notifyJobRescheduled", async () => {
+    const job = await db.job.findUnique({
+      where: { id: jobId },
+      include: {
+        organization: true,
+        customer: true,
+        asset: true,
+        technician: true,
+      },
+    });
+
+    if (!job) {
+      return;
+    }
+
+    const internalUserIds = await getInternalRecipients(job.organizationId);
+
+    await Promise.all([
+      createInAppNotifications({
+        organizationId: job.organizationId,
+        userIds: [...internalUserIds, job.technicianId],
+        type: "job_rescheduled",
+        title: `Job ${job.jobNumber} rescheduled`,
+        message: `Job for ${job.customer.name} has been rescheduled to ${formatDate(job.scheduledDate)}.`,
+        link: `/jobs/${job.id}`,
+      }),
+      sendEmail(
+        job.technician.email,
+        `Job ${job.jobNumber} rescheduled`,
+        await renderComponent(JobScheduledEmail, {
+          technicianName: job.technician.name,
+          organizationName: job.organization.name,
+          jobNumber: job.jobNumber,
+          customerName: job.customer.name,
+          assetName: job.asset?.name ?? "Unassigned asset",
+          scheduledDate: formatDate(job.scheduledDate),
+          jobUrl: `${getAppUrl()}/jobs/${job.id}`,
+        }),
+      ),
+      sendPushToUser(job.technicianId, {
+        title: `Job ${job.jobNumber} rescheduled`,
+        body: `Job for ${job.customer.name} rescheduled to ${formatDate(job.scheduledDate)}.`,
+        data: { type: "job", id: job.id },
+      }),
+    ]);
+  });
+}
+
+export async function notifyTicketAssigned(ticketId: string) {
+  return safelyRun("notifyTicketAssigned", async () => {
+    const ticket = await db.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        organization: true,
+        customer: true,
+        assignedTo: true,
+      },
+    });
+
+    if (!ticket || !ticket.assignedToId || !ticket.assignedTo) {
+      return;
+    }
+
+    await Promise.all([
+      createInAppNotifications({
+        organizationId: ticket.organizationId,
+        userIds: [ticket.assignedToId],
+        type: "ticket_assigned",
+        title: `Complaint ${ticket.ticketNumber} assigned`,
+        message: `${ticket.customer.name}'s complaint "${ticket.subject}" has been assigned to you.`,
+        link: `/complaints/${ticket.id}`,
+      }),
+      sendEmail(
+        ticket.assignedTo.email,
+        `Complaint ${ticket.ticketNumber} assigned to you`,
+        await renderComponent(TicketCreatedEmail, {
+          customerName: ticket.customer.name,
+          organizationName: ticket.organization.name,
+          ticketNumber: ticket.ticketNumber,
+          subject: ticket.subject,
+          priority: ticket.priority.toLowerCase(),
+          ticketUrl: `${getAppUrl()}/complaints/${ticket.id}`,
+        }),
+      ),
+      sendPushToUser(ticket.assignedToId, {
+        title: `Complaint ${ticket.ticketNumber} assigned`,
+        body: `${ticket.customer.name}'s complaint "${ticket.subject}" assigned to you.`,
+        data: { type: "complaint", id: ticket.id },
+      }),
     ]);
   });
 }

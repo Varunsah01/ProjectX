@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createRazorpayRefund } from "@/lib/razorpay";
 
@@ -27,7 +28,7 @@ export async function initiateRefund(input: unknown) {
         invoice: { organizationId: user.organizationId },
       },
       include: {
-        invoice: { select: { id: true, organizationId: true } },
+        invoice: { select: { id: true, organizationId: true, status: true } },
       },
     });
 
@@ -51,15 +52,46 @@ export async function initiateRefund(input: unknown) {
       );
     }
 
-    const refund = await db.refund.create({
-      data: {
-        paymentId: payment.id,
-        amountPaisa: values.amountPaisa,
-        reason: values.reason,
-        status: "PENDING",
-        notes: {} as Prisma.InputJsonValue,
-        initiatedById: user.id,
-      },
+    // Create refund record + audit atomically
+    const refund = await db.$transaction(async (tx) => {
+      const created = await tx.refund.create({
+        data: {
+          paymentId: payment.id,
+          amountPaisa: values.amountPaisa,
+          reason: values.reason,
+          status: "PENDING",
+          notes: {} as Prisma.InputJsonValue,
+          initiatedById: user.id,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "REFUND",
+          entity: "Refund",
+          entityId: created.id,
+          after: {
+            paymentId: payment.id,
+            amountPaisa: values.amountPaisa,
+            reason: values.reason,
+            status: "PENDING",
+          },
+        }),
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Invoice",
+          entityId: payment.invoice.id,
+          before: { status: payment.invoice.status },
+          after: { refundInitiated: true, refundAmountPaisa: values.amountPaisa },
+        }),
+      });
+
+      return created;
     });
 
     try {

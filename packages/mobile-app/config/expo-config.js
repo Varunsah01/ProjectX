@@ -25,6 +25,13 @@ const mobileExpoConfig = {
         microphonePermission: false,
       },
     ],
+    [
+      "expo-notifications",
+      {
+        icon: "./assets/branding/pilot/icon.png",
+        color: "#0F766E",
+      },
+    ],
   ],
   platforms: ["android"],
   android: {
@@ -34,6 +41,7 @@ const mobileExpoConfig = {
       foregroundImage: "./assets/branding/pilot/adaptive-icon.png",
       backgroundColor: "#0F766E",
     },
+    useNextNotificationsApi: true,
   },
 };
 

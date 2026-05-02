@@ -17,11 +17,15 @@ const csrfExemptPrefixes = [
   "/api/mobile/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
+  "/api/health",
+  "/api/status",
 ];
 const rateLimitExemptPrefixes = [
   "/api/auth/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
+  "/api/health",
+  "/api/status",
 ];
 
 function isMutationMethod(method: string) {
@@ -61,7 +65,9 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
     publicRoutes.has(pathname) ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/mobile/") ||
-    pathname === "/api/auth/register";
+    pathname === "/api/auth/register" ||
+    pathname === "/api/health" ||
+    pathname === "/api/status";
   const requestIp =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "anonymous";

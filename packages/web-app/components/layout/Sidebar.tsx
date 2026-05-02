@@ -13,6 +13,7 @@ import {
   Briefcase,
   Shield,
   BarChart3,
+  Upload,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -32,6 +33,7 @@ const navItems = [
   { label: "Technicians", href: "/technicians", icon: Wrench },
   { label: "Contracts", href: "/contracts", icon: Shield },
   { label: "Reports", href: "/reports", icon: BarChart3 },
+  { label: "Import", href: "/import", icon: Upload },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

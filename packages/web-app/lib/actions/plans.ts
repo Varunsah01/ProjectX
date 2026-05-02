@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { listPlansForOrganization } from "@/lib/queries/plans";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createPlanSchema, updatePlanSchema } from "@/lib/validations/plan";
@@ -33,20 +34,35 @@ export async function createPlanAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = createPlanSchema.parse(input);
-    const plan = await db.plan.create({
-      data: {
-        organizationId: user.organizationId,
-        name: values.name,
-        type: values.type.toUpperCase() as never,
-        durationMonths: values.duration,
-        price: values.price,
-        visitsCovered: values.visitsCovered,
-        description: values.description,
-        hsnSac: values.hsnSac,
-        gstRatePercent: values.gstRatePercent,
-        gstApplicable: values.gstApplicable,
-        isActive: values.isActive,
-      },
+
+    const plan = await db.$transaction(async (tx) => {
+      const created = await tx.plan.create({
+        data: {
+          organizationId: user.organizationId,
+          name: values.name,
+          type: values.type.toUpperCase() as never,
+          durationMonths: values.duration,
+          price: values.price,
+          visitsCovered: values.visitsCovered,
+          description: values.description,
+          hsnSac: values.hsnSac,
+          gstRatePercent: values.gstRatePercent,
+          gstApplicable: values.gstApplicable,
+          isActive: values.isActive,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Plan",
+          entityId: created.id,
+          after: { name: created.name, type: created.type, price: created.price },
+        }),
+      });
+
+      return created;
     });
 
     revalidatePath("/settings");
@@ -69,21 +85,37 @@ export async function updatePlanAction(input: unknown) {
       return actionFailure("Plan not found");
     }
 
-    await db.plan.update({
-      where: { id: values.id },
-      data: {
-        ...(values.name !== undefined ? { name: values.name } : {}),
-        ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
-        ...(values.duration !== undefined ? { durationMonths: values.duration } : {}),
-        ...(values.price !== undefined ? { price: values.price } : {}),
-        ...(values.visitsCovered !== undefined ? { visitsCovered: values.visitsCovered } : {}),
-        ...(values.description !== undefined ? { description: values.description } : {}),
-        ...(values.hsnSac !== undefined ? { hsnSac: values.hsnSac } : {}),
-        ...(values.gstRatePercent !== undefined ? { gstRatePercent: values.gstRatePercent } : {}),
-        ...(values.gstApplicable !== undefined ? { gstApplicable: values.gstApplicable } : {}),
-        ...(values.isActive !== undefined ? { isActive: values.isActive } : {}),
-      },
-    });
+    const updateData = {
+      ...(values.name !== undefined ? { name: values.name } : {}),
+      ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
+      ...(values.duration !== undefined ? { durationMonths: values.duration } : {}),
+      ...(values.price !== undefined ? { price: values.price } : {}),
+      ...(values.visitsCovered !== undefined ? { visitsCovered: values.visitsCovered } : {}),
+      ...(values.description !== undefined ? { description: values.description } : {}),
+      ...(values.hsnSac !== undefined ? { hsnSac: values.hsnSac } : {}),
+      ...(values.gstRatePercent !== undefined ? { gstRatePercent: values.gstRatePercent } : {}),
+      ...(values.gstApplicable !== undefined ? { gstApplicable: values.gstApplicable } : {}),
+      ...(values.isActive !== undefined ? { isActive: values.isActive } : {}),
+    };
+
+    await db.$transaction([
+      db.plan.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Plan",
+          entityId: values.id,
+          before: { name: existing.name, type: existing.type, price: existing.price, isActive: existing.isActive },
+          after: {
+            name: values.name ?? existing.name,
+            type: values.type !== undefined ? values.type.toUpperCase() : existing.type,
+            price: values.price ?? existing.price,
+            isActive: values.isActive ?? existing.isActive,
+          },
+        }),
+      }),
+    ]);
 
     revalidatePath("/settings");
     revalidatePath("/contracts/new");
@@ -96,13 +128,27 @@ export async function updatePlanAction(input: unknown) {
 export async function deletePlanAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
-    const deleted = await db.plan.deleteMany({
+
+    const existing = await db.plan.findFirst({
       where: { id, organizationId: user.organizationId },
     });
 
-    if (!deleted.count) {
+    if (!existing) {
       return actionFailure("Plan not found");
     }
+
+    await db.$transaction([
+      db.plan.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Plan",
+          entityId: id,
+          before: { name: existing.name, type: existing.type, price: existing.price },
+        }),
+      }),
+    ]);
 
     revalidatePath("/settings");
     revalidatePath("/contracts/new");

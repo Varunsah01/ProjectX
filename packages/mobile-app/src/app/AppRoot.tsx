@@ -16,6 +16,7 @@ import NoticeCard from "../components/ui/NoticeCard";
 import { APP_DISPLAY_NAME } from "../constants/branding";
 import { colors } from "../constants/theme";
 import { useAuth } from "../hooks/useAuth";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import { useSync } from "../hooks/useSync";
 import { AuthProvider } from "../providers/AuthProvider";
 import { SyncProvider } from "../providers/SyncProvider";
@@ -123,6 +124,19 @@ function AppShell() {
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const exitBackPressAtRef = useRef(0);
   const apiTargetNotice = getApiTargetNotice();
+
+  const handleNotificationTap = useCallback(
+    (data: { type: string; id: string }) => {
+      if (data.type === "job" && data.id) {
+        navigationRef.navigate("JobDetail", { jobId: data.id });
+      } else if (data.type === "complaint" && data.id) {
+        navigationRef.navigate("ComplaintDetail", { complaintId: data.id });
+      }
+    },
+    [navigationRef],
+  );
+
+  usePushNotifications(handleNotificationTap);
 
   const syncStatusNotice = useMemo<SyncStatusNoticeState | null>(() => {
     if (pendingCount === 0) {

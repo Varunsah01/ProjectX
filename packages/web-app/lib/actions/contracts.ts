@@ -9,6 +9,7 @@ import {
   toPrismaBillingCycle,
 } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getContractDetailForOrganization, listContractsForOrganization } from "@/lib/queries/contracts";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
@@ -61,33 +62,54 @@ export async function createContractAction(input: unknown) {
     const startDate = parseDateInput(values.startDate);
     const endDate = addMonthsPreservingDay(startDate, plan.durationMonths);
     endDate.setDate(endDate.getDate() - 1);
-    const contract = await db.contract.create({
-      data: {
-        organizationId: user.organizationId,
-        contractNumber: await getNextNumber(values.type === "amc" ? "AMC" : "WRN", user.organizationId, "contract"),
-        customerId: customer.id,
-        assetId: asset.id,
-        planId: plan.id,
-        type: values.type.toUpperCase() as never,
-        billingCycle: toPrismaBillingCycle(values.billingCycle),
-        startDate,
-        endDate,
-        nextBillingDate: startDate,
-        lastBilledDate: null,
-        status: "ACTIVE",
-        value: plan.price,
-        visitsCovered: plan.visitsCovered,
-        visitsUsed: 0,
-        nextServiceDate: asset.nextServiceDate ?? startDate,
-        notes: cleanOptional(values.notes),
-      },
-    });
 
-    await db.asset.update({
-      where: { id: asset.id },
-      data: {
-        amcStatus: values.type === "amc" ? "Active AMC" : "Warranty",
-      },
+    const contract = await db.$transaction(async (tx) => {
+      const created = await tx.contract.create({
+        data: {
+          organizationId: user.organizationId,
+          contractNumber: await getNextNumber(values.type === "amc" ? "AMC" : "WRN", user.organizationId, "contract"),
+          customerId: customer.id,
+          assetId: asset.id,
+          planId: plan.id,
+          type: values.type.toUpperCase() as never,
+          billingCycle: toPrismaBillingCycle(values.billingCycle),
+          startDate,
+          endDate,
+          nextBillingDate: startDate,
+          lastBilledDate: null,
+          status: "ACTIVE",
+          value: plan.price,
+          visitsCovered: plan.visitsCovered,
+          visitsUsed: 0,
+          nextServiceDate: asset.nextServiceDate ?? startDate,
+          notes: cleanOptional(values.notes),
+        },
+      });
+
+      await tx.asset.update({
+        where: { id: asset.id },
+        data: { amcStatus: values.type === "amc" ? "Active AMC" : "Warranty" },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Contract",
+          entityId: created.id,
+          after: {
+            contractNumber: created.contractNumber,
+            type: created.type,
+            status: created.status,
+            customerId: customer.id,
+            assetId: asset.id,
+            planId: plan.id,
+            value: created.value,
+          },
+        }),
+      });
+
+      return created;
     });
 
     const detail = await getContractDetailForOrganization(user.organizationId, contract.id);
@@ -125,25 +147,48 @@ export async function updateContractAction(input: unknown) {
           : startDate
         : existing.nextBillingDate;
 
-    await db.contract.update({
-      where: { id: values.id },
-      data: {
-        ...(values.planId ? { planId: values.planId } : {}),
-        ...(values.customerId ? { customerId: values.customerId } : {}),
-        ...(values.assetId ? { assetId: values.assetId } : {}),
-        ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
-        ...(values.billingCycle !== undefined
-          ? { billingCycle: toPrismaBillingCycle(values.billingCycle) }
-          : {}),
-        ...(values.startDate !== undefined ? { startDate } : {}),
-        ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
-        ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
-        ...(values.visitsUsed !== undefined ? { visitsUsed: values.visitsUsed } : {}),
-        ...(values.billingCycle !== undefined || values.startDate !== undefined
-          ? { nextBillingDate }
-          : {}),
-      },
-    });
+    const updateData = {
+      ...(values.planId ? { planId: values.planId } : {}),
+      ...(values.customerId ? { customerId: values.customerId } : {}),
+      ...(values.assetId ? { assetId: values.assetId } : {}),
+      ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
+      ...(values.billingCycle !== undefined
+        ? { billingCycle: toPrismaBillingCycle(values.billingCycle) }
+        : {}),
+      ...(values.startDate !== undefined ? { startDate } : {}),
+      ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
+      ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
+      ...(values.visitsUsed !== undefined ? { visitsUsed: values.visitsUsed } : {}),
+      ...(values.billingCycle !== undefined || values.startDate !== undefined
+        ? { nextBillingDate }
+        : {}),
+    };
+
+    await db.$transaction([
+      db.contract.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Contract",
+          entityId: values.id,
+          before: {
+            type: existing.type,
+            billingCycle: existing.billingCycle,
+            status: existing.status,
+            startDate: existing.startDate,
+            visitsUsed: existing.visitsUsed,
+          },
+          after: {
+            type: values.type !== undefined ? values.type.toUpperCase() : existing.type,
+            billingCycle: values.billingCycle ?? existing.billingCycle.toLowerCase(),
+            status: values.status !== undefined ? values.status.toUpperCase() : existing.status,
+            startDate: values.startDate !== undefined ? startDate : existing.startDate,
+            visitsUsed: values.visitsUsed ?? existing.visitsUsed,
+          },
+        }),
+      }),
+    ]);
 
     const detail = await getContractDetailForOrganization(user.organizationId, values.id);
     revalidatePath("/contracts");
@@ -167,47 +212,70 @@ export async function renewContractAction(input: { id: string; newEndDate: strin
     newStartDate.setDate(newStartDate.getDate() + 1);
     const newEndDate = parseDateInput(input.newEndDate);
 
-    await db.contract.update({
-      where: { id: existing.id },
-      data: {
-        startDate: newStartDate,
-        endDate: newEndDate,
-        status: "ACTIVE",
-        visitsUsed: 0,
-        nextBillingDate: newStartDate,
-        lastBilledDate: null,
-      },
-    });
-
     const invoiceNumber = await getNextNumber("INV", user.organizationId, "invoice");
     const dueDate = new Date(newStartDate);
     dueDate.setDate(dueDate.getDate() + 7);
 
-    await db.invoice.create({
-      data: {
-        organizationId: user.organizationId,
-        invoiceNumber,
-        customerId: existing.customerId,
-        contractId: existing.id,
-        amount: existing.value,
-        paidAmount: 0,
-        dueDate,
-        issuedDate: new Date(),
-        status: "ISSUED",
-        type: "RECURRING",
-        notes: `Renewal for contract ${existing.contractNumber}`,
-        items: {
-          create: [
-            {
-              organizationId: user.organizationId,
-              description: `Contract renewal (${existing.contractNumber})`,
-              qty: 1,
-              rate: existing.value,
-              amount: existing.value,
-            },
-          ],
+    await db.$transaction(async (tx) => {
+      await tx.contract.update({
+        where: { id: existing.id },
+        data: {
+          startDate: newStartDate,
+          endDate: newEndDate,
+          status: "ACTIVE",
+          visitsUsed: 0,
+          nextBillingDate: newStartDate,
+          lastBilledDate: null,
         },
-      },
+      });
+
+      const invoice = await tx.invoice.create({
+        data: {
+          organizationId: user.organizationId,
+          invoiceNumber,
+          customerId: existing.customerId,
+          contractId: existing.id,
+          amount: existing.value,
+          paidAmount: 0,
+          dueDate,
+          issuedDate: new Date(),
+          status: "ISSUED",
+          type: "RECURRING",
+          notes: `Renewal for contract ${existing.contractNumber}`,
+          items: {
+            create: [
+              {
+                organizationId: user.organizationId,
+                description: `Contract renewal (${existing.contractNumber})`,
+                qty: 1,
+                rate: existing.value,
+                amount: existing.value,
+              },
+            ],
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Contract",
+          entityId: existing.id,
+          before: { status: existing.status, startDate: existing.startDate, endDate: existing.endDate },
+          after: { status: "ACTIVE", startDate: newStartDate, endDate: newEndDate },
+        }),
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Invoice",
+          entityId: invoice.id,
+          after: { invoiceNumber, type: "RECURRING", amount: existing.value, status: "ISSUED" },
+        }),
+      });
     });
 
     const detail = await getContractDetailForOrganization(user.organizationId, existing.id);
@@ -247,31 +315,45 @@ export async function generateRenewalQuoteAction(input: unknown) {
 
     const invoiceNumber = await getNextNumber("INV", user.organizationId, "invoice");
 
-    const invoice = await db.invoice.create({
-      data: {
-        organizationId: user.organizationId,
-        invoiceNumber,
-        customerId: contract.customerId,
-        contractId: contract.id,
-        amount: values.price,
-        paidAmount: 0,
-        dueDate: newStart,
-        issuedDate: new Date(),
-        status: "DRAFT",
-        type: "RECURRING",
-        notes: cleanOptional(values.notes),
-        items: {
-          create: [
-            {
-              organizationId: user.organizationId,
-              description: lineItemDescription,
-              qty: 1,
-              rate: values.price,
-              amount: values.price,
-            },
-          ],
+    const invoice = await db.$transaction(async (tx) => {
+      const created = await tx.invoice.create({
+        data: {
+          organizationId: user.organizationId,
+          invoiceNumber,
+          customerId: contract.customerId,
+          contractId: contract.id,
+          amount: values.price,
+          paidAmount: 0,
+          dueDate: newStart,
+          issuedDate: new Date(),
+          status: "DRAFT",
+          type: "RECURRING",
+          notes: cleanOptional(values.notes),
+          items: {
+            create: [
+              {
+                organizationId: user.organizationId,
+                description: lineItemDescription,
+                qty: 1,
+                rate: values.price,
+                amount: values.price,
+              },
+            ],
+          },
         },
-      },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Invoice",
+          entityId: created.id,
+          after: { invoiceNumber, type: "RECURRING", amount: values.price, status: "DRAFT" },
+        }),
+      });
+
+      return created;
     });
 
     // Notify all admins/managers in-app (no customer email — it's a draft quote)
@@ -309,13 +391,27 @@ export async function generateRenewalQuoteAction(input: unknown) {
 export async function deleteContractAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
-    const deleted = await db.contract.deleteMany({
+
+    const existing = await db.contract.findFirst({
       where: { id, organizationId: user.organizationId },
     });
 
-    if (!deleted.count) {
+    if (!existing) {
       return actionFailure("Contract not found");
     }
+
+    await db.$transaction([
+      db.contract.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Contract",
+          entityId: id,
+          before: { contractNumber: existing.contractNumber, type: existing.type, status: existing.status },
+        }),
+      }),
+    ]);
 
     revalidatePath("/contracts");
     revalidatePath("/assets");

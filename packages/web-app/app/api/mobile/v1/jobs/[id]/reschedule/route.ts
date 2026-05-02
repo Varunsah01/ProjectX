@@ -6,6 +6,7 @@ import { jobDetailsInclude, mapJob } from "@/lib/data-mappers";
 import { cleanOptional, parseDateInput } from "@/lib/actions/helpers";
 import { db } from "@/lib/db";
 import { getMobileSession, validateMobileCsrf } from "@/lib/mobile/auth";
+import { notifyJobRescheduled } from "@/lib/notifications";
 import { parseJsonBody } from "@/lib/security/api";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,8 @@ export async function POST(
         serviceReport: nextServiceReport,
       },
     });
+
+    void notifyJobRescheduled(job.id);
 
     const updatedJob = await db.job.findFirst({
       where: { id: job.id, organizationId: session.user.organizationId },

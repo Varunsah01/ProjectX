@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
-import { notifyTicketCreated, notifyTicketResolved } from "@/lib/notifications";
+import { buildAuditLog } from "@/lib/audit/log";
+import { notifyTicketAssigned, notifyTicketCreated, notifyTicketResolved } from "@/lib/notifications";
 import { cleanOptional, getNextNumber, getSlaDeadline } from "@/lib/actions/helpers";
 import { getTicketDetailForOrganization, listTicketsForOrganization } from "@/lib/queries/tickets";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
@@ -41,40 +42,61 @@ export async function createTicketAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createTicketSchema.parse(input);
-    const ticket = await db.ticket.create({
-      data: {
-        organizationId: user.organizationId,
-        ticketNumber: await getNextNumber("TKT", user.organizationId, "ticket"),
-        customerId: values.customerId,
-        assetId: values.assetId || null,
-        subject: values.subject,
-        description: values.description,
-        category: values.category,
-        priority: values.priority.toUpperCase() as never,
-        status: values.assignedToId ? "ASSIGNED" : "OPEN",
-        assignedToId: values.assignedToId || null,
-        slaDeadline: getSlaDeadline(values.priority),
-        timeline: {
-          create: [
-            {
-              organizationId: user.organizationId,
-              byUserId: user.id,
-              action: "Ticket created",
-              note: cleanOptional(values.description),
-            },
-            ...(values.assignedToId
-              ? [
-                  {
-                    organizationId: user.organizationId,
-                    byUserId: user.id,
-                    action: "Technician assigned",
-                    note: null,
-                  },
-                ]
-              : []),
-          ],
+
+    const ticket = await db.$transaction(async (tx) => {
+      const created = await tx.ticket.create({
+        data: {
+          organizationId: user.organizationId,
+          ticketNumber: await getNextNumber("TKT", user.organizationId, "ticket"),
+          customerId: values.customerId,
+          assetId: values.assetId || null,
+          subject: values.subject,
+          description: values.description,
+          category: values.category,
+          priority: values.priority.toUpperCase() as never,
+          status: values.assignedToId ? "ASSIGNED" : "OPEN",
+          assignedToId: values.assignedToId || null,
+          slaDeadline: getSlaDeadline(values.priority),
+          timeline: {
+            create: [
+              {
+                organizationId: user.organizationId,
+                byUserId: user.id,
+                action: "Ticket created",
+                note: cleanOptional(values.description),
+              },
+              ...(values.assignedToId
+                ? [
+                    {
+                      organizationId: user.organizationId,
+                      byUserId: user.id,
+                      action: "Technician assigned",
+                      note: null,
+                    },
+                  ]
+                : []),
+            ],
+          },
         },
-      },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Ticket",
+          entityId: created.id,
+          after: {
+            ticketNumber: created.ticketNumber,
+            subject: created.subject,
+            category: created.category,
+            priority: created.priority,
+            status: created.status,
+          },
+        }),
+      });
+
+      return created;
     });
 
     const detail = await getTicketDetailForOrganization(user.organizationId, ticket.id);
@@ -100,22 +122,45 @@ export async function updateTicketAction(input: unknown) {
       return actionFailure("Complaint not found");
     }
 
-    await db.ticket.update({
-      where: { id: values.id },
-      data: {
-        ...(values.customerId ? { customerId: values.customerId } : {}),
-        ...(values.assetId !== undefined ? { assetId: values.assetId || null } : {}),
-        ...(values.subject !== undefined ? { subject: values.subject } : {}),
-        ...(values.description !== undefined ? { description: values.description } : {}),
-        ...(values.category !== undefined ? { category: values.category } : {}),
-        ...(values.priority !== undefined ? { priority: values.priority.toUpperCase() as never } : {}),
-        ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
-        ...(values.assignedToId !== undefined ? { assignedToId: values.assignedToId || null } : {}),
-        ...(values.resolvedAt !== undefined
-          ? { resolvedAt: values.resolvedAt ? new Date(values.resolvedAt) : null }
-          : {}),
-      },
-    });
+    const updateData = {
+      ...(values.customerId ? { customerId: values.customerId } : {}),
+      ...(values.assetId !== undefined ? { assetId: values.assetId || null } : {}),
+      ...(values.subject !== undefined ? { subject: values.subject } : {}),
+      ...(values.description !== undefined ? { description: values.description } : {}),
+      ...(values.category !== undefined ? { category: values.category } : {}),
+      ...(values.priority !== undefined ? { priority: values.priority.toUpperCase() as never } : {}),
+      ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
+      ...(values.assignedToId !== undefined ? { assignedToId: values.assignedToId || null } : {}),
+      ...(values.resolvedAt !== undefined
+        ? { resolvedAt: values.resolvedAt ? new Date(values.resolvedAt) : null }
+        : {}),
+    };
+
+    await db.$transaction([
+      db.ticket.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Ticket",
+          entityId: values.id,
+          before: {
+            subject: existing.subject,
+            category: existing.category,
+            priority: existing.priority,
+            status: existing.status,
+            assignedToId: existing.assignedToId,
+          },
+          after: {
+            subject: values.subject ?? existing.subject,
+            category: values.category ?? existing.category,
+            priority: values.priority !== undefined ? values.priority.toUpperCase() : existing.priority,
+            status: values.status !== undefined ? values.status.toUpperCase() : existing.status,
+            assignedToId: values.assignedToId !== undefined ? (values.assignedToId || null) : existing.assignedToId,
+          },
+        }),
+      }),
+    ]);
 
     const detail = await getTicketDetailForOrganization(user.organizationId, values.id);
     await notifyTicketResolved(values.id);
@@ -140,23 +185,38 @@ export async function assignTicketAction(input: unknown) {
       return actionFailure("Complaint not found");
     }
 
-    await db.ticket.update({
-      where: { id: values.id },
-      data: {
-        assignedToId: values.assignedToId,
-        status: existing.status === "OPEN" ? "ASSIGNED" : existing.status,
-        timeline: {
-          create: {
-            organizationId: user.organizationId,
-            byUserId: user.id,
-            action: "Technician assigned",
-            note: null,
+    const newStatus = existing.status === "OPEN" ? "ASSIGNED" : existing.status;
+
+    await db.$transaction([
+      db.ticket.update({
+        where: { id: values.id },
+        data: {
+          assignedToId: values.assignedToId,
+          status: newStatus,
+          timeline: {
+            create: {
+              organizationId: user.organizationId,
+              byUserId: user.id,
+              action: "Technician assigned",
+              note: null,
+            },
           },
         },
-      },
-    });
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Ticket",
+          entityId: values.id,
+          before: { status: existing.status, assignedToId: existing.assignedToId },
+          after: { status: newStatus, assignedToId: values.assignedToId },
+        }),
+      }),
+    ]);
 
     const detail = await getTicketDetailForOrganization(user.organizationId, values.id);
+    await notifyTicketAssigned(values.id);
     revalidatePath("/complaints");
     revalidatePath(`/complaints/${values.id}`);
     return actionSuccess(detail!.ticket);
@@ -177,21 +237,33 @@ export async function resolveTicketAction(input: unknown) {
       return actionFailure("Complaint not found");
     }
 
-    await db.ticket.update({
-      where: { id: values.id },
-      data: {
-        status: "RESOLVED",
-        resolvedAt: new Date(),
-        timeline: {
-          create: {
-            organizationId: user.organizationId,
-            byUserId: user.id,
-            action: "Ticket resolved",
-            note: cleanOptional(values.note),
+    await db.$transaction([
+      db.ticket.update({
+        where: { id: values.id },
+        data: {
+          status: "RESOLVED",
+          resolvedAt: new Date(),
+          timeline: {
+            create: {
+              organizationId: user.organizationId,
+              byUserId: user.id,
+              action: "Ticket resolved",
+              note: cleanOptional(values.note),
+            },
           },
         },
-      },
-    });
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Ticket",
+          entityId: values.id,
+          before: { status: existing.status },
+          after: { status: "RESOLVED" },
+        }),
+      }),
+    ]);
 
     const detail = await getTicketDetailForOrganization(user.organizationId, values.id);
     revalidatePath("/complaints");
@@ -206,13 +278,27 @@ export async function resolveTicketAction(input: unknown) {
 export async function deleteTicketAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
-    const deleted = await db.ticket.deleteMany({
+
+    const existing = await db.ticket.findFirst({
       where: { id, organizationId: user.organizationId },
     });
 
-    if (!deleted.count) {
+    if (!existing) {
       return actionFailure("Complaint not found");
     }
+
+    await db.$transaction([
+      db.ticket.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Ticket",
+          entityId: id,
+          before: { ticketNumber: existing.ticketNumber, subject: existing.subject, status: existing.status },
+        }),
+      }),
+    ]);
 
     revalidatePath("/complaints");
     revalidatePath("/");

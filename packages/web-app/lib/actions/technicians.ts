@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { listTechniciansForOrganization } from "@/lib/queries/technicians";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import { createTechnicianSchema, updateTechnicianSchema } from "@/lib/validations/technician";
@@ -42,18 +43,33 @@ export async function createTechnicianAction(input: unknown) {
     const values = createTechnicianSchema.parse(input);
     const generatedPassword = values.password ?? generatePassword();
     const passwordHash = await bcrypt.hash(generatedPassword, 10);
-    const technician = await db.user.create({
-      data: {
-        organizationId: user.organizationId,
-        name: values.name,
-        email: values.email,
-        passwordHash,
-        role: "TECHNICIAN",
-        status: values.status,
-        phone: values.phone,
-        territory: values.territory,
-        specialization: values.specialization,
-      },
+
+    const technician = await db.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          organizationId: user.organizationId,
+          name: values.name,
+          email: values.email,
+          passwordHash,
+          role: "TECHNICIAN",
+          status: values.status,
+          phone: values.phone,
+          territory: values.territory,
+          specialization: values.specialization,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Technician",
+          entityId: created.id,
+          after: { name: created.name, email: created.email, role: created.role, status: created.status },
+        }),
+      });
+
+      return created;
     });
 
     revalidatePath("/technicians");
@@ -97,18 +113,33 @@ export async function updateTechnicianAction(input: unknown) {
       return actionFailure("Technician not found");
     }
 
-    await db.user.update({
-      where: { id: values.id },
-      data: {
-        ...(values.name !== undefined ? { name: values.name } : {}),
-        ...(values.email !== undefined ? { email: values.email } : {}),
-        ...(values.phone !== undefined ? { phone: values.phone } : {}),
-        ...(values.territory !== undefined ? { territory: values.territory } : {}),
-        ...(values.specialization !== undefined ? { specialization: values.specialization } : {}),
-        ...(values.status !== undefined ? { status: values.status } : {}),
-        ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
-      },
-    });
+    const updateData = {
+      ...(values.name !== undefined ? { name: values.name } : {}),
+      ...(values.email !== undefined ? { email: values.email } : {}),
+      ...(values.phone !== undefined ? { phone: values.phone } : {}),
+      ...(values.territory !== undefined ? { territory: values.territory } : {}),
+      ...(values.specialization !== undefined ? { specialization: values.specialization } : {}),
+      ...(values.status !== undefined ? { status: values.status } : {}),
+      ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
+    };
+
+    await db.$transaction([
+      db.user.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Technician",
+          entityId: values.id,
+          before: { name: existing.name, email: existing.email, status: existing.status },
+          after: {
+            name: values.name ?? existing.name,
+            email: values.email ?? existing.email,
+            status: values.status ?? existing.status,
+          },
+        }),
+      }),
+    ]);
 
     revalidatePath("/technicians");
     revalidatePath(`/technicians/${values.id}`);
@@ -130,6 +161,8 @@ export async function deleteTechnicianAction(id: string) {
       },
       select: {
         id: true,
+        name: true,
+        email: true,
       },
     });
 
@@ -158,11 +191,18 @@ export async function deleteTechnicianAction(id: string) {
       );
     }
 
-    await db.user.delete({
-      where: {
-        id,
-      },
-    });
+    await db.$transaction([
+      db.user.delete({ where: { id } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Technician",
+          entityId: id,
+          before: { name: existing.name, email: existing.email },
+        }),
+      }),
+    ]);
 
     revalidatePath("/technicians");
     revalidatePath("/settings");

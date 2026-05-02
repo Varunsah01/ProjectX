@@ -5,9 +5,11 @@ import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { addMonthsPreservingDay } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import {
   notifyInvoiceReminder,
   notifyJobAssigned,
+  notifyTicketAssigned,
 } from "@/lib/notifications";
 import {
   actionFailure,
@@ -46,20 +48,30 @@ export async function bulkUpdateCustomerStatusAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkCustomerStatusSchema.parse(input);
-    const result = await db.customer.updateMany({
-      where: {
-        organizationId: user.organizationId,
-        id: {
-          in: values.ids,
+
+    await db.$transaction([
+      db.customer.updateMany({
+        where: {
+          organizationId: user.organizationId,
+          id: { in: values.ids },
         },
-      },
-      data: {
-        status: values.status.toUpperCase() as never,
-      },
-    });
+        data: {
+          status: values.status.toUpperCase() as never,
+        },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Customer",
+          entityId: "bulk",
+          after: { ids: values.ids, status: values.status.toUpperCase(), count: values.ids.length },
+        }),
+      }),
+    ]);
 
     await revalidatePaths(["/customers", "/"]);
-    return actionSuccess({ count: result.count });
+    return actionSuccess({ count: values.ids.length });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to update customers"));
   }
@@ -114,22 +126,30 @@ export async function bulkMarkInvoicesPaidAction(input: unknown) {
       select: {
         id: true,
         amount: true,
+        status: true,
       },
     });
 
-    await db.$transaction(
-      invoices.map((invoice) =>
+    await db.$transaction([
+      ...invoices.map((invoice) =>
         db.invoice.update({
-          where: {
-            id: invoice.id,
-          },
-          data: {
-            paidAmount: invoice.amount,
-            status: "PAID",
-          },
+          where: { id: invoice.id },
+          data: { paidAmount: invoice.amount, status: "PAID" },
         }),
       ),
-    );
+      ...invoices.map((invoice) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Invoice",
+            entityId: invoice.id,
+            before: { status: invoice.status },
+            after: { status: "PAID", paidAmount: invoice.amount },
+          }),
+        }),
+      ),
+    ]);
 
     await revalidatePaths(["/invoices", "/collections", "/"]);
     return actionSuccess({ count: invoices.length });
@@ -148,9 +168,7 @@ export async function bulkAssignJobsAction(input: unknown) {
         organizationId: user.organizationId,
         role: "TECHNICIAN",
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     if (!technician) {
@@ -160,32 +178,38 @@ export async function bulkAssignJobsAction(input: unknown) {
     const jobs = await db.job.findMany({
       where: {
         organizationId: user.organizationId,
-        id: {
-          in: values.ids,
-        },
-        status: {
-          notIn: ["COMPLETED", "CANCELLED"],
-        },
+        id: { in: values.ids },
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
       },
-      select: {
-        id: true,
-        status: true,
-      },
+      select: { id: true, status: true, technicianId: true },
     });
 
-    await db.$transaction(
-      jobs.map((job) =>
+    await db.$transaction([
+      ...jobs.map((job) =>
         db.job.update({
-          where: {
-            id: job.id,
-          },
+          where: { id: job.id },
           data: {
             technicianId: values.technicianId,
             status: job.status === "PENDING" ? "ASSIGNED" : job.status,
           },
         }),
       ),
-    );
+      ...jobs.map((job) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Job",
+            entityId: job.id,
+            before: { technicianId: job.technicianId, status: job.status },
+            after: {
+              technicianId: values.technicianId,
+              status: job.status === "PENDING" ? "ASSIGNED" : job.status,
+            },
+          }),
+        }),
+      ),
+    ]);
 
     await Promise.all(jobs.map((job) => notifyJobAssigned(job.id)));
 
@@ -200,23 +224,41 @@ export async function bulkCancelJobsAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = bulkInvoiceIdsSchema.parse(input);
-    const result = await db.job.updateMany({
+
+    const jobs = await db.job.findMany({
       where: {
         organizationId: user.organizationId,
-        id: {
-          in: values.ids,
-        },
-        status: {
-          notIn: ["COMPLETED", "CANCELLED"],
-        },
+        id: { in: values.ids },
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
       },
-      data: {
-        status: "CANCELLED",
-      },
+      select: { id: true, status: true },
     });
 
+    await db.$transaction([
+      db.job.updateMany({
+        where: {
+          organizationId: user.organizationId,
+          id: { in: values.ids },
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        data: { status: "CANCELLED" },
+      }),
+      ...jobs.map((job) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Job",
+            entityId: job.id,
+            before: { status: job.status },
+            after: { status: "CANCELLED" },
+          }),
+        }),
+      ),
+    ]);
+
     await revalidatePaths(["/jobs", "/technicians", "/"]);
-    return actionSuccess({ count: result.count });
+    return actionSuccess({ count: jobs.length });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to cancel jobs"));
   }
@@ -232,9 +274,7 @@ export async function bulkAssignTicketsAction(input: unknown) {
         organizationId: user.organizationId,
         role: "TECHNICIAN",
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     if (!technician) {
@@ -244,25 +284,16 @@ export async function bulkAssignTicketsAction(input: unknown) {
     const tickets = await db.ticket.findMany({
       where: {
         organizationId: user.organizationId,
-        id: {
-          in: values.ids,
-        },
-        status: {
-          notIn: ["CLOSED", "RESOLVED"],
-        },
+        id: { in: values.ids },
+        status: { notIn: ["CLOSED", "RESOLVED"] },
       },
-      select: {
-        id: true,
-        status: true,
-      },
+      select: { id: true, status: true, assignedToId: true },
     });
 
-    await db.$transaction(
-      tickets.map((ticket) =>
+    await db.$transaction([
+      ...tickets.map((ticket) =>
         db.ticket.update({
-          where: {
-            id: ticket.id,
-          },
+          where: { id: ticket.id },
           data: {
             assignedToId: values.assignedToId,
             status: ticket.status === "OPEN" ? "ASSIGNED" : ticket.status,
@@ -277,8 +308,24 @@ export async function bulkAssignTicketsAction(input: unknown) {
           },
         }),
       ),
-    );
+      ...tickets.map((ticket) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Ticket",
+            entityId: ticket.id,
+            before: { assignedToId: ticket.assignedToId, status: ticket.status },
+            after: {
+              assignedToId: values.assignedToId,
+              status: ticket.status === "OPEN" ? "ASSIGNED" : ticket.status,
+            },
+          }),
+        }),
+      ),
+    ]);
 
+    await Promise.all(tickets.map((ticket) => notifyTicketAssigned(ticket.id)));
     await revalidatePaths(["/complaints", "/technicians", "/"]);
     return actionSuccess({ count: tickets.length });
   } catch (error) {
@@ -293,25 +340,16 @@ export async function bulkCloseTicketsAction(input: unknown) {
     const tickets = await db.ticket.findMany({
       where: {
         organizationId: user.organizationId,
-        id: {
-          in: values.ids,
-        },
-        status: {
-          notIn: ["CLOSED"],
-        },
+        id: { in: values.ids },
+        status: { notIn: ["CLOSED"] },
       },
-      select: {
-        id: true,
-        resolvedAt: true,
-      },
+      select: { id: true, resolvedAt: true, status: true },
     });
 
-    await db.$transaction(
-      tickets.map((ticket) =>
+    await db.$transaction([
+      ...tickets.map((ticket) =>
         db.ticket.update({
-          where: {
-            id: ticket.id,
-          },
+          where: { id: ticket.id },
           data: {
             status: "CLOSED",
             resolvedAt: ticket.resolvedAt ?? new Date(),
@@ -326,7 +364,19 @@ export async function bulkCloseTicketsAction(input: unknown) {
           },
         }),
       ),
-    );
+      ...tickets.map((ticket) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Ticket",
+            entityId: ticket.id,
+            before: { status: ticket.status },
+            after: { status: "CLOSED" },
+          }),
+        }),
+      ),
+    ]);
 
     await revalidatePaths(["/complaints", "/"]);
     return actionSuccess({ count: tickets.length });
@@ -342,23 +392,17 @@ export async function bulkRenewContractsAction(input: unknown) {
     const contracts = await db.contract.findMany({
       where: {
         organizationId: user.organizationId,
-        id: {
-          in: values.ids,
-        },
+        id: { in: values.ids },
       },
       include: {
-        plan: {
-          select: {
-            durationMonths: true,
-          },
-        },
+        plan: { select: { durationMonths: true } },
       },
     });
 
     const renewableContracts = contracts.filter((contract) => Boolean(contract.plan));
 
-    await db.$transaction(
-      renewableContracts.map((contract) => {
+    await db.$transaction([
+      ...renewableContracts.map((contract) => {
         const renewalStartDate = new Date(contract.endDate);
         renewalStartDate.setDate(renewalStartDate.getDate() + 1);
         renewalStartDate.setHours(0, 0, 0, 0);
@@ -377,9 +421,7 @@ export async function bulkRenewContractsAction(input: unknown) {
         renewalEndDate.setDate(renewalEndDate.getDate() - 1);
 
         return db.contract.update({
-          where: {
-            id: contract.id,
-          },
+          where: { id: contract.id },
           data: {
             endDate: renewalEndDate,
             nextBillingDate: renewalStartDate,
@@ -389,7 +431,19 @@ export async function bulkRenewContractsAction(input: unknown) {
           },
         });
       }),
-    );
+      ...renewableContracts.map((contract) =>
+        db.auditLog.create({
+          data: buildAuditLog({
+            actor: user,
+            action: "STATUS_CHANGE",
+            entity: "Contract",
+            entityId: contract.id,
+            before: { status: contract.status, endDate: contract.endDate },
+            after: { status: "ACTIVE", visitsUsed: 0 },
+          }),
+        }),
+      ),
+    ]);
 
     await revalidatePaths(["/contracts", "/"]);
     return actionSuccess({ count: renewableContracts.length });

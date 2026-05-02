@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
-import { notifyJobAssigned, notifyJobCompleted } from "@/lib/notifications";
+import { buildAuditLog } from "@/lib/audit/log";
+import { notifyJobAssigned, notifyJobCompleted, notifyJobRescheduled } from "@/lib/notifications";
 import { cleanOptional, getNextNumber, parseDateInput } from "@/lib/actions/helpers";
 import { getJobDetailForOrganization, listJobsForOrganization } from "@/lib/queries/jobs";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
@@ -38,20 +39,40 @@ export async function createJobAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER, UserRole.AGENT]);
     const values = createJobSchema.parse(input);
-    const job = await db.job.create({
-      data: {
-        organizationId: user.organizationId,
-        jobNumber: await getNextNumber("JOB", user.organizationId, "job"),
-        ticketId: values.ticketId || null,
-        customerId: values.customerId,
-        assetId: values.assetId || null,
-        technicianId: values.technicianId,
-        type: values.type.toUpperCase() as never,
-        status: values.status.toUpperCase() as never,
-        scheduledDate: parseDateInput(values.scheduledDate),
-        notes: cleanOptional(values.notes),
-        serviceReport: cleanOptional(values.serviceReport),
-      },
+
+    const job = await db.$transaction(async (tx) => {
+      const created = await tx.job.create({
+        data: {
+          organizationId: user.organizationId,
+          jobNumber: await getNextNumber("JOB", user.organizationId, "job"),
+          ticketId: values.ticketId || null,
+          customerId: values.customerId,
+          assetId: values.assetId || null,
+          technicianId: values.technicianId,
+          type: values.type.toUpperCase() as never,
+          status: values.status.toUpperCase() as never,
+          scheduledDate: parseDateInput(values.scheduledDate),
+          notes: cleanOptional(values.notes),
+          serviceReport: cleanOptional(values.serviceReport),
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "Job",
+          entityId: created.id,
+          after: {
+            jobNumber: created.jobNumber,
+            type: created.type,
+            status: created.status,
+            technicianId: created.technicianId,
+          },
+        }),
+      });
+
+      return created;
     });
 
     const detail = await getJobDetailForOrganization(user.organizationId, job.id);
@@ -77,27 +98,52 @@ export async function updateJobAction(input: unknown) {
       return actionFailure("Job not found");
     }
 
-    await db.job.update({
-      where: { id: values.id },
-      data: {
-        ...(values.ticketId !== undefined ? { ticketId: values.ticketId || null } : {}),
-        ...(values.customerId ? { customerId: values.customerId } : {}),
-        ...(values.assetId !== undefined ? { assetId: values.assetId || null } : {}),
-        ...(values.technicianId ? { technicianId: values.technicianId } : {}),
-        ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
-        ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
-        ...(values.scheduledDate !== undefined ? { scheduledDate: parseDateInput(values.scheduledDate) } : {}),
-        ...(values.completedAt !== undefined
-          ? { completedAt: values.completedAt ? new Date(values.completedAt) : null }
-          : {}),
-        ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
-        ...(values.serviceReport !== undefined ? { serviceReport: cleanOptional(values.serviceReport) } : {}),
-      },
-    });
+    const updateData = {
+      ...(values.ticketId !== undefined ? { ticketId: values.ticketId || null } : {}),
+      ...(values.customerId ? { customerId: values.customerId } : {}),
+      ...(values.assetId !== undefined ? { assetId: values.assetId || null } : {}),
+      ...(values.technicianId ? { technicianId: values.technicianId } : {}),
+      ...(values.type !== undefined ? { type: values.type.toUpperCase() as never } : {}),
+      ...(values.status !== undefined ? { status: values.status.toUpperCase() as never } : {}),
+      ...(values.scheduledDate !== undefined ? { scheduledDate: parseDateInput(values.scheduledDate) } : {}),
+      ...(values.completedAt !== undefined
+        ? { completedAt: values.completedAt ? new Date(values.completedAt) : null }
+        : {}),
+      ...(values.notes !== undefined ? { notes: cleanOptional(values.notes) } : {}),
+      ...(values.serviceReport !== undefined ? { serviceReport: cleanOptional(values.serviceReport) } : {}),
+    };
+
+    await db.$transaction([
+      db.job.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Job",
+          entityId: values.id,
+          before: {
+            type: existing.type,
+            status: existing.status,
+            technicianId: existing.technicianId,
+          },
+          after: {
+            type: values.type !== undefined ? values.type.toUpperCase() : existing.type,
+            status: values.status !== undefined ? values.status.toUpperCase() : existing.status,
+            technicianId: values.technicianId ?? existing.technicianId,
+          },
+        }),
+      }),
+    ]);
 
     const detail = await getJobDetailForOrganization(user.organizationId, values.id);
     if (values.technicianId !== undefined && values.technicianId !== existing.technicianId) {
       await notifyJobAssigned(values.id);
+    }
+    if (
+      values.scheduledDate !== undefined &&
+      parseDateInput(values.scheduledDate).getTime() !== existing.scheduledDate.getTime()
+    ) {
+      await notifyJobRescheduled(values.id);
     }
     revalidatePath("/jobs");
     revalidatePath(`/jobs/${values.id}`);
@@ -118,14 +164,26 @@ export async function completeJobAction(id: string, serviceReport?: string) {
       return actionFailure("Job not found");
     }
 
-    await db.job.update({
-      where: { id },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-        ...(serviceReport ? { serviceReport } : {}),
-      },
-    });
+    await db.$transaction([
+      db.job.update({
+        where: { id },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          ...(serviceReport ? { serviceReport } : {}),
+        },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Job",
+          entityId: id,
+          before: { status: existing.status },
+          after: { status: "COMPLETED" },
+        }),
+      }),
+    ]);
 
     const detail = await getJobDetailForOrganization(user.organizationId, id);
     await notifyJobCompleted(id);
@@ -140,13 +198,27 @@ export async function completeJobAction(id: string, serviceReport?: string) {
 export async function deleteJobAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
-    const deleted = await db.job.deleteMany({
+
+    const existing = await db.job.findFirst({
       where: { id, organizationId: user.organizationId },
     });
 
-    if (!deleted.count) {
+    if (!existing) {
       return actionFailure("Job not found");
     }
+
+    await db.$transaction([
+      db.job.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "Job",
+          entityId: id,
+          before: { jobNumber: existing.jobNumber, type: existing.type, status: existing.status },
+        }),
+      }),
+    ]);
 
     revalidatePath("/jobs");
     return actionSuccess({ id });

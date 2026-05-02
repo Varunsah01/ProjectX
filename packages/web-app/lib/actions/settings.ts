@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
+import { buildAuditLog } from "@/lib/audit/log";
 import { getSettingsDataForOrganization } from "@/lib/queries/settings";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import {
@@ -33,28 +34,58 @@ export async function updateBusinessProfileAction(input: unknown) {
   try {
     const user = await requireRole([UserRole.ADMIN]);
     const values = updateBusinessProfileSchema.parse(input);
-    await db.organization.update({
+
+    const existing = await db.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
-      data: {
-        name: values.businessName,
-        phone: values.phone,
-        email: values.email,
-        address: values.address,
-        city: values.city,
-        gstin: values.gstin || null,
-        placeOfBusinessState: values.placeOfBusinessState || null,
-        legalName: values.legalName || null,
-        logo: values.logo || null,
-        signatureUrl: values.signatureUrl || null,
-        pan: values.pan || null,
-        bankName: values.bankName || null,
-        bankAccountNumber: values.bankAccountNumber || null,
-        bankIfsc: values.bankIfsc || null,
-        bankBranch: values.bankBranch || null,
-        upiId: values.upiId || null,
-        invoiceTerms: values.invoiceTerms || null,
-      },
     });
+
+    const updateData = {
+      name: values.businessName,
+      phone: values.phone,
+      email: values.email,
+      address: values.address,
+      city: values.city,
+      gstin: values.gstin || null,
+      placeOfBusinessState: values.placeOfBusinessState || null,
+      legalName: values.legalName || null,
+      logo: values.logo || null,
+      signatureUrl: values.signatureUrl || null,
+      pan: values.pan || null,
+      bankName: values.bankName || null,
+      bankAccountNumber: values.bankAccountNumber || null,
+      bankIfsc: values.bankIfsc || null,
+      bankBranch: values.bankBranch || null,
+      upiId: values.upiId || null,
+      invoiceTerms: values.invoiceTerms || null,
+    };
+
+    await db.$transaction([
+      db.organization.update({ where: { id: user.organizationId }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Organization",
+          entityId: user.organizationId,
+          before: {
+            name: existing.name,
+            phone: existing.phone,
+            email: existing.email,
+            address: existing.address,
+            city: existing.city,
+            gstin: existing.gstin,
+          },
+          after: {
+            name: values.businessName,
+            phone: values.phone,
+            email: values.email,
+            address: values.address,
+            city: values.city,
+            gstin: values.gstin || null,
+          },
+        }),
+      }),
+    ]);
 
     const data = await getSettingsDataForOrganization(user.organizationId);
     revalidatePath("/settings");
@@ -71,15 +102,30 @@ export async function createTeamMemberAction(input: unknown) {
     const values = createTeamMemberSchema.parse(input);
     const generatedPassword = values.password ?? generatePassword();
     const passwordHash = await bcrypt.hash(generatedPassword, 10);
-    const member = await db.user.create({
-      data: {
-        organizationId: user.organizationId,
-        name: values.name,
-        email: values.email,
-        passwordHash,
-        role: values.role.toUpperCase() as never,
-        status: values.status,
-      },
+
+    const member = await db.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          organizationId: user.organizationId,
+          name: values.name,
+          email: values.email,
+          passwordHash,
+          role: values.role.toUpperCase() as never,
+          status: values.status,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "CREATE",
+          entity: "TeamMember",
+          entityId: created.id,
+          after: { name: created.name, email: created.email, role: created.role },
+        }),
+      });
+
+      return created;
     });
 
     revalidatePath("/settings");
@@ -152,15 +198,29 @@ export async function removeTeamMemberAction(id: string) {
       db.customerNote.count({ where: { organizationId: user.organizationId, userId: id } }),
     ]);
 
-    if (jobCount > 0 || timelineCount > 0 || auditCount > 0 || noteCount > 0) {
-      // Soft-delete: preserve historical records, filter from team list
-      await db.user.update({
-        where: { id },
-        data: { status: "REMOVED", tokenVersion: { increment: 1 } },
+    const hasHistory = jobCount > 0 || timelineCount > 0 || auditCount > 0 || noteCount > 0;
+
+    await db.$transaction(async (tx) => {
+      if (hasHistory) {
+        await tx.user.update({
+          where: { id },
+          data: { status: "REMOVED", tokenVersion: { increment: 1 } },
+        });
+      } else {
+        await tx.user.delete({ where: { id } });
+      }
+
+      await tx.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "DELETE",
+          entity: "TeamMember",
+          entityId: id,
+          before: { name: existing.name, email: existing.email, role: existing.role },
+        }),
       });
-    } else {
-      await db.user.delete({ where: { id } });
-    }
+    });
+
     await db.session.deleteMany({ where: { userId: id } });
 
     revalidatePath("/settings");
@@ -184,17 +244,33 @@ export async function updateTeamMemberAction(input: unknown) {
 
     const shouldInvalidateSessions = Boolean(values.password || values.role);
 
-    await db.user.update({
-      where: { id: values.id },
-      data: {
-        ...(values.name !== undefined ? { name: values.name } : {}),
-        ...(values.email !== undefined ? { email: values.email } : {}),
-        ...(values.role !== undefined ? { role: values.role.toUpperCase() as never } : {}),
-        ...(values.status !== undefined ? { status: values.status } : {}),
-        ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
-        ...(shouldInvalidateSessions ? { tokenVersion: { increment: 1 } } : {}),
-      },
-    });
+    const updateData = {
+      ...(values.name !== undefined ? { name: values.name } : {}),
+      ...(values.email !== undefined ? { email: values.email } : {}),
+      ...(values.role !== undefined ? { role: values.role.toUpperCase() as never } : {}),
+      ...(values.status !== undefined ? { status: values.status } : {}),
+      ...(values.password ? { passwordHash: await bcrypt.hash(values.password, 10) } : {}),
+      ...(shouldInvalidateSessions ? { tokenVersion: { increment: 1 } } : {}),
+    };
+
+    await db.$transaction([
+      db.user.update({ where: { id: values.id }, data: updateData }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "TeamMember",
+          entityId: values.id,
+          before: { name: existing.name, email: existing.email, role: existing.role, status: existing.status },
+          after: {
+            name: values.name ?? existing.name,
+            email: values.email ?? existing.email,
+            role: values.role !== undefined ? values.role.toUpperCase() : existing.role,
+            status: values.status ?? existing.status,
+          },
+        }),
+      }),
+    ]);
 
     if (shouldInvalidateSessions) {
       await db.session.deleteMany({ where: { userId: values.id } });
