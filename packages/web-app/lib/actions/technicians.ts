@@ -59,6 +59,14 @@ export async function createTechnicianAction(input: unknown) {
         },
       });
 
+      await tx.orgMembership.create({
+        data: {
+          userId: created.id,
+          organizationId: user.organizationId,
+          role: "TECHNICIAN",
+        },
+      });
+
       await tx.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -191,9 +199,12 @@ export async function deleteTechnicianAction(id: string) {
       );
     }
 
-    await db.$transaction([
-      db.user.delete({ where: { id } }),
-      db.auditLog.create({
+    await db.$transaction(async (tx) => {
+      await tx.orgMembership.deleteMany({
+        where: { userId: id, organizationId: user.organizationId },
+      });
+      await tx.user.delete({ where: { id } });
+      await tx.auditLog.create({
         data: buildAuditLog({
           actor: user,
           action: "DELETE",
@@ -201,8 +212,8 @@ export async function deleteTechnicianAction(id: string) {
           entityId: id,
           before: { name: existing.name, email: existing.email },
         }),
-      }),
-    ]);
+      });
+    });
 
     revalidatePath("/technicians");
     revalidatePath("/settings");

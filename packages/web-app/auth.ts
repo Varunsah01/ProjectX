@@ -46,6 +46,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return {};
       }
 
+      // Verify the active membership still exists
+      if (token.activeOrgId) {
+        const membership = await db.orgMembership.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: token.sub,
+              organizationId: token.activeOrgId as string,
+            },
+          },
+          select: { role: true },
+        });
+
+        if (!membership) {
+          // Membership was removed — invalidate session
+          return {};
+        }
+
+        // Keep role in sync with DB
+        token.activeRole = membership.role;
+      }
+
       token.tokenVersionCheckedAt = Date.now();
       token.isEmailVerified = !!dbUser.emailVerified;
       return token;
@@ -78,8 +99,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: true,
             email: true,
             passwordHash: true,
-            role: true,
-            organizationId: true,
             status: true,
             image: true,
             avatar: true,
@@ -98,13 +117,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // Fetch all org memberships
+        const memberships = await db.orgMembership.findMany({
+          where: { userId: user.id },
+          include: {
+            organization: { select: { name: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        });
+
+        if (memberships.length === 0) {
+          return null;
+        }
+
+        const firstMembership = memberships[0];
+
         return {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role,
-          organizationId: user.organizationId,
           image: user.image ?? user.avatar ?? null,
+          activeOrgId: firstMembership.organizationId,
+          activeRole: firstMembership.role,
+          memberships: memberships.map((m) => ({
+            organizationId: m.organizationId,
+            role: m.role,
+            orgName: m.organization.name,
+          })),
           tokenVersion: user.tokenVersion,
           isEmailVerified: !!user.emailVerified,
         };

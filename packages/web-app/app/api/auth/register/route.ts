@@ -87,6 +87,14 @@ export async function POST(request: Request) {
         },
       });
 
+      await tx.orgMembership.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          role: UserRole.ADMIN,
+        },
+      });
+
       return { userId: user.id };
     });
 

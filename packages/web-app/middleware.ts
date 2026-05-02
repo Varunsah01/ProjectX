@@ -3,20 +3,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import authConfig from "@/auth.config";
 import { requestContext } from "@/lib/request-context";
 import { applySecurityHeaders } from "@/lib/security/headers";
-import { rateLimit } from "@/lib/security/rate-limit";
+import { rateLimit, rateLimitOrg, rateLimitUser, type RateLimitResult } from "@/lib/security/rate-limit";
 import { canAccessPath } from "@/lib/security/rbac";
 
 const { auth } = NextAuth(authConfig);
 
 type AuthedRequest = NextRequest & { auth: Session | null };
 
-const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"]);
+const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/accept-invitation"]);
 const csrfExemptPrefixes = [
   "/api/auth/",
   "/api/mobile/v1/",
   "/api/mobile/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
+  "/api/cron/contract-renewals",
+  "/api/cron/invoice-reminders",
   "/api/health",
   "/api/status",
 ];
@@ -24,9 +26,19 @@ const rateLimitExemptPrefixes = [
   "/api/auth/",
   "/api/webhooks/razorpay",
   "/api/cron/generate-invoices",
+  "/api/cron/contract-renewals",
+  "/api/cron/invoice-reminders",
   "/api/health",
   "/api/status",
+  "/api/mobile/v1/openapi.json",
 ];
+
+const WINDOW_MS = 60_000;
+const MOBILE_ORG_MULTIPLIER = 10;
+
+const IP_LIMITS   = { mutation: 30,  query: 120   } as const;
+const ORG_LIMITS  = { mutation: 600, query: 3_000  } as const;
+const USER_LIMITS = { mutation: 120, query: 600    } as const;
 
 function isMutationMethod(method: string) {
   return ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
@@ -45,6 +57,20 @@ function buildApiError(message: string, status: number) {
       { status },
     ),
   );
+}
+
+type RateLimitScope = "ip" | "org" | "user";
+
+function build429(scope: RateLimitScope, result: RateLimitResult): NextResponse {
+  const response = buildApiError("Too many requests. Please try again shortly.", 429);
+  const retryAfterSeconds = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
+  response.headers.set("Retry-After",                        String(retryAfterSeconds));
+  response.headers.set("X-RateLimit-Limit",                  String(result.limit));
+  response.headers.set("X-RateLimit-Remaining",              String(result.remaining));
+  response.headers.set("X-RateLimit-Reset",                  String(Math.ceil(result.resetAt / 1000)));
+  response.headers.set("X-RateLimit-Scope",                  scope);
+  response.headers.set(`X-RateLimit-Remaining-${scope}`,     String(result.remaining));
+  return response;
 }
 
 export default auth(async (request) => {
@@ -72,39 +98,38 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "anonymous";
 
-  if (
-    isApiRoute &&
-    !isExemptPath(pathname, rateLimitExemptPrefixes)
-  ) {
-    const limit = isMutationMethod(request.method) ? 30 : 120;
-    const rateLimitResult = await rateLimit(
-      `${requestIp}:${pathname}:${request.method.toUpperCase()}`,
-      {
-        limit,
-        windowMs: 60_000,
-      },
-    );
+  if (isApiRoute && !isExemptPath(pathname, rateLimitExemptPrefixes)) {
+    const isMobile   = pathname.startsWith("/api/mobile/");
+    const isMutation = isMutationMethod(request.method);
+    const method     = request.method.toUpperCase();
+    const scopeKey   = isMutation ? "mutation" : "query";
 
-    if (!rateLimitResult.allowed) {
-      const response = buildApiError(
-        "Too many requests. Please try again shortly.",
-        429,
-      );
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000),
-      );
-      response.headers.set("Retry-After", String(retryAfterSeconds));
-      response.headers.set("X-RateLimit-Limit", String(rateLimitResult.limit));
-      response.headers.set(
-        "X-RateLimit-Remaining",
-        String(rateLimitResult.remaining),
-      );
-      response.headers.set(
-        "X-RateLimit-Reset",
-        String(Math.ceil(rateLimitResult.resetAt / 1000)),
-      );
-      return response;
+    // IP ────────────────────────────────────────────────────────────────────
+    const ipResult = await rateLimit(
+      `${requestIp}:${pathname}:${method}`,
+      { limit: IP_LIMITS[scopeKey], windowMs: WINDOW_MS },
+    );
+    if (!ipResult.allowed) return build429("ip", ipResult);
+
+    // Org ───────────────────────────────────────────────────────────────────
+    const orgId = request.auth?.user?.activeOrgId;
+    if (orgId) {
+      const orgBase   = ORG_LIMITS[scopeKey];
+      const orgResult = await rateLimitOrg(orgId, method, {
+        limit: isMobile ? orgBase * MOBILE_ORG_MULTIPLIER : orgBase,
+        windowMs: WINDOW_MS,
+      });
+      if (!orgResult.allowed) return build429("org", orgResult);
+    }
+
+    // User ──────────────────────────────────────────────────────────────────
+    const userId = request.auth?.user?.id;
+    if (userId) {
+      const userResult = await rateLimitUser(userId, method, {
+        limit: USER_LIMITS[scopeKey],
+        windowMs: WINDOW_MS,
+      });
+      if (!userResult.allowed) return build429("user", userResult);
     }
   }
 
@@ -142,12 +167,12 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
   }
 
   if (
-    request.auth?.user?.role &&
+    request.auth?.user?.activeRole &&
     !isApiRoute &&
-    !canAccessPath(request.auth.user.role, pathname)
+    !canAccessPath(request.auth.user.activeRole, pathname)
   ) {
     const fallbackUrl =
-      request.auth.user.role === "TECHNICIAN" ? "/jobs" : "/";
+      request.auth.user.activeRole === "TECHNICIAN" ? "/jobs" : "/";
     return applySecurityHeaders(
       NextResponse.redirect(new URL(fallbackUrl, nextUrl)),
     );
@@ -155,15 +180,15 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
 
   const requestHeaders = new Headers(request.headers);
 
-  if (request.auth?.user.organizationId) {
+  if (request.auth?.user.activeOrgId) {
     requestHeaders.set(
       "x-organization-id",
-      request.auth.user.organizationId,
+      request.auth.user.activeOrgId,
     );
   }
 
-  if (request.auth?.user?.role) {
-    requestHeaders.set("x-user-role", request.auth.user.role);
+  if (request.auth?.user?.activeRole) {
+    requestHeaders.set("x-user-role", request.auth.user.activeRole);
   }
 
   const response = NextResponse.next({

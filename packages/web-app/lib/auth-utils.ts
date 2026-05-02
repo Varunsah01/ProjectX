@@ -14,19 +14,39 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return db.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: session.user.id },
     select: {
       id: true,
       name: true,
       email: true,
-      role: true,
       status: true,
-      organizationId: true,
       avatar: true,
       image: true,
+      memberships: {
+        where: { organizationId: session.user.activeOrgId },
+        select: { organizationId: true, role: true },
+        take: 1,
+      },
     },
   });
+
+  if (!user || user.memberships.length === 0) {
+    return null;
+  }
+
+  const membership = user.memberships[0];
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    status: user.status,
+    avatar: user.avatar,
+    image: user.image,
+    organizationId: membership.organizationId,
+    role: membership.role,
+  };
 }
 
 export async function requireAuth() {

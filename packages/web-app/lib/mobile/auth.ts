@@ -8,8 +8,6 @@ const MOBILE_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
 
 type TechnicianRecord = {
   id: string;
-  organizationId: string;
-  role: UserRole;
   name: string;
   email: string;
   passwordHash: string;
@@ -57,8 +55,6 @@ type TechnicianIdentifierType = "phone" | "employee_id";
 
 const technicianSelect = {
   id: true,
-  organizationId: true,
-  role: true,
   name: true,
   email: true,
   passwordHash: true,
@@ -76,10 +72,13 @@ const technicianSelect = {
   skills: true,
 } as const;
 
-function buildMobileUser(record: TechnicianRecord): MobileSessionUser {
+function buildMobileUser(
+  record: TechnicianRecord,
+  membershipOrgId: string,
+): MobileSessionUser {
   return {
     id: record.id,
-    organizationId: record.organizationId,
+    organizationId: membershipOrgId,
     role: "technician",
     name: record.name,
     email: record.email,
@@ -134,19 +133,24 @@ async function findTechnicianByPhone(phone: string) {
     return null;
   }
 
-  const candidates = await db.user.findMany({
-    where: {
-      role: UserRole.TECHNICIAN,
-      phone: {
-        not: null,
-      },
+  // Find users with TECHNICIAN memberships
+  const candidates = await db.orgMembership.findMany({
+    where: { role: UserRole.TECHNICIAN },
+    include: {
+      user: { select: technicianSelect },
     },
-    select: technicianSelect,
   });
 
-  return (
-    candidates.find((candidate) => normalizePhone(candidate.phone) === normalizedPhone) ?? null
-  );
+  for (const candidate of candidates) {
+    if (normalizePhone(candidate.user.phone) === normalizedPhone) {
+      return {
+        ...candidate.user,
+        membershipOrgId: candidate.organizationId,
+      };
+    }
+  }
+
+  return null;
 }
 
 async function findTechnicianByEmployeeId(employeeId: string) {
@@ -161,17 +165,28 @@ async function findTechnicianByIdentifier(
     return findTechnicianByPhone(identifier);
   }
 
-  return findTechnicianByEmployeeId(identifier);
+  const user = await findTechnicianByEmployeeId(identifier);
+  if (!user) return null;
+
+  // Get the first TECHNICIAN membership
+  const membership = await db.orgMembership.findFirst({
+    where: { userId: user.id, role: UserRole.TECHNICIAN },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!membership) return null;
+
+  return { ...user, membershipOrgId: membership.organizationId };
 }
 
 export async function findActiveTechnicianByPhone(phone: string) {
-  const user = await findTechnicianByPhone(phone);
+  const result = await findTechnicianByPhone(phone);
 
-  if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {
+  if (!result || result.status === "INACTIVE") {
     return null;
   }
 
-  return buildMobileUser(user);
+  return buildMobileUser(result, result.membershipOrgId);
 }
 
 export async function authenticateTechnician({
@@ -194,19 +209,19 @@ export async function authenticateTechnician({
     return null;
   }
 
-  const user = await findTechnicianByIdentifier(identifierType, trimmedIdentifier);
+  const result = await findTechnicianByIdentifier(identifierType, trimmedIdentifier);
 
-  if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {
+  if (!result || result.status === "INACTIVE") {
     return null;
   }
 
-  const passwordMatches = await compare(trimmedSecret, user.passwordHash);
+  const passwordMatches = await compare(trimmedSecret, result.passwordHash);
 
   if (!passwordMatches) {
     return null;
   }
 
-  return buildMobileUser(user);
+  return buildMobileUser(result, result.membershipOrgId);
 }
 
 export async function createMobileSession(userId: string) {
@@ -256,7 +271,20 @@ export async function getMobileSession(request: Request): Promise<MobileSessionR
 
   const user = await findTechnicianById(session.userId);
 
-  if (!user || user.role !== UserRole.TECHNICIAN || user.status === "INACTIVE") {
+  if (!user || user.status === "INACTIVE") {
+    await db.session.deleteMany({
+      where: { sessionToken: token },
+    });
+    return null;
+  }
+
+  // Get the first TECHNICIAN membership for org context
+  const membership = await db.orgMembership.findFirst({
+    where: { userId: session.userId, role: UserRole.TECHNICIAN },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!membership) {
     await db.session.deleteMany({
       where: { sessionToken: token },
     });
@@ -265,7 +293,7 @@ export async function getMobileSession(request: Request): Promise<MobileSessionR
 
   return {
     token,
-    user: buildMobileUser(user),
+    user: buildMobileUser(user, membership.organizationId),
     csrfToken: session.csrfToken,
   };
 }

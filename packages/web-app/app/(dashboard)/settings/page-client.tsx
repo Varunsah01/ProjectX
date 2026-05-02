@@ -26,6 +26,11 @@ import {
   updateBusinessProfileAction,
   updateTeamMemberAction,
 } from "@/lib/actions/settings";
+import {
+  createInvitationAction,
+  listPendingInvitationsAction,
+  revokeInvitationAction,
+} from "@/lib/actions/invitations";
 import { updateNotificationSettingsAction } from "@/lib/actions/notifications-settings";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createTeamMemberSchema } from "@/lib/validations/settings";
@@ -61,6 +66,13 @@ export default function SettingsPageClient({
               currentRole={currentRole}
             />
           ),
+        }
+      : null,
+    currentRole === "ADMIN"
+      ? {
+          id: "invitations",
+          label: "Invitations",
+          content: <InvitationsTab />,
         }
       : null,
     {
@@ -955,6 +967,222 @@ function TeamTab({
           onClose={() => setRevealPassword(null)}
         />
       )}
+    </>
+  );
+}
+
+// ── Invitations Tab ─────────────────────────────────────────────────────────
+
+type PendingInvitation = {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+function InvitationsTab() {
+  const router = useRouter();
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  // Invite form
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("AGENT");
+  const [inviteError, setInviteError] = useState("");
+
+  // Revoke confirm
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    listPendingInvitationsAction().then((res) => {
+      if (res.success) {
+        setInvitations(res.data as unknown as PendingInvitation[]);
+      }
+      setLoaded(true);
+    });
+  }, []);
+
+  const handleInvite = () => {
+    if (!inviteEmail.trim()) {
+      setInviteError("Email is required.");
+      return;
+    }
+    setInviteError("");
+    startTransition(async () => {
+      const result = await createInvitationAction({ email: inviteEmail.trim(), role: inviteRole });
+      if (!result.success) {
+        setInviteError(result.error ?? "Failed to send invitation");
+        return;
+      }
+      toast.success("Invitation sent");
+      setShowInviteForm(false);
+      setInviteEmail("");
+      setInviteRole("AGENT");
+      // Refresh list
+      const listRes = await listPendingInvitationsAction();
+      if (listRes.success) {
+        setInvitations(listRes.data as unknown as PendingInvitation[]);
+      }
+    });
+  };
+
+  const handleRevoke = (id: string) => {
+    startTransition(async () => {
+      const result = await revokeInvitationAction(id);
+      if (!result.success) {
+        toast.error(result.error ?? "Failed to revoke invitation");
+        return;
+      }
+      toast.success("Invitation revoked");
+      setRevokeId(null);
+      setInvitations((prev) => prev.filter((inv) => inv.id !== id));
+    });
+  };
+
+  return (
+    <>
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h3 className="font-semibold text-slate-900">Pending Invitations</h3>
+          <button
+            type="button"
+            onClick={() => setShowInviteForm(true)}
+            className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
+          >
+            Invite Member
+          </button>
+        </div>
+
+        {!loaded ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+          </div>
+        ) : invitations.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-500">
+            No pending invitations.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/80">
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">Sent</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-slate-500">Expires</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {invitations.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{inv.email}</td>
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 capitalize">
+                        {inv.role.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">{formatDateTime(inv.createdAt)}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500">{formatDateTime(inv.expiresAt)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => setRevokeId(inv.id)}
+                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Invite modal */}
+      <Modal
+        isOpen={showInviteForm}
+        onClose={() => {
+          if (!isPending) {
+            setShowInviteForm(false);
+            setInviteEmail("");
+            setInviteRole("AGENT");
+            setInviteError("");
+          }
+        }}
+        title="Invite Team Member"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <FormField
+            label="Email"
+            name="invite-email"
+            type="email"
+            required
+            value={inviteEmail}
+            onChange={(e) => { setInviteEmail(e.target.value); setInviteError(""); }}
+            placeholder="colleague@company.com"
+          />
+          <FormField
+            as="select"
+            label="Role"
+            name="invite-role"
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}
+            options={[
+              { value: "ADMIN", label: "Admin" },
+              { value: "MANAGER", label: "Manager" },
+              { value: "AGENT", label: "Agent" },
+              { value: "TECHNICIAN", label: "Technician" },
+            ]}
+          />
+          {inviteError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {inviteError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                setShowInviteForm(false);
+                setInviteEmail("");
+                setInviteRole("AGENT");
+                setInviteError("");
+              }}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              type="button"
+              loading={isPending}
+              loadingText="Sending..."
+              onClick={handleInvite}
+            >
+              Send Invitation
+            </SubmitButton>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Revoke confirmation */}
+      <ConfirmModal
+        isOpen={Boolean(revokeId)}
+        onClose={() => { if (!isPending) setRevokeId(null); }}
+        onConfirm={() => { if (revokeId) handleRevoke(revokeId); }}
+        title="Revoke Invitation"
+        description="This will permanently revoke the invitation. The recipient will no longer be able to accept it."
+        confirmLabel="Revoke"
+        loading={isPending}
+      />
     </>
   );
 }

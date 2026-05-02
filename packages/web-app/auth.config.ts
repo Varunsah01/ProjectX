@@ -9,13 +9,18 @@ const authConfig = {
     strategy: "jwt",
   },
   callbacks: {
-    jwt({ token, user }) {
-      if (user?.role) {
-        token.role = user.role;
+    jwt({ token, user, trigger, session }) {
+      // Initial sign-in: populate from the user object returned by authorize()
+      if (user?.activeOrgId) {
+        token.activeOrgId = user.activeOrgId;
       }
 
-      if (user?.organizationId) {
-        token.organizationId = user.organizationId;
+      if (user?.activeRole) {
+        token.activeRole = user.activeRole;
+      }
+
+      if (user?.memberships) {
+        token.memberships = user.memberships;
       }
 
       if (user?.tokenVersion !== undefined) {
@@ -27,18 +32,29 @@ const authConfig = {
         token.isEmailVerified = !!user.isEmailVerified;
       }
 
+      // Org switch: triggered by client calling useSession().update()
+      if (trigger === "update" && session?.activeOrgId) {
+        token.activeOrgId = session.activeOrgId as string;
+        token.activeRole = session.activeRole as typeof token.activeRole;
+      }
+
       return token;
     },
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? session.user.id;
-        session.user.role =
-          (token.role as typeof session.user.role) ?? session.user.role;
-        session.user.organizationId =
-          (token.organizationId as string | undefined) ??
-          session.user.organizationId;
+        session.user.activeRole =
+          (token.activeRole as typeof session.user.activeRole) ??
+          session.user.activeRole;
+        session.user.activeOrgId =
+          (token.activeOrgId as string | undefined) ??
+          session.user.activeOrgId;
         session.user.isEmailVerified =
           (token.isEmailVerified as boolean | undefined) ?? false;
+        session.user.memberships =
+          (token.memberships as typeof session.user.memberships | undefined) ??
+          session.user.memberships ??
+          [];
       }
 
       return session;

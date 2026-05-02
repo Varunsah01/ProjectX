@@ -1,6 +1,7 @@
 import * as React from "react";
 import { UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
+import { notifyCustomer } from "@/lib/messaging/service";
 import { sendEmail } from "@/lib/email";
 import { ContractExpiredEmail } from "@/lib/email-templates/contract-expired";
 import { ContractExpiringEmail } from "@/lib/email-templates/contract-expiring";
@@ -125,7 +126,16 @@ export async function notifyInvoiceCreated(invoiceId: string) {
       where: { id: invoiceId },
       include: {
         organization: true,
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            preferredChannel: true,
+            whatsappOptOut: true,
+          },
+        },
       },
     });
 
@@ -159,6 +169,23 @@ export async function notifyInvoiceCreated(invoiceId: string) {
         }),
       ),
     ]);
+
+    await notifyCustomer(
+      {
+        id: invoice.customer.id,
+        organizationId: invoice.organizationId,
+        phone: invoice.customer.phone,
+        preferredChannel: invoice.customer.preferredChannel,
+        whatsappOptOut: invoice.customer.whatsappOptOut,
+      },
+      "invoice_issued",
+      {
+        invoiceNumber: invoice.invoiceNumber,
+        amount: String(invoice.amount),
+        dueDate: formatDate(invoice.dueDate),
+        invoiceUrl,
+      },
+    );
   });
 }
 
@@ -476,7 +503,16 @@ export async function notifyJobCompleted(jobId: string) {
       where: { id: jobId },
       include: {
         organization: true,
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            preferredChannel: true,
+            whatsappOptOut: true,
+          },
+        },
         asset: true,
       },
     });
@@ -508,6 +544,21 @@ export async function notifyJobCompleted(jobId: string) {
         }),
       ),
     ]);
+
+    await notifyCustomer(
+      {
+        id: job.customer.id,
+        organizationId: job.organizationId,
+        phone: job.customer.phone,
+        preferredChannel: job.customer.preferredChannel,
+        whatsappOptOut: job.customer.whatsappOptOut,
+      },
+      "job_completed",
+      {
+        jobNumber: job.jobNumber,
+        summary: job.serviceReport ?? job.notes ?? "",
+      },
+    );
   });
 }
 
@@ -576,19 +627,19 @@ export async function notifyWelcomeUser(userId: string) {
 
     await Promise.all([
       createInAppNotifications({
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         userIds: [user.id],
         type: "welcome",
-        title: `Welcome to ${user.organization.name}`,
+        title: `Welcome to ${user.organization!.name}`,
         message: "Your account is ready and you can start using the dashboard.",
         link: "/",
       }),
       sendEmail(
         user.email,
-        `Welcome to ${user.organization.name}`,
+        `Welcome to ${user.organization!.name}`,
         await renderComponent(WelcomeEmail, {
           recipientName: user.name,
-          organizationName: user.organization.name,
+          organizationName: user.organization!.name,
           recipientType: "user",
           dashboardUrl: getAppUrl(),
         }),
@@ -643,6 +694,44 @@ export async function notifyJobRescheduled(jobId: string) {
         data: { type: "job", id: job.id },
       }),
     ]);
+  });
+}
+
+export async function notifyCustomerPaymentReceived(invoiceId: string) {
+  return safelyRun("notifyCustomerPaymentReceived", async () => {
+    const invoice = await db.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        invoiceNumber: true,
+        paidAmount: true,
+        organizationId: true,
+        customer: {
+          select: {
+            id: true,
+            phone: true,
+            preferredChannel: true,
+            whatsappOptOut: true,
+          },
+        },
+      },
+    });
+
+    if (!invoice) return;
+
+    await notifyCustomer(
+      {
+        id: invoice.customer.id,
+        organizationId: invoice.organizationId,
+        phone: invoice.customer.phone,
+        preferredChannel: invoice.customer.preferredChannel,
+        whatsappOptOut: invoice.customer.whatsappOptOut,
+      },
+      "payment_received",
+      {
+        invoiceNumber: invoice.invoiceNumber,
+        amount: String(invoice.paidAmount),
+      },
+    );
   });
 }
 

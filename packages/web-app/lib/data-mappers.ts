@@ -145,6 +145,9 @@ export const jobDetailsInclude = {
       name: true,
       address: true,
       city: true,
+      phone: true,
+      preferredChannel: true,
+      whatsappOptOut: true,
     },
   },
   asset: {
@@ -317,7 +320,7 @@ export function mapTicketTimelineEntry(
     id: entry.id,
     date: toDateTimeString(entry.createdAt),
     action: entry.action,
-    by: entry.byUser.name,
+    by: entry.byUser?.name ?? "Customer",
     note: entry.note ?? undefined,
   };
 }
@@ -487,7 +490,7 @@ export function mapTeamMember(
     id: member.id,
     name: member.name,
     email: member.email,
-    role: roleToUi(member.role) as TeamMember["role"],
+    role: roleToUi(member.role!) as TeamMember["role"],
     status: member.status.toLowerCase() === "inactive" ? "inactive" : "active",
     lastActive: toDateTimeString(member.lastActiveAt ?? member.createdAt),
   };

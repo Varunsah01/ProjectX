@@ -115,6 +115,14 @@ export async function createTeamMemberAction(input: unknown) {
         },
       });
 
+      await tx.orgMembership.create({
+        data: {
+          userId: created.id,
+          organizationId: user.organizationId,
+          role: values.role.toUpperCase() as never,
+        },
+      });
+
       await tx.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -201,6 +209,11 @@ export async function removeTeamMemberAction(id: string) {
     const hasHistory = jobCount > 0 || timelineCount > 0 || auditCount > 0 || noteCount > 0;
 
     await db.$transaction(async (tx) => {
+      // Remove the org membership
+      await tx.orgMembership.deleteMany({
+        where: { userId: id, organizationId: user.organizationId },
+      });
+
       if (hasHistory) {
         await tx.user.update({
           where: { id },
@@ -253,9 +266,23 @@ export async function updateTeamMemberAction(input: unknown) {
       ...(shouldInvalidateSessions ? { tokenVersion: { increment: 1 } } : {}),
     };
 
-    await db.$transaction([
-      db.user.update({ where: { id: values.id }, data: updateData }),
-      db.auditLog.create({
+    await db.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: values.id }, data: updateData });
+
+      // Keep OrgMembership role in sync
+      if (values.role !== undefined) {
+        await tx.orgMembership.update({
+          where: {
+            userId_organizationId: {
+              userId: values.id,
+              organizationId: user.organizationId,
+            },
+          },
+          data: { role: values.role.toUpperCase() as never },
+        });
+      }
+
+      await tx.auditLog.create({
         data: buildAuditLog({
           actor: user,
           action: "UPDATE",
@@ -269,8 +296,8 @@ export async function updateTeamMemberAction(input: unknown) {
             status: values.status ?? existing.status,
           },
         }),
-      }),
-    ]);
+      });
+    });
 
     if (shouldInvalidateSessions) {
       await db.session.deleteMany({ where: { userId: values.id } });

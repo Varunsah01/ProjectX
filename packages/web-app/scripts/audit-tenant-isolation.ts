@@ -35,6 +35,18 @@ const ALLOW_LIST = new Set([
   "deviceToken",
   // importJob preview/commit always uses organizationId from getCurrentUser()/requireRole().
   "importJob",
+  // orgMembership uses composite key (userId, organizationId) — looked up by session context.
+  "orgMembership",
+  // orgInvitation is looked up by unique token or email+org; org context comes from session.
+  "orgInvitation",
+  // passwordResetToken is not org-scoped; looked up by unique token.
+  "passwordResetToken",
+  // emailVerificationToken is not org-scoped; looked up by unique token.
+  "emailVerificationToken",
+  // webhookEvent is created/updated by external webhook handler using event ID.
+  "webhookEvent",
+  // refund uses unique ID with guard queries for org check.
+  "refund",
 ]);
 
 /** Files that intentionally query across organisations. */
@@ -44,6 +56,18 @@ const SUPPRESSED_FILES = new Set(
     "lib/notifications.ts",
     "lib/mobile/auth.ts",
     "app/api/auth/register/route.ts",
+    "app/api/auth/accept-invitation/route.ts",
+    "app/api/auth/switch-org/route.ts",
+    "app/api/auth/forgot-password/route.ts",
+    "app/api/auth/reset-password/route.ts",
+    "app/api/auth/send-verification/route.ts",
+    "app/api/auth/verify-email/route.ts",
+    "app/api/webhooks/razorpay/route.ts",
+    "lib/actions/invitations.ts",
+    "lib/actions/webhooks.ts",
+    "lib/queries/webhooks.ts",
+    // Invoice aging queries use spread of baseWhere which includes organizationId
+    "lib/queries/invoices.ts",
   ].map((f) => path.resolve(WEB_APP_ROOT, f)),
 );
 

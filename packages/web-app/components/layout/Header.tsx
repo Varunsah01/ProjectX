@@ -34,12 +34,17 @@ export function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const { setMobileOpen } = useSidebar();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const pathname = usePathname();
   const user = session?.user;
   const displayName = user?.name || "Workspace User";
-  const role = formatRole(user?.role);
+  const role = formatRole(user?.activeRole);
   const initials = getInitials(displayName);
+  const memberships = user?.memberships ?? [];
+  const activeOrgId = user?.activeOrgId;
+  const activeOrgName = memberships.find((m) => m.organizationId === activeOrgId)?.orgName ?? "Organization";
+  const [orgSwitching, setOrgSwitching] = useState(false);
+  const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
 
   // Prime unread badge on mount
   useEffect(() => {
@@ -129,6 +134,26 @@ export function Header() {
   async function handleSignOut() {
     setShowUserMenu(false);
     await signOut({ callbackUrl: "/login" });
+  }
+
+  async function switchOrg(orgId: string) {
+    if (orgId === activeOrgId || orgSwitching) return;
+    setOrgSwitching(true);
+    try {
+      const res = await fetch("/api/auth/switch-org", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: orgId }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { activeOrgId: string; activeRole: string };
+        await update({ activeOrgId: data.activeOrgId, activeRole: data.activeRole });
+        window.location.href = "/";
+      }
+    } finally {
+      setOrgSwitching(false);
+      setOrgDropdownOpen(false);
+    }
   }
 
   const grouped = groupResults(results);
@@ -287,6 +312,52 @@ export function Header() {
             </>
           )}
         </div>
+
+        {/* Org Switcher */}
+        {memberships.length > 1 && (
+          <div className="relative">
+            <button
+              onClick={() => setOrgDropdownOpen(!orgDropdownOpen)}
+              disabled={orgSwitching}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60"
+            >
+              <span className="hidden sm:inline max-w-[120px] truncate">{activeOrgName}</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${orgDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {orgDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setOrgDropdownOpen(false)} />
+                <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Switch Organization
+                  </div>
+                  {memberships.map((m) => (
+                    <button
+                      key={m.organizationId}
+                      type="button"
+                      onClick={() => switchOrg(m.organizationId)}
+                      disabled={orgSwitching}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60"
+                    >
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
+                        {m.orgName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="truncate text-sm font-medium text-slate-900">{m.orgName}</p>
+                        <p className="text-[11px] text-slate-500 capitalize">{m.role.toLowerCase()}</p>
+                      </div>
+                      {m.organizationId === activeOrgId && (
+                        <svg className="h-4 w-4 shrink-0 text-brand-600" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* User Menu */}
         <div className="relative">
