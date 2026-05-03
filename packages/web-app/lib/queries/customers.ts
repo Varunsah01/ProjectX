@@ -106,7 +106,22 @@ export async function getCustomerDetailForOrganization(
       id,
       organizationId,
     },
-    include: customerSummaryInclude,
+    include: {
+      ...customerSummaryInclude,
+      messageLogs: {
+        select: {
+          id: true,
+          channel: true,
+          kind: true,
+          status: true,
+          providerMessageId: true,
+          error: true,
+          sentAt: true,
+        },
+        orderBy: { sentAt: "desc" },
+        take: 50,
+      },
+    },
   });
 
   if (!customer) {
@@ -118,36 +133,54 @@ export async function getCustomerDetailForOrganization(
       where: { organizationId, customerId: id },
       include: assetDetailsInclude,
       orderBy: { createdAt: "desc" },
+      take: 100,
     }),
     db.invoice.findMany({
       where: { organizationId, customerId: id },
       include: invoiceDetailsInclude,
       orderBy: { issuedDate: "desc" },
+      take: 100,
     }),
     db.ticket.findMany({
       where: { organizationId, customerId: id },
       include: ticketDetailsInclude,
       orderBy: { createdAt: "desc" },
+      take: 100,
     }),
     db.contract.findMany({
       where: { organizationId, customerId: id },
       include: contractDetailsInclude,
       orderBy: { startDate: "desc" },
+      take: 100,
     }),
     db.customerNote.findMany({
       where: { organizationId, customerId: id },
       include: customerNoteInclude,
       orderBy: { createdAt: "desc" },
+      take: 100,
     }),
   ]);
 
   return {
-    customer: mapCustomer(customer),
+    customer: {
+      ...mapCustomer(customer),
+      preferredChannel: customer.preferredChannel as string,
+      whatsappOptOut: customer.whatsappOptOut,
+    },
     assets: assets.map(mapAsset),
     invoices: invoices.map(mapInvoice),
     tickets: tickets.map(mapTicket),
     contracts: contracts.map(mapContract),
     notes: notes.map(mapCustomerNote),
+    messageLogs: customer.messageLogs.map((log) => ({
+      id: log.id,
+      channel: log.channel,
+      kind: log.kind,
+      status: log.status as string,
+      providerMessageId: log.providerMessageId ?? undefined,
+      error: log.error ?? undefined,
+      sentAt: log.sentAt.toISOString(),
+    })),
   };
 }
 

@@ -553,6 +553,9 @@ export interface BusinessProfile {
   bankBranch?: string;
   upiId?: string;
   invoiceTerms?: string;
+  grievanceOfficerName?: string;
+  grievanceOfficerEmail?: string;
+  grievanceOfficerPhone?: string;
 }
 
 export interface SettingsData {

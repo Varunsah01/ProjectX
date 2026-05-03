@@ -152,3 +152,12 @@ export function toEnumValue<T extends string>(value: string | undefined) {
 
   return value.toUpperCase().replaceAll(" ", "_") as T;
 }
+
+const DEFAULT_TAKE = 50;
+const MAX_TAKE = 200;
+
+/** Clamp a take value to safe bounds for non-paginated findMany calls. */
+export function safeTake(take?: number): number {
+  if (!take) return DEFAULT_TAKE;
+  return Math.min(Math.max(1, take), MAX_TAKE);
+}

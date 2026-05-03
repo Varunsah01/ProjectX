@@ -1,5 +1,8 @@
 import { db } from "@/lib/db";
 
+// Financial records must be retained for 8 years per the IT Act.
+const FINANCIAL_RETENTION_YEARS = 8;
+
 export interface RetentionResult {
   softDeleted: {
     jobs: number;
@@ -8,6 +11,9 @@ export interface RetentionResult {
     contracts: number;
     assets: number;
     customers: number;
+  };
+  retentionExempt: {
+    invoices: number;
   };
   transient: {
     importJobs: number;
@@ -31,8 +37,23 @@ export async function runRetention(): Promise<RetentionResult> {
   const tickets = await db.ticket.deleteMany({
     where: { deletedAt: { not: null, lt: ago(90) } },
   });
+  // DPDPA / IT Act guard: only hard-delete invoices whose issuedDate is beyond
+  // the 8-year financial retention window. Invoices inside the window are exempt.
+  const financialRetentionCutoff = new Date(now);
+  financialRetentionCutoff.setFullYear(financialRetentionCutoff.getFullYear() - FINANCIAL_RETENTION_YEARS);
+
+  const invoicesExempt = await db.invoice.count({
+    where: {
+      deletedAt: { not: null, lt: ago(90) },
+      issuedDate: { gte: financialRetentionCutoff },
+    },
+  });
+
   const invoices = await db.invoice.deleteMany({
-    where: { deletedAt: { not: null, lt: ago(90) } },
+    where: {
+      deletedAt: { not: null, lt: ago(90) },
+      issuedDate: { lt: financialRetentionCutoff },
+    },
   });
   const contracts = await db.contract.deleteMany({
     where: { deletedAt: { not: null, lt: ago(90) } },
@@ -72,6 +93,9 @@ export async function runRetention(): Promise<RetentionResult> {
       contracts: contracts.count,
       assets: assets.count,
       customers: customers.count,
+    },
+    retentionExempt: {
+      invoices: invoicesExempt,
     },
     transient: {
       importJobs: importJobs.count,

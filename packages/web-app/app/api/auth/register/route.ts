@@ -1,14 +1,18 @@
 import * as React from "react";
 import { hash } from "bcrypt";
 import { UserRole } from "@prisma/client";
+import type { ConsentPurpose } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { generateToken } from "@/lib/auth-tokens";
 import { db } from "@/lib/db";
+import { grantConsent } from "@/lib/compliance/consent";
 import { sendEmail } from "@/lib/email";
 import { getAppUrl } from "@/lib/email-templates/_shared";
 import { EmailVerificationEmail } from "@/lib/email-templates/email-verification";
 import { notifyWelcomeUser } from "@/lib/notifications";
 import { renderEmailTemplate } from "@/lib/render-email-template";
+
+const VALID_PURPOSES: ConsentPurpose[] = ["SERVICE_DELIVERY", "COMMUNICATION", "ANALYTICS", "MARKETING"];
 
 export async function POST(request: Request) {
   try {
@@ -17,12 +21,16 @@ export async function POST(request: Request) {
       email?: string;
       password?: string;
       organizationName?: string;
+      consents?: string[];
     };
 
     const name = body.name?.trim() ?? "";
     const email = body.email?.trim().toLowerCase() ?? "";
     const password = body.password ?? "";
     const organizationName = body.organizationName?.trim() ?? "";
+    const grantedPurposes = (body.consents ?? []).filter(
+      (p): p is ConsentPurpose => VALID_PURPOSES.includes(p as ConsentPurpose)
+    );
 
     if (!name || !email || !password || !organizationName) {
       return NextResponse.json(
@@ -94,6 +102,22 @@ export async function POST(request: Request) {
           role: UserRole.ADMIN,
         },
       });
+
+      // Record consent for granted purposes within the same transaction
+      for (const purpose of grantedPurposes) {
+        await tx.consent.create({
+          data: {
+            organizationId: organization.id,
+            dataPrincipalId: user.id,
+            dataPrincipalType: "USER",
+            purpose,
+            status: "GRANTED",
+            grantedAt: new Date(),
+            legalBasis: "Explicit consent during account signup",
+            evidence: { source: "signup_form" },
+          },
+        });
+      }
 
       return { userId: user.id };
     });

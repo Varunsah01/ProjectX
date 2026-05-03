@@ -90,6 +90,20 @@ async function handleGenerateInvoices(request: Request) {
   try {
     const result = await generateRecurringInvoices();
 
+    if ("skipped" in result) {
+      logger.info(
+        {
+          event: "cron.skipped",
+          name: "generate-invoices",
+          runDate,
+          reason: result.skipped,
+          durationMs: Date.now() - start,
+        },
+        "cron skipped",
+      );
+      return NextResponse.json({ skipped: result.skipped });
+    }
+
     revalidatePath("/");
     revalidatePath("/contracts");
     revalidatePath("/invoices");

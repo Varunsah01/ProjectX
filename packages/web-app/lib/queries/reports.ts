@@ -1,10 +1,7 @@
 import { db } from "@/lib/db";
 import {
   contractDetailsInclude,
-  invoiceDetailsInclude,
-  jobDetailsInclude,
   mapContract,
-  ticketDetailsInclude,
   technicianSelect,
 } from "@/lib/data-mappers";
 import {
@@ -57,7 +54,16 @@ export async function getReportsDataForOrganization(
           organizationId,
           issuedDate: { gte: from, lte: to },
         },
-        include: invoiceDetailsInclude,
+        select: {
+          id: true,
+          customerId: true,
+          amount: true,
+          paidAmount: true,
+          status: true,
+          issuedDate: true,
+          dueDate: true,
+          customer: { select: { name: true } },
+        },
         orderBy: { issuedDate: "asc" },
       }),
       db.ticket.findMany({
@@ -65,7 +71,14 @@ export async function getReportsDataForOrganization(
           organizationId,
           createdAt: { gte: from, lte: to },
         },
-        include: ticketDetailsInclude,
+        select: {
+          id: true,
+          status: true,
+          priority: true,
+          assignedToId: true,
+          createdAt: true,
+          resolvedAt: true,
+        },
         orderBy: { createdAt: "asc" },
       }),
       // Contracts are snapshot / current-state metrics — not filtered by date
@@ -73,23 +86,34 @@ export async function getReportsDataForOrganization(
         where: { organizationId },
         include: contractDetailsInclude,
         orderBy: { endDate: "asc" },
+        take: 2000,
       }),
       db.job.findMany({
         where: {
           organizationId,
           scheduledDate: { gte: from, lte: to },
         },
-        include: jobDetailsInclude,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          technicianId: true,
+          scheduledDate: true,
+        },
         orderBy: { scheduledDate: "asc" },
       }),
       db.user.findMany({
         where: { organizationId, role: "TECHNICIAN" },
         select: technicianSelect,
         orderBy: { name: "asc" },
+        take: 500,
       }),
       db.customer.findMany({
         where: { organizationId },
-        include: { assets: { select: { id: true } } },
+        select: {
+          id: true,
+          assets: { select: { id: true } },
+        },
       }),
     ]);
 
@@ -102,17 +126,19 @@ export async function getReportsDataForOrganization(
   const collectionRate =
     totalRevenue > 0 ? Math.round((totalCollected / totalRevenue) * 100) : 0;
 
+  // Pre-build customer asset count map to avoid O(n*m) lookup
+  const customerAssetMap = new Map(customers.map((c) => [c.id, c.assets.length]));
+
   const customerRevenueMap = new Map<
     string,
     { name: string; totalPaid: number; outstanding: number; assetsCount: number }
   >();
   invoices.forEach((invoice) => {
-    const customer = customers.find((c) => c.id === invoice.customerId);
     const entry = customerRevenueMap.get(invoice.customerId) ?? {
       name: invoice.customer.name,
       totalPaid: 0,
       outstanding: 0,
-      assetsCount: customer?.assets.length ?? 0,
+      assetsCount: customerAssetMap.get(invoice.customerId) ?? 0,
     };
     entry.totalPaid += invoice.paidAmount;
     entry.outstanding += Math.max(0, invoice.amount - invoice.paidAmount);

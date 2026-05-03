@@ -41,6 +41,9 @@ export const updateBusinessProfileSchema = z.object({
   bankBranch: z.string().trim().max(100).optional().or(z.literal("")),
   upiId: z.string().trim().max(100).optional().or(z.literal("")),
   invoiceTerms: z.string().trim().max(1000).optional().or(z.literal("")),
+  grievanceOfficerName: z.string().trim().max(200).optional().or(z.literal("")),
+  grievanceOfficerEmail: z.string().trim().email("Invalid email").optional().or(z.literal("")),
+  grievanceOfficerPhone: z.string().trim().max(20).optional().or(z.literal("")),
 });
 
 export const createTeamMemberSchema = z.object({

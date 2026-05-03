@@ -677,7 +677,330 @@ function uuidFromKey(key: string) {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 
-main()
+// ---------------------------------------------------------------------------
+// Large-scale seed for performance testing (SEED_SCALE=large)
+// ---------------------------------------------------------------------------
+
+async function seedLargeDataset() {
+  const NUM_ORGS = 5;
+  const CUSTOMERS_PER_ORG = 200;
+  const ASSETS_PER_ORG = 400;
+  const CONTRACTS_PER_ORG = 300;
+  const INVOICES_PER_ORG = 5000;
+  const TICKETS_PER_ORG = 2000;
+  const JOBS_PER_ORG = 3000;
+  const TECHS_PER_ORG = 50;
+  const BATCH_SIZE = 500;
+
+  const passwordHash = await hash("test1234", 10);
+
+  const jobStatuses: JobStatus[] = [
+    JobStatus.PENDING, JobStatus.ASSIGNED, JobStatus.IN_PROGRESS,
+    JobStatus.EN_ROUTE, JobStatus.COMPLETED, JobStatus.CANCELLED,
+  ];
+  const jobTypes: JobType[] = [
+    JobType.COMPLAINT, JobType.SCHEDULED, JobType.INSTALLATION, JobType.INSPECTION,
+  ];
+  const invoiceStatuses: InvoiceStatus[] = [
+    InvoiceStatus.DRAFT, InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE,
+    InvoiceStatus.PARTIAL, InvoiceStatus.PAID, InvoiceStatus.CANCELLED,
+  ];
+  const ticketStatuses: TicketStatus[] = [
+    TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS,
+    TicketStatus.ON_HOLD, TicketStatus.RESOLVED, TicketStatus.CLOSED,
+  ];
+  const ticketPriorities: TicketPriority[] = [
+    TicketPriority.LOW, TicketPriority.MEDIUM, TicketPriority.HIGH, TicketPriority.CRITICAL,
+  ];
+  const contractStatuses: ContractStatus[] = [
+    ContractStatus.ACTIVE, ContractStatus.EXPIRING_SOON, ContractStatus.EXPIRED,
+    ContractStatus.RENEWED, ContractStatus.CANCELLED,
+  ];
+
+  function pick<T>(arr: T[], i: number): T {
+    return arr[i % arr.length];
+  }
+
+  function dayOffset(base: Date, days: number) {
+    const d = new Date(base);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  const baseDate = new Date();
+
+  for (let orgIdx = 0; orgIdx < NUM_ORGS; orgIdx++) {
+    const orgKey = `perf-org-${orgIdx}`;
+    const orgId = uuidFromKey(orgKey);
+    console.log(`  Creating org ${orgIdx + 1}/${NUM_ORGS} (${orgId})...`);
+
+    await prisma.organization.create({
+      data: {
+        id: orgId,
+        name: `PerfTest Org ${orgIdx}`,
+        slug: `perftest-${orgIdx}`,
+        phone: `900000000${orgIdx}`,
+        email: `admin@perftest${orgIdx}.example.com`,
+        address: "123 Perf Street",
+        city: "Mumbai",
+      },
+    });
+
+    // Admin user
+    const adminId = uuidFromKey(`${orgKey}-admin`);
+    await prisma.user.create({
+      data: {
+        id: adminId,
+        organizationId: orgId,
+        name: `Admin ${orgIdx}`,
+        email: `admin@perftest${orgIdx}.example.com`,
+        phone: `900000100${orgIdx}`,
+        passwordHash,
+        role: UserRole.ADMIN,
+        status: "available",
+        emailVerified: new Date(),
+      },
+    });
+
+    // Technicians
+    const techIds: string[] = [];
+    for (let batch = 0; batch < TECHS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, TECHS_PER_ORG - batch);
+      await prisma.user.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-tech-${i}`);
+          techIds.push(id);
+          return {
+            id,
+            organizationId: orgId,
+            name: `Tech ${i} Org${orgIdx}`,
+            email: `tech${i}@perftest${orgIdx}.example.com`,
+            phone: `91000${String(orgIdx).padStart(2, "0")}${String(i).padStart(4, "0")}`,
+            passwordHash,
+            role: UserRole.TECHNICIAN,
+            emailVerified: new Date(),
+            status: pick(["available", "on_job", "en_route", "offline"], i),
+            rating: 3 + (i % 3),
+            specialization: pick(["HVAC", "Plumbing", "Electrical", "General"], i),
+          };
+        }),
+      });
+    }
+
+    // Customers
+    const customerIds: string[] = [];
+    for (let batch = 0; batch < CUSTOMERS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, CUSTOMERS_PER_ORG - batch);
+      await prisma.customer.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-cust-${i}`);
+          customerIds.push(id);
+          return {
+            id,
+            organizationId: orgId,
+            name: `Customer ${i} Org${orgIdx}`,
+            phone: `92000${String(orgIdx).padStart(2, "0")}${String(i).padStart(4, "0")}`,
+            email: `cust${i}@perftest${orgIdx}.example.com`,
+            address: `${100 + i} Test Street`,
+            city: pick(["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad"], i),
+            status: pick([CustomerStatus.ACTIVE, CustomerStatus.ACTIVE, CustomerStatus.ACTIVE, CustomerStatus.INACTIVE], i),
+            category: pick(["residential", "commercial"], i),
+          };
+        }),
+      });
+    }
+
+    // Assets
+    const assetIds: string[] = [];
+    for (let batch = 0; batch < ASSETS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, ASSETS_PER_ORG - batch);
+      await prisma.asset.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-asset-${i}`);
+          assetIds.push(id);
+          const installDate = dayOffset(baseDate, -(365 + (i % 300)));
+          return {
+            id,
+            organizationId: orgId,
+            customerId: customerIds[i % customerIds.length],
+            name: `Asset ${i}`,
+            category: pick(["AC", "Purifier", "Heater", "Lift", "Generator"], i),
+            model: `Model-${i % 20}`,
+            serialNumber: `SN-${orgIdx}-${i}`,
+            status: AssetStatus.ACTIVE,
+            installationDate: installDate,
+            warrantyEnd: dayOffset(installDate, 365),
+          };
+        }),
+      });
+    }
+
+    // Plans (a few per org)
+    const planIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const id = uuidFromKey(`${orgKey}-plan-${i}`);
+      planIds.push(id);
+    }
+    await prisma.plan.createMany({
+      data: planIds.map((id, i) => ({
+        id,
+        organizationId: orgId,
+        name: `Plan ${i}`,
+        type: pick([ContractType.AMC, ContractType.WARRANTY], i),
+        durationMonths: 12,
+        price: 5000 + i * 1000,
+        visitsCovered: 4 + i,
+        description: `Performance test plan ${i}`,
+        hsnSac: "998719",
+        gstRatePercent: 18,
+        isActive: true,
+      })),
+    });
+
+    // Contracts
+    const contractIds: string[] = [];
+    for (let batch = 0; batch < CONTRACTS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, CONTRACTS_PER_ORG - batch);
+      await prisma.contract.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-contract-${i}`);
+          contractIds.push(id);
+          const start = dayOffset(baseDate, -(180 + (i % 365)));
+          const end = dayOffset(start, 365);
+          return {
+            id,
+            organizationId: orgId,
+            contractNumber: `CON-${orgIdx}-${String(i).padStart(5, "0")}`,
+            customerId: customerIds[i % customerIds.length],
+            assetId: assetIds[i % assetIds.length],
+            planId: planIds[i % planIds.length],
+            type: pick([ContractType.AMC, ContractType.WARRANTY], i),
+            status: pick(contractStatuses, i),
+            startDate: start,
+            endDate: end,
+            value: 5000 + (i % 20) * 500,
+            billingCycle: BillingCycle.QUARTERLY,
+            visitsCovered: 4,
+            visitsUsed: i % 5,
+            nextBillingDate: dayOffset(baseDate, 30 + (i % 90)),
+          };
+        }),
+      });
+    }
+
+    // Invoices
+    for (let batch = 0; batch < INVOICES_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, INVOICES_PER_ORG - batch);
+      await prisma.invoice.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-inv-${i}`);
+          const issuedDate = dayOffset(baseDate, -(i % 365));
+          const dueDate = dayOffset(issuedDate, 15);
+          const amount = 1000 + (i % 50) * 200;
+          const status = pick(invoiceStatuses, i);
+          const paidAmount = status === InvoiceStatus.PAID ? amount
+            : status === InvoiceStatus.PARTIAL ? Math.floor(amount * 0.5)
+            : 0;
+          return {
+            id,
+            organizationId: orgId,
+            invoiceNumber: `INV-${orgIdx}-${String(i).padStart(6, "0")}`,
+            customerId: customerIds[i % customerIds.length],
+            contractId: i < contractIds.length ? contractIds[i] : null,
+            amount,
+            paidAmount,
+            dueDate,
+            issuedDate,
+            status,
+            type: pick([InvoiceType.ONE_TIME, InvoiceType.RECURRING], i),
+          };
+        }),
+      });
+    }
+
+    // Tickets
+    for (let batch = 0; batch < TICKETS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, TICKETS_PER_ORG - batch);
+      await prisma.ticket.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-ticket-${i}`);
+          const createdAt = dayOffset(baseDate, -(i % 180));
+          const status = pick(ticketStatuses, i);
+          const resolved = status === TicketStatus.RESOLVED || status === TicketStatus.CLOSED;
+          return {
+            id,
+            organizationId: orgId,
+            ticketNumber: `TKT-${orgIdx}-${String(i).padStart(5, "0")}`,
+            customerId: customerIds[i % customerIds.length],
+            assetId: assetIds[i % assetIds.length],
+            subject: `Issue ${i}`,
+            description: `Perf test ticket description ${i}`,
+            category: pick(["repair", "maintenance", "installation", "inspection"], i),
+            priority: pick(ticketPriorities, i),
+            status,
+            assignedToId: i % 3 === 0 ? null : techIds[i % techIds.length],
+            slaDeadline: dayOffset(createdAt, 3),
+            resolvedAt: resolved ? dayOffset(createdAt, 1 + (i % 5)) : null,
+            createdAt,
+          };
+        }),
+      });
+    }
+
+    // Jobs
+    for (let batch = 0; batch < JOBS_PER_ORG; batch += BATCH_SIZE) {
+      const chunk = Math.min(BATCH_SIZE, JOBS_PER_ORG - batch);
+      await prisma.job.createMany({
+        data: Array.from({ length: chunk }, (_, j) => {
+          const i = batch + j;
+          const id = uuidFromKey(`${orgKey}-job-${i}`);
+          const scheduledDate = dayOffset(baseDate, -(i % 180));
+          const status = pick(jobStatuses, i);
+          return {
+            id,
+            organizationId: orgId,
+            jobNumber: `JOB-${orgIdx}-${String(i).padStart(5, "0")}`,
+            customerId: customerIds[i % customerIds.length],
+            assetId: assetIds[i % assetIds.length],
+            technicianId: techIds[i % techIds.length],
+            type: pick(jobTypes, i),
+            status,
+            scheduledDate,
+            completedAt: status === JobStatus.COMPLETED ? dayOffset(scheduledDate, 1) : null,
+          };
+        }),
+      });
+    }
+
+    console.log(`  Org ${orgIdx + 1} done.`);
+  }
+
+  const totalRows =
+    NUM_ORGS * (1 + 1 + TECHS_PER_ORG + CUSTOMERS_PER_ORG + ASSETS_PER_ORG + 5 +
+      CONTRACTS_PER_ORG + INVOICES_PER_ORG + TICKETS_PER_ORG + JOBS_PER_ORG);
+  console.log(`\nLarge seed complete: ~${totalRows.toLocaleString()} rows across ${NUM_ORGS} orgs.`);
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+async function run() {
+  await main();
+
+  if (process.env.SEED_SCALE === "large") {
+    console.log("\nSEED_SCALE=large — generating performance test dataset...\n");
+    await seedLargeDataset();
+  }
+}
+
+run()
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;

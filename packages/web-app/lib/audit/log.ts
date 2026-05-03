@@ -11,7 +11,12 @@ export type AuditAction =
   | "LOGOUT"
   | "EXPORT"
   | "REFUND"
-  | "REMINDER_SENT";
+  | "REMINDER_SENT"
+  | "CONSENT_GRANT"
+  | "CONSENT_WITHDRAW"
+  | "DSR_REQUEST"
+  | "DSR_PROCESS"
+  | "BREACH_LOG";
 
 export interface AuditActor {
   id: string;

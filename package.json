@@ -11,6 +11,8 @@
     "dev:mobile": "npm run start -w packages/mobile-app",
     "build:landing": "npm run build -w packages/landing",
     "build:web": "/bin/zsh -lc 'if [ -f .env.local ]; then set -a && source .env.local >/dev/null 2>&1 && set +a; fi; npm run build -w packages/web-app'",
+    "dev:portal": "/bin/zsh -lc 'if [ -f .env.local ]; then set -a && source .env.local >/dev/null 2>&1 && set +a; fi; npm run dev -w packages/portal'",
+    "build:portal": "/bin/zsh -lc 'if [ -f .env.local ]; then set -a && source .env.local >/dev/null 2>&1 && set +a; fi; npm run build -w packages/portal'",
     "lint": "npm run lint --workspaces --if-present",
     "docker:up": "docker compose --env-file .env.local up -d",
     "docker:down": "docker compose --env-file .env.local down",

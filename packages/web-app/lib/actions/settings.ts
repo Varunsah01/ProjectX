@@ -57,6 +57,9 @@ export async function updateBusinessProfileAction(input: unknown) {
       bankBranch: values.bankBranch || null,
       upiId: values.upiId || null,
       invoiceTerms: values.invoiceTerms || null,
+      grievanceOfficerName: values.grievanceOfficerName || null,
+      grievanceOfficerEmail: values.grievanceOfficerEmail || null,
+      grievanceOfficerPhone: values.grievanceOfficerPhone || null,
     };
 
     await db.$transaction([

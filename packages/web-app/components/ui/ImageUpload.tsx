@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ImageUploadProps {
   kind: "logo" | "signature";
@@ -42,7 +43,7 @@ export function ImageUpload({
 
     try {
       const ext = file.name.split(".").pop() || "png";
-      const res = await fetch("/api/uploads/sign", {
+      const res = await apiFetch("/api/uploads/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, contentType: file.type, ext }),

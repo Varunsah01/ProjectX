@@ -28,6 +28,7 @@ export async function GET(request: Request) {
       },
       include: ticketDetailsInclude,
       orderBy: [{ createdAt: "desc" }],
+      take: 100,
     });
 
     return NextResponse.json({

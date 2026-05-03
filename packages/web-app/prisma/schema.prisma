@@ -146,6 +146,44 @@ enum PreferredChannel {
   WHATSAPP
 }
 
+// ─── DPDPA Compliance Enums ──────────────────────────────────────────────────
+
+enum DataPrincipalType {
+  USER
+  CUSTOMER
+}
+
+enum ConsentPurpose {
+  SERVICE_DELIVERY
+  COMMUNICATION
+  ANALYTICS
+  MARKETING
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum BreachStatus {
+  DETECTED
+  REPORTED
+  CLOSED
+}
+
+enum DsrType {
+  ACCESS
+  CORRECTION
+  ERASURE
+}
+
+enum DsrStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
 enum MessageStatus {
   QUEUED
   SENT
@@ -173,26 +211,32 @@ model Organization {
   bankBranch           String?          @map("bank_branch")
   upiId                String?          @map("upi_id")
   invoiceTerms         String?          @map("invoice_terms")
-  notificationSettings Json?            @default("{}") @map("notification_settings")
-  createdAt            DateTime         @default(now()) @map("created_at")
-  updatedAt            DateTime         @updatedAt @map("updated_at")
-  users                User[]
-  customers            Customer[]
-  assets               Asset[]
-  contracts            Contract[]
-  plans                Plan[]
-  invoices             Invoice[]
-  invoiceItems         InvoiceItem[]
-  tickets              Ticket[]
-  ticketTimelines      TicketTimeline[]
-  jobs                 Job[]
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  customerNotes        CustomerNote[]
-  importJobs           ImportJob[]
-  messageLogs          MessageLog[]
-  memberships          OrgMembership[]
-  invitations          OrgInvitation[]
+  notificationSettings  Json?            @default("{}") @map("notification_settings")
+  grievanceOfficerName  String?          @map("grievance_officer_name")
+  grievanceOfficerEmail String?          @map("grievance_officer_email")
+  grievanceOfficerPhone String?          @map("grievance_officer_phone")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  users                 User[]
+  customers             Customer[]
+  assets                Asset[]
+  contracts             Contract[]
+  plans                 Plan[]
+  invoices              Invoice[]
+  invoiceItems          InvoiceItem[]
+  tickets               Ticket[]
+  ticketTimelines       TicketTimeline[]
+  jobs                  Job[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  customerNotes         CustomerNote[]
+  importJobs            ImportJob[]
+  messageLogs           MessageLog[]
+  memberships           OrgMembership[]
+  invitations           OrgInvitation[]
+  consents              Consent[]
+  breachLogs            BreachLog[]
+  dsrRequests           DsrRequest[]
 
   @@index([createdAt])
   @@map("organizations")
@@ -239,6 +283,8 @@ model User {
   importJobs              ImportJob[]
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  createdBreachLogs       BreachLog[]              @relation("BreachLogCreator")
+  processedDsrs           DsrRequest[]             @relation("DsrProcessedBy")
 
   @@index([organizationId])
   @@index([role])
@@ -879,4 +925,72 @@ model OrgInvitation {
   @@index([email, organizationId])
   @@index([token])
   @@map("org_invitations")
+}
+
+// ─── DPDPA Compliance Models ─────────────────────────────────────────────────
+
+model Consent {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  dataPrincipalId   String            @map("data_principal_id") @db.Uuid
+  dataPrincipalType DataPrincipalType @map("data_principal_type")
+  purpose           ConsentPurpose
+  status            ConsentStatus     @default(WITHDRAWN)
+  grantedAt         DateTime?         @map("granted_at")
+  withdrawnAt       DateTime?         @map("withdrawn_at")
+  legalBasis        String            @map("legal_basis")
+  evidence          Json              @default("{}")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, dataPrincipalId, dataPrincipalType, purpose])
+  @@index([organizationId, dataPrincipalId, dataPrincipalType])
+  @@index([organizationId, status])
+  @@index([createdAt])
+  @@map("consents")
+}
+
+model BreachLog {
+  id                     String       @id @default(uuid()) @db.Uuid
+  organizationId         String       @map("organization_id") @db.Uuid
+  detectedAt             DateTime     @map("detected_at")
+  scope                  String       @db.Text
+  affectedPrincipals     Int          @default(0) @map("affected_principals")
+  status                 BreachStatus @default(DETECTED)
+  reportedToBoardAt      DateTime?    @map("reported_to_board_at")
+  reportedToPrincipalsAt DateTime?    @map("reported_to_principals_at")
+  notes                  String?      @db.Text
+  createdById            String       @map("created_by_id") @db.Uuid
+  createdAt              DateTime     @default(now()) @map("created_at")
+  updatedAt              DateTime     @updatedAt @map("updated_at")
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy              User         @relation("BreachLogCreator", fields: [createdById], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, detectedAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("breach_logs")
+}
+
+model DsrRequest {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  dataPrincipalId   String            @map("data_principal_id") @db.Uuid
+  dataPrincipalType DataPrincipalType @map("data_principal_type")
+  type              DsrType
+  status            DsrStatus         @default(PENDING)
+  details           Json              @default("{}")
+  responseNotes     String?           @map("response_notes") @db.Text
+  processedById     String?           @map("processed_by_id") @db.Uuid
+  processedAt       DateTime?         @map("processed_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  processedBy       User?             @relation("DsrProcessedBy", fields: [processedById], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, dataPrincipalId, dataPrincipalType])
+  @@index([createdAt])
+  @@map("dsr_requests")
 }

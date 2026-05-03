@@ -11,11 +11,21 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Tabs } from "@/components/ui/Tabs";
 import { DataTable } from "@/components/ui/DataTable";
-import { addCustomerNoteAction, deleteCustomerAction, updateCustomerAction } from "@/lib/actions/customers";
+import { addCustomerNoteAction, deleteCustomerAction, updateCustomerAction, updateCustomerMessagingPreferencesAction } from "@/lib/actions/customers";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { updateCustomerSchema } from "@/lib/validations/customer";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import type { Asset, Contract, CustomerNote, Invoice, Ticket } from "@/lib/types";
+
+type MessageLogEntry = {
+  id: string;
+  channel: string;
+  kind: string;
+  status: string;
+  providerMessageId?: string;
+  error?: string;
+  sentAt: string;
+};
 
 type CustomerDetail = {
   customer: {
@@ -33,12 +43,15 @@ type CustomerDetail = {
     totalDue: number;
     totalPaid: number;
     createdAt: string;
+    preferredChannel: string;
+    whatsappOptOut: boolean;
   };
   assets: Asset[];
   invoices: Invoice[];
   tickets: Ticket[];
   contracts: Contract[];
   notes: CustomerNote[];
+  messageLogs: MessageLogEntry[];
 };
 
 function getInitialFormState(detail: CustomerDetail["customer"]) {
@@ -82,6 +95,8 @@ export default function CustomerDetailPageClient({
       totalDue: 0,
       totalPaid: 0,
       createdAt: "",
+      preferredChannel: "",
+      whatsappOptOut: false,
     }),
   );
 
@@ -109,7 +124,7 @@ export default function CustomerDetailPageClient({
     );
   }
 
-  const { customer, assets, invoices, tickets, contracts, notes } = detail;
+  const { customer, assets, invoices, tickets, contracts, notes, messageLogs } = detail;
   const isBusy = (key: string) => pendingAction === key;
 
   const updateField = (
@@ -409,6 +424,14 @@ export default function CustomerDetailPageClient({
                     </div>
                   )}
                 </div>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <MessagingPreferences
+                    customerId={customer.id}
+                    preferredChannel={customer.preferredChannel}
+                    whatsappOptOut={customer.whatsappOptOut}
+                    onRefresh={() => router.refresh()}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -638,6 +661,12 @@ export default function CustomerDetailPageClient({
               />
             ),
           },
+          {
+            id: "messages",
+            label: "Messages",
+            count: messageLogs.length,
+            content: <MessagesTab logs={messageLogs} />,
+          },
         ]}
       />
 
@@ -654,6 +683,167 @@ export default function CustomerDetailPageClient({
         confirmLabel="Delete Customer"
         loading={isBusy("delete")}
       />
+    </div>
+  );
+}
+
+// ─── Messaging preferences ───────────────────────────────────────────────────
+
+const CHANNEL_OPTIONS = [
+  { value: "EMAIL", label: "Email only" },
+  { value: "SMS", label: "SMS" },
+  { value: "WHATSAPP", label: "WhatsApp" },
+];
+
+function MessagingPreferences({
+  customerId,
+  preferredChannel,
+  whatsappOptOut,
+  onRefresh,
+}: {
+  customerId: string;
+  preferredChannel: string;
+  whatsappOptOut: boolean;
+  onRefresh: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const handleChannelChange = async (channel: string) => {
+    setSaving(true);
+    const result = await updateCustomerMessagingPreferencesAction({
+      customerId,
+      preferredChannel: channel,
+      whatsappOptOut,
+    });
+    setSaving(false);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to update channel");
+    } else {
+      onRefresh();
+    }
+  };
+
+  const handleOptOutChange = async (checked: boolean) => {
+    setSaving(true);
+    const result = await updateCustomerMessagingPreferencesAction({
+      customerId,
+      preferredChannel,
+      whatsappOptOut: checked,
+    });
+    setSaving(false);
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to update opt-out");
+    } else {
+      onRefresh();
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Notify via</span>
+        <select
+          value={preferredChannel}
+          disabled={saving}
+          onChange={(e) => handleChannelChange(e.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
+        >
+          {CHANNEL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {preferredChannel === "WHATSAPP" && (
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={whatsappOptOut}
+            disabled={saving}
+            onChange={(e) => handleOptOutChange(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:opacity-60"
+          />
+          Opt out of WhatsApp
+        </label>
+      )}
+    </div>
+  );
+}
+
+// ─── Messages tab ─────────────────────────────────────────────────────────────
+
+const KIND_LABELS: Record<string, string> = {
+  invoice_issued: "Invoice Issued",
+  payment_received: "Payment Received",
+  technician_en_route: "Technician En Route",
+  job_completed: "Job Completed",
+  contract_renewal_due: "Contract Renewal Due",
+};
+
+function MessageStatusBadge({ status }: { status: string }) {
+  const s = status.toUpperCase();
+  const colorClass =
+    s === "SENT" || s === "DELIVERED"
+      ? "bg-green-100 text-green-700"
+      : s === "FAILED"
+        ? "bg-red-100 text-red-700"
+        : "bg-slate-100 text-slate-600";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colorClass}`}>
+      {s.charAt(0) + s.slice(1).toLowerCase()}
+    </span>
+  );
+}
+
+function MessagesTab({ logs }: { logs: MessageLogEntry[] }) {
+  if (logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <MessageSquare className="mb-3 h-8 w-8 text-slate-300" />
+        <p className="text-sm font-medium text-slate-500">No messages sent yet</p>
+        <p className="mt-1 text-xs text-slate-400">
+          Messages via SMS and WhatsApp will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-500">
+            <th className="pb-3 pr-4">Channel</th>
+            <th className="pb-3 pr-4">Event</th>
+            <th className="pb-3 pr-4">Status</th>
+            <th className="pb-3 pr-4">Message ID</th>
+            <th className="pb-3">Sent</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {logs.map((log) => (
+            <tr key={log.id} className="text-slate-700">
+              <td className="py-3 pr-4 font-medium">{log.channel}</td>
+              <td className="py-3 pr-4">{KIND_LABELS[log.kind] ?? log.kind}</td>
+              <td className="py-3 pr-4">
+                <MessageStatusBadge status={log.status} />
+                {log.error && (
+                  <p className="mt-0.5 text-xs text-red-500" title={log.error}>
+                    {log.error.slice(0, 60)}
+                  </p>
+                )}
+              </td>
+              <td className="py-3 pr-4 font-mono text-xs text-slate-400">
+                {log.providerMessageId ?? "—"}
+              </td>
+              <td className="py-3 text-xs text-slate-400">
+                {formatDate(log.sentAt)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

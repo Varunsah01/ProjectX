@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { FormField } from "@/components/ui/FormField";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { createCustomerAction } from "@/lib/actions/customers";
+import { recordCustomerConsentAction } from "@/lib/actions/compliance";
 import { clearFormError, getFormErrors, type FormErrors } from "@/lib/form-errors";
 import { createCustomerSchema } from "@/lib/validations/customer";
 
@@ -25,6 +26,13 @@ export default function NewCustomerPage() {
     shippingState: "",
     category: "Residential",
   });
+  const [consents, setConsents] = useState({
+    SERVICE_DELIVERY: false,
+    COMMUNICATION: false,
+    ANALYTICS: false,
+    MARKETING: false,
+  });
+  const [consentBasis, setConsentBasis] = useState("");
 
   const update = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -55,6 +63,22 @@ export default function NewCustomerPage() {
       if (!result.success) {
         toast.error(result.error);
         return;
+      }
+
+      // Record consent attestation if any purposes were selected
+      const grantedPurposes = Object.entries(consents)
+        .filter(([, granted]) => granted)
+        .map(([purpose]) => ({
+          purpose: purpose as "SERVICE_DELIVERY" | "COMMUNICATION" | "ANALYTICS" | "MARKETING",
+          granted: true,
+        }));
+
+      if (grantedPurposes.length > 0) {
+        await recordCustomerConsentAction({
+          customerId: result.data.id,
+          purposes: grantedPurposes,
+          legalBasis: consentBasis || "Consent attested by admin during customer creation",
+        });
       }
 
       toast.success("Customer created");
@@ -192,6 +216,65 @@ export default function NewCustomerPage() {
               { value: "38", label: "38 - Ladakh" },
             ]}
           />
+        </div>
+
+        <div className="mt-6 space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">
+            Consent Attestation (DPDPA)
+          </p>
+          <p className="text-xs text-slate-500">
+            Confirm the purposes for which you have obtained consent from this customer.
+          </p>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={consents.SERVICE_DELIVERY}
+                onChange={(e) => setConsents((c) => ({ ...c, SERVICE_DELIVERY: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-slate-700">Service delivery</span>
+            </label>
+            <label className="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={consents.COMMUNICATION}
+                onChange={(e) => setConsents((c) => ({ ...c, COMMUNICATION: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-slate-700">Communication</span>
+            </label>
+            <label className="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={consents.ANALYTICS}
+                onChange={(e) => setConsents((c) => ({ ...c, ANALYTICS: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-slate-700">Analytics</span>
+            </label>
+            <label className="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={consents.MARKETING}
+                onChange={(e) => setConsents((c) => ({ ...c, MARKETING: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-slate-700">Marketing</span>
+            </label>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Legal basis / how consent was obtained
+            </label>
+            <input
+              type="text"
+              value={consentBasis}
+              onChange={(e) => setConsentBasis(e.target.value)}
+              placeholder="e.g. Verbal consent during onboarding call"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
         </div>
 
         <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-6">

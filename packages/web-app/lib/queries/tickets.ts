@@ -176,51 +176,21 @@ export async function getTicketFormOptions() {
 }
 
 export async function getTicketStatusCountsForOrganization(organizationId: string) {
-  const [all, open, assigned, inProgress, onHold, resolved] = await Promise.all([
-    db.ticket.count({
-      where: {
-        organizationId,
-      },
-    }),
-    db.ticket.count({
-      where: {
-        organizationId,
-        status: "OPEN",
-      },
-    }),
-    db.ticket.count({
-      where: {
-        organizationId,
-        status: "ASSIGNED",
-      },
-    }),
-    db.ticket.count({
-      where: {
-        organizationId,
-        status: "IN_PROGRESS",
-      },
-    }),
-    db.ticket.count({
-      where: {
-        organizationId,
-        status: "ON_HOLD",
-      },
-    }),
-    db.ticket.count({
-      where: {
-        organizationId,
-        status: "RESOLVED",
-      },
-    }),
-  ]);
+  const groups = await db.ticket.groupBy({
+    by: ["status"],
+    where: { organizationId },
+    _count: true,
+  });
+
+  const countMap = new Map(groups.map((g) => [g.status, g._count]));
 
   return {
-    all,
-    open,
-    assigned,
-    in_progress: inProgress,
-    on_hold: onHold,
-    resolved: resolved,
+    all: groups.reduce((sum, g) => sum + g._count, 0),
+    open: countMap.get("OPEN") ?? 0,
+    assigned: countMap.get("ASSIGNED") ?? 0,
+    in_progress: countMap.get("IN_PROGRESS") ?? 0,
+    on_hold: countMap.get("ON_HOLD") ?? 0,
+    resolved: countMap.get("RESOLVED") ?? 0,
   };
 }
 

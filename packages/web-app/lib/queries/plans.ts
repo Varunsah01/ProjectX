@@ -87,6 +87,7 @@ export async function getActivePlanOptionsForOrganization(
     orderBy: {
       name: "asc",
     },
+    take: 200,
   });
 
   return plans.map(mapPlan);

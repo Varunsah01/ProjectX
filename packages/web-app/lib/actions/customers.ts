@@ -310,13 +310,32 @@ export async function updateCustomerMessagingPreferencesAction(input: unknown) {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = updateMessagingPreferencesSchema.parse(input);
 
-    await db.customer.update({
+    const existing = await db.customer.findUnique({
       where: { id: values.customerId, organizationId: user.organizationId },
-      data: {
-        preferredChannel: values.preferredChannel as PreferredChannel,
-        whatsappOptOut: values.whatsappOptOut,
-      },
+      select: { preferredChannel: true, whatsappOptOut: true },
     });
+
+    await db.$transaction([
+      db.customer.update({
+        where: { id: values.customerId, organizationId: user.organizationId },
+        data: {
+          preferredChannel: values.preferredChannel as PreferredChannel,
+          whatsappOptOut: values.whatsappOptOut,
+        },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "UPDATE",
+          entity: "Customer",
+          entityId: values.customerId,
+          before: existing
+            ? { preferredChannel: existing.preferredChannel, whatsappOptOut: existing.whatsappOptOut }
+            : null,
+          after: { preferredChannel: values.preferredChannel, whatsappOptOut: values.whatsappOptOut },
+        }),
+      }),
+    ]);
 
     revalidatePath(`/customers/${values.customerId}`);
     return actionSuccess(null);

@@ -101,27 +101,30 @@ export async function getContractDetailForOrganization(organizationId: string, i
     return null;
   }
 
-  const jobs = await db.job.findMany({
-    where: {
-      organizationId,
-      assetId: contract.assetId,
-    },
-    include: jobDetailsInclude,
-    orderBy: {
-      scheduledDate: "desc",
-    },
-  });
-
-  const invoices = await db.invoice.findMany({
-    where: {
-      organizationId,
-      contractId: contract.id,
-    },
-    include: invoiceDetailsInclude,
-    orderBy: {
-      issuedDate: "desc",
-    },
-  });
+  const [jobs, invoices] = await Promise.all([
+    db.job.findMany({
+      where: {
+        organizationId,
+        assetId: contract.assetId,
+      },
+      include: jobDetailsInclude,
+      orderBy: {
+        scheduledDate: "desc",
+      },
+      take: 100,
+    }),
+    db.invoice.findMany({
+      where: {
+        organizationId,
+        contractId: contract.id,
+      },
+      include: invoiceDetailsInclude,
+      orderBy: {
+        issuedDate: "desc",
+      },
+      take: 100,
+    }),
+  ]);
 
   return {
     contract: mapContract(contract),
@@ -144,6 +147,7 @@ export async function getContractFormOptionsForOrganization(organizationId: stri
       orderBy: {
         name: "asc",
       },
+      take: 200,
     }),
     db.customer.findMany({
       where: {

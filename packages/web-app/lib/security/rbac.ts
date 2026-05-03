@@ -48,7 +48,12 @@ export type Permission =
   | "payments:create"
   | "payments:verify"
   | "pdf:invoice"
-  | "pdf:job-report";
+  | "pdf:job-report"
+  | "compliance:view"
+  | "compliance:manage"
+  | "consent:manage"
+  | "dsr:manage"
+  | "breach:manage";
 
 const managerDeniedPermissions = new Set<Permission>([
   "settings:business",
@@ -57,6 +62,10 @@ const managerDeniedPermissions = new Set<Permission>([
   "technicians:create",
   "technicians:update",
   "technicians:delete",
+  "compliance:manage",
+  "consent:manage",
+  "dsr:manage",
+  "breach:manage",
 ]);
 
 const agentAllowedPermissions = new Set<Permission>([

@@ -13,6 +13,7 @@ import {
   Wrench,
   Briefcase,
   Shield,
+  ShieldCheck,
   BarChart3,
   Upload,
   Settings,
@@ -36,8 +37,9 @@ const navItems = [
   { label: "Contracts", href: "/contracts", icon: Shield },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Import", href: "/import", icon: Upload },
+  { label: "Compliance", href: "/compliance", icon: ShieldCheck, adminOnly: true },
   { label: "Settings", href: "/settings", icon: Settings },
-];
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -71,6 +73,9 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {navItems.map((item) => {
+            if ("adminOnly" in item && item.adminOnly && activeRole !== "ADMIN") {
+              return null;
+            }
             const isActive =
               item.href === "/"
                 ? pathname === "/"

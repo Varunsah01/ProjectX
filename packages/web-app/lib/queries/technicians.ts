@@ -108,6 +108,7 @@ export async function getTechnicianDetailForOrganization(organizationId: string,
       orderBy: {
         scheduledDate: "desc",
       },
+      take: 100,
     }),
     db.ticket.findMany({
       where: {
@@ -118,6 +119,7 @@ export async function getTechnicianDetailForOrganization(organizationId: string,
       orderBy: {
         createdAt: "desc",
       },
+      take: 100,
     }),
   ]);
 

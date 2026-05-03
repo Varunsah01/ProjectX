@@ -110,6 +110,7 @@ export async function getAssetDetailForOrganization(organizationId: string, id: 
       orderBy: {
         startDate: "desc",
       },
+      take: 100,
     }),
     db.job.findMany({
       where: {
@@ -120,6 +121,7 @@ export async function getAssetDetailForOrganization(organizationId: string, id: 
       orderBy: {
         scheduledDate: "desc",
       },
+      take: 100,
     }),
   ]);
 
@@ -148,6 +150,7 @@ export async function getAssetsForCustomerForOrganization(
     orderBy: {
       name: "asc",
     },
+    take: 200,
   });
 
   return assets.map(mapAsset);

@@ -15,6 +15,7 @@ import {
   issueInvoiceAction,
   updateInvoiceAction,
 } from "@/lib/actions/invoices";
+import type { UserRole } from "@prisma/client";
 import { RecordPaymentModal } from "../RecordPaymentModal";
 import { RefundModal } from "../RefundModal";
 import type { Payment } from "@/lib/types";
@@ -66,10 +67,12 @@ export default function InvoiceDetailPageClient({
   invoice,
   customers,
   orgState,
+  currentRole,
 }: {
   invoice: Invoice | null;
   customers: Array<{ id: string; name: string; billingState?: string | null }>;
   orgState: string;
+  currentRole: UserRole | null;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -126,6 +129,15 @@ export default function InvoiceDetailPageClient({
 
   const balance = invoice.amount - invoice.paidAmount;
   const isBusy = (key: string) => pendingAction === key;
+
+  const refundablePayment =
+    invoice.payments?.find(
+      (p) => p.status === "captured" && p.amount - p.refundedAmountPaisa > 0,
+    ) ?? null;
+  const canInitiateRefund =
+    (invoice.status === "paid" || invoice.status === "partially_refunded") &&
+    currentRole === "ADMIN" &&
+    refundablePayment !== null;
 
   const updateField = (
     field: "customerId" | "dueDate" | "type" | "status" | "notes",
@@ -371,6 +383,17 @@ export default function InvoiceDetailPageClient({
                   >
                     <CreditCard className="h-4 w-4" />
                     Record Payment
+                  </button>
+                )}
+                {canInitiateRefund && (
+                  <button
+                    type="button"
+                    disabled={Boolean(pendingAction)}
+                    onClick={() => setRefundPayment(refundablePayment)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    Initiate Refund
                   </button>
                 )}
                 <a

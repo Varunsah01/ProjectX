@@ -28,6 +28,7 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-fetch";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { ReportsOverview } from "@/lib/types";
 
@@ -290,7 +291,7 @@ function ReportExportMenu({
     if (loading) return;
     setLoading("pdf");
     try {
-      const response = await fetch(`/api/reports/pdf?from=${from}&to=${to}`);
+      const response = await apiFetch(`/api/reports/pdf?from=${from}&to=${to}`);
       if (!response.ok) throw new Error("Failed to generate PDF");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

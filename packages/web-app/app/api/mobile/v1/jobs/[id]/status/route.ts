@@ -6,6 +6,7 @@ import { mapJob, jobDetailsInclude } from "@/lib/data-mappers";
 import { db } from "@/lib/db";
 import { getMobileSession, validateMobileCsrf } from "@/lib/mobile/auth";
 import { notifyJobCompleted } from "@/lib/notifications";
+import { notifyCustomer } from "@/lib/messaging/service";
 import { cleanOptional } from "@/lib/actions/helpers";
 import { parseJsonBody } from "@/lib/security/api";
 
@@ -207,6 +208,24 @@ export async function POST(
 
     if (nextStatus === JobStatus.COMPLETED) {
       await notifyJobCompleted(job.id);
+    }
+
+    if (nextStatus === JobStatus.EN_ROUTE) {
+      const c = updatedJob.customer;
+      notifyCustomer(
+        {
+          id: c.id,
+          organizationId: updatedJob.organizationId,
+          phone: c.phone,
+          preferredChannel: c.preferredChannel,
+          whatsappOptOut: c.whatsappOptOut,
+        },
+        "technician_en_route",
+        {
+          technicianName: session.user.name ?? "Your technician",
+          jobNumber: updatedJob.jobNumber,
+        },
+      ).catch(() => {});
     }
 
     return NextResponse.json({

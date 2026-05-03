@@ -26,6 +26,7 @@ import {
   updateBusinessProfileAction,
   updateTeamMemberAction,
 } from "@/lib/actions/settings";
+import Link from "next/link";
 import {
   createInvitationAction,
   listPendingInvitationsAction,
@@ -86,6 +87,13 @@ export default function SettingsPageClient({
       label: "Notifications",
       content: <NotificationsTab initialNotificationSettings={data.notificationSettings} />,
     },
+    currentRole === "ADMIN"
+      ? {
+          id: "compliance",
+          label: "Compliance",
+          content: <ComplianceSettingsTab initialProfile={data.businessProfile} />,
+        }
+      : null,
     currentRole === "ADMIN"
       ? {
           id: "audit",
@@ -1650,6 +1658,117 @@ function NotificationsTab({
         >
           {isPending ? "Saving..." : "Save Preferences"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ComplianceSettingsTab({
+  initialProfile,
+}: {
+  initialProfile: NonNullable<SettingsData["businessProfile"]> | null;
+}) {
+  const [form, setForm] = useState({
+    grievanceOfficerName: initialProfile?.grievanceOfficerName ?? "",
+    grievanceOfficerEmail: initialProfile?.grievanceOfficerEmail ?? "",
+    grievanceOfficerPhone: initialProfile?.grievanceOfficerPhone ?? "",
+  });
+  const [isPending, startTransition] = useTransition();
+
+  function handleSave() {
+    startTransition(async () => {
+      if (!initialProfile) return;
+      const result = await updateBusinessProfileAction({
+        ...initialProfile,
+        grievanceOfficerName: form.grievanceOfficerName,
+        grievanceOfficerEmail: form.grievanceOfficerEmail,
+        grievanceOfficerPhone: form.grievanceOfficerPhone,
+      });
+
+      if (result.success) {
+        toast.success("Compliance settings saved");
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm font-medium text-amber-800">
+          These settings support DPDPA compliance. Verify all configurations with legal counsel.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-4 text-base font-semibold text-slate-900">
+          Grievance Officer (DPDPA Section 13)
+        </h3>
+        <p className="mb-4 text-sm text-slate-500">
+          Every Data Fiduciary must designate a grievance officer to address data principal concerns.
+          This information is displayed on the customer portal.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField
+            label="Name"
+            name="grievanceOfficerName"
+            value={form.grievanceOfficerName}
+            onChange={(e) => setForm((f) => ({ ...f, grievanceOfficerName: e.target.value }))}
+            placeholder="Full name of grievance officer"
+          />
+          <FormField
+            label="Email"
+            name="grievanceOfficerEmail"
+            type="email"
+            value={form.grievanceOfficerEmail}
+            onChange={(e) => setForm((f) => ({ ...f, grievanceOfficerEmail: e.target.value }))}
+            placeholder="grievance@company.com"
+          />
+          <FormField
+            label="Phone"
+            name="grievanceOfficerPhone"
+            type="tel"
+            value={form.grievanceOfficerPhone}
+            onChange={(e) => setForm((f) => ({ ...f, grievanceOfficerPhone: e.target.value }))}
+            placeholder="+91 98765 43210"
+          />
+        </div>
+        <div className="mt-4">
+          <button
+            onClick={handleSave}
+            disabled={isPending}
+            className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-70"
+          >
+            {isPending ? "Saving..." : "Save Grievance Officer"}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-2 text-base font-semibold text-slate-900">
+          Compliance Dashboard
+        </h3>
+        <p className="mb-4 text-sm text-slate-500">
+          Manage consents, data subject rights requests, breach logs, and view cross-border data flows.
+        </p>
+        <Link
+          href="/compliance"
+          className="inline-block rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+        >
+          Open Compliance Dashboard
+        </Link>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-2 text-base font-semibold text-slate-900">
+          Data Residency
+        </h3>
+        <p className="text-sm text-slate-500">
+          Database region is verified at startup via the <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">EXPECTED_DB_REGION</code> environment
+          variable. The application will refuse to start in production if the database host does not
+          match the expected region.
+        </p>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-fetch";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { commitImportAction, listImportJobsAction } from "@/lib/actions/imports";
@@ -59,7 +60,7 @@ export default function ImportPageClient() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch(`/api/imports/${selectedKind}/preview`, {
+      const res = await apiFetch(`/api/imports/${selectedKind}/preview`, {
         method: "POST",
         body: formData,
       });

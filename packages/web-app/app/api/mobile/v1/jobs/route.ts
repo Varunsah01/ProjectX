@@ -29,6 +29,7 @@ export async function GET(request: Request) {
         { scheduledDate: "asc" },
         { createdAt: "desc" },
       ],
+      take: 100,
     });
 
     return NextResponse.json({

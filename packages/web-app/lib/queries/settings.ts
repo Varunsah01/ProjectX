@@ -34,6 +34,7 @@ export async function getSettingsDataForOrganization(
           orderBy: {
             createdAt: "asc",
           },
+          take: 200,
         })
       : Promise.resolve([]),
     db.plan.findMany({
@@ -43,6 +44,7 @@ export async function getSettingsDataForOrganization(
       orderBy: {
         name: "asc",
       },
+      take: 200,
     }),
     options.includeAuditLogs
       ? db.auditLog.findMany({
@@ -98,6 +100,9 @@ export async function getSettingsDataForOrganization(
           bankBranch: organization.bankBranch ?? undefined,
           upiId: organization.upiId ?? undefined,
           invoiceTerms: organization.invoiceTerms ?? undefined,
+          grievanceOfficerName: organization.grievanceOfficerName ?? undefined,
+          grievanceOfficerEmail: organization.grievanceOfficerEmail ?? undefined,
+          grievanceOfficerPhone: organization.grievanceOfficerPhone ?? undefined,
         }
       : null,
     teamMembers: teamMembers.map(mapTeamMember),

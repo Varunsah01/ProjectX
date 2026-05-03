@@ -26,6 +26,12 @@ export default function SignupPage() {
     confirmPassword: "",
     organizationName: "",
   });
+  const [consents, setConsents] = useState({
+    SERVICE_DELIVERY: false,
+    COMMUNICATION: false,
+    ANALYTICS: false,
+    MARKETING: false,
+  });
   const [errors, setErrors] = useState<SignupErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,6 +60,10 @@ export default function SignupPage() {
       nextErrors.confirmPassword = "Passwords do not match.";
     }
 
+    if (!consents.SERVICE_DELIVERY) {
+      nextErrors.form = "You must consent to data processing for service delivery to create an account.";
+    }
+
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -72,6 +82,9 @@ export default function SignupPage() {
         email: form.email.trim(),
         password: form.password,
         organizationName: form.organizationName.trim(),
+        consents: Object.entries(consents)
+          .filter(([, granted]) => granted)
+          .map(([purpose]) => purpose),
       }),
     });
 
@@ -223,6 +236,63 @@ export default function SignupPage() {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">
+            Data Processing Consent
+          </p>
+          <p className="text-xs text-slate-500">
+            Under the Digital Personal Data Protection Act, 2023, we need your consent
+            to process your data. Review our{" "}
+            <a href="/privacy" target="_blank" className="text-brand-600 underline">
+              Privacy Policy
+            </a>.
+          </p>
+          <label className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consents.SERVICE_DELIVERY}
+              onChange={(e) => setConsents((c) => ({ ...c, SERVICE_DELIVERY: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="text-sm text-slate-700">
+              <strong>Service delivery</strong> — required to provide the core service
+            </span>
+          </label>
+          <label className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consents.COMMUNICATION}
+              onChange={(e) => setConsents((c) => ({ ...c, COMMUNICATION: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="text-sm text-slate-700">
+              <strong>Communication</strong> — service updates, reminders, and notifications
+            </span>
+          </label>
+          <label className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consents.ANALYTICS}
+              onChange={(e) => setConsents((c) => ({ ...c, ANALYTICS: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="text-sm text-slate-700">
+              <strong>Analytics</strong> — usage analytics to improve the product
+            </span>
+          </label>
+          <label className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consents.MARKETING}
+              onChange={(e) => setConsents((c) => ({ ...c, MARKETING: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span className="text-sm text-slate-700">
+              <strong>Marketing</strong> — product updates and promotional offers
+            </span>
+          </label>
         </div>
 
         {errors.form ? (

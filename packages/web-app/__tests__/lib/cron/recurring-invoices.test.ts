@@ -5,12 +5,21 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: vi.fn(),
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    contract: { findMany: vi.fn(), update: vi.fn() },
+vi.mock("@/lib/db", () => {
+  const txClient = {
     invoice: { create: vi.fn() },
-  },
-}));
+    contract: { update: vi.fn() },
+  };
+  return {
+    db: {
+      contract: { findMany: vi.fn(), update: vi.fn() },
+      invoice: { create: vi.fn() },
+      $queryRaw: vi.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      $transaction: vi.fn((fn: (tx: typeof txClient) => Promise<unknown>) => fn(txClient)),
+      __txClient: txClient,
+    },
+  };
+});
 
 vi.mock("@/lib/actions/helpers", () => ({
   getNextNumber: vi.fn(),
@@ -24,13 +33,26 @@ import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db";
 import { getNextNumber } from "@/lib/actions/helpers";
 import { notifyInvoiceCreated } from "@/lib/notifications";
-import { generateRecurringInvoices } from "@/lib/cron/recurring-invoices";
+import {
+  generateRecurringInvoices,
+  type RecurringInvoiceGenerationResult,
+} from "@/lib/cron/recurring-invoices";
+
+function assertNotSkipped(
+  result: RecurringInvoiceGenerationResult,
+): asserts result is Exclude<RecurringInvoiceGenerationResult, { skipped: string }> {
+  if ("skipped" in result) throw new Error(`Unexpected skip: ${result.skipped}`);
+}
 
 const mockFindMany = vi.mocked(db.contract.findMany);
-const mockContractUpdate = vi.mocked(db.contract.update);
-const mockInvoiceCreate = vi.mocked(db.invoice.create);
 const mockGetNextNumber = vi.mocked(getNextNumber);
 const mockNotify = vi.mocked(notifyInvoiceCreated);
+
+// The transaction callback receives a tx client — invoice.create and contract.update
+// are called on tx, not on db directly.
+const txClient = (db as unknown as { __txClient: { invoice: { create: ReturnType<typeof vi.fn> }; contract: { update: ReturnType<typeof vi.fn> } } }).__txClient;
+const mockInvoiceCreate = txClient.invoice.create;
+const mockContractUpdate = txClient.contract.update;
 
 function makeContract(overrides: Record<string, unknown> = {}) {
   const now = new Date("2025-01-15");
@@ -68,6 +90,7 @@ describe("generateRecurringInvoices", () => {
     mockFindMany.mockResolvedValue([contract] as never);
 
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
+    assertNotSkipped(result);
 
     expect(result.count).toBe(1);
     expect(result.invoiceIds).toEqual(["inv-new-1"]);
@@ -90,6 +113,7 @@ describe("generateRecurringInvoices", () => {
     mockFindMany.mockResolvedValue([]);
 
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
+    assertNotSkipped(result);
 
     expect(result.count).toBe(0);
     expect(result.invoiceIds).toEqual([]);
@@ -101,6 +125,7 @@ describe("generateRecurringInvoices", () => {
     mockFindMany.mockResolvedValue([]);
 
     const result = await generateRecurringInvoices();
+    assertNotSkipped(result);
 
     expect(result.count).toBe(0);
     expect(result.invoiceIds).toEqual([]);
@@ -123,6 +148,7 @@ describe("generateRecurringInvoices", () => {
     }) as never);
 
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
+    assertNotSkipped(result);
 
     // The good contract should still produce an invoice
     expect(result.count).toBe(1);
@@ -148,6 +174,7 @@ describe("generateRecurringInvoices", () => {
 
     // Reference date: Jan 15 2025 — should catch up Nov, Dec, Jan
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
+    assertNotSkipped(result);
 
     expect(result.count).toBe(3);
     expect(result.invoiceIds).toEqual(["inv-1", "inv-2", "inv-3"]);

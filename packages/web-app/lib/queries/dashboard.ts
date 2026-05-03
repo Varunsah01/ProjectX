@@ -11,29 +11,17 @@ import {
 } from "@/lib/data-mappers";
 import {
   addDays,
-  getDaysDifference,
   getMonthLabel,
   getMonthLabelWithYear,
   getOrganizationContext,
-  toDateString,
+  startOfDay,
 } from "@/lib/query-utils";
 import type { ActionItem, DashboardData, DashboardMetrics, RevenuePeriod } from "@/lib/types";
-
-function getReferenceDate(dates: Date[]) {
-  return dates.reduce<Date | null>((latest, current) => {
-    if (!latest || current > latest) {
-      return current;
-    }
-
-    return latest;
-  }, null) ?? new Date();
-}
 
 function getPeriodMonths(period: RevenuePeriod, referenceDate: Date): number {
   if (period === "3m") return 3;
   if (period === "6m") return 6;
   if (period === "12m") return 12;
-  // ytd: January through the reference month (inclusive), minimum 1
   return Math.max(1, referenceDate.getMonth() + 1);
 }
 
@@ -54,119 +42,167 @@ export async function getDashboardDataForOrganization(
   organizationId: string,
   period: RevenuePeriod = "6m",
 ): Promise<DashboardData> {
-  const [customers, assets, invoices, tickets, contracts, jobs, technicians] = await Promise.all([
-    db.customer.findMany({
-      where: { organizationId },
-      include: {
-        invoices: {
-          select: {
-            amount: true,
-            paidAmount: true,
-            status: true,
-          },
-        },
-      },
+  const referenceDate = new Date();
+  const today = startOfDay(referenceDate);
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const thirtyDaysAgo = addDays(referenceDate, -30);
+  const sevenDaysFromNow = addDays(referenceDate, 7);
+  const periodMonths = getPeriodMonths(period, referenceDate);
+  const periodStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - (periodMonths - 1), 1);
+
+  const [
+    totalCustomers,
+    activeCustomers,
+    totalAssets,
+    dueSums,
+    overdueAgg,
+    longOverdueCount,
+    draftInvoicesCount,
+    openTicketsCount,
+    criticalTicketsCount,
+    criticalUnassignedCount,
+    resolvedTickets,
+    renewalGroups,
+    expiringContractCount,
+    expiringThisWeekCount,
+    pendingJobsCount,
+    todayJobsCount,
+    overdueInvoices,
+    recentTickets,
+    expiringContracts,
+    todayJobs,
+    revenueInvoices,
+    technicians,
+  ] = await Promise.all([
+    // ── Customer counts ──
+    db.customer.count({ where: { organizationId } }),
+    db.customer.count({ where: { organizationId, status: "ACTIVE" } }),
+
+    // ── Asset count ──
+    db.asset.count({ where: { organizationId } }),
+
+    // ── Invoice aggregates ──
+    db.invoice.aggregate({
+      where: { organizationId, status: { in: ["ISSUED", "OVERDUE", "PARTIAL"] } },
+      _sum: { amount: true, paidAmount: true },
     }),
-    db.asset.count({
-      where: { organizationId },
+    db.invoice.aggregate({
+      where: { organizationId, status: "OVERDUE" },
+      _sum: { amount: true, paidAmount: true },
+      _count: true,
     }),
-    db.invoice.findMany({
-      where: { organizationId },
-      include: invoiceDetailsInclude,
-      orderBy: { dueDate: "asc" },
+    db.invoice.count({
+      where: { organizationId, status: "OVERDUE", dueDate: { lt: thirtyDaysAgo } },
+    }),
+    db.invoice.count({
+      where: { organizationId, status: "DRAFT" },
+    }),
+
+    // ── Ticket counts ──
+    db.ticket.count({
+      where: { organizationId, status: { notIn: ["RESOLVED", "CLOSED"] } },
+    }),
+    db.ticket.count({
+      where: { organizationId, priority: "CRITICAL", status: { notIn: ["RESOLVED", "CLOSED"] } },
+    }),
+    db.ticket.count({
+      where: { organizationId, priority: "CRITICAL", assignedToId: null, status: { notIn: ["RESOLVED", "CLOSED"] } },
     }),
     db.ticket.findMany({
-      where: { organizationId },
-      include: ticketDetailsInclude,
-      orderBy: { createdAt: "desc" },
+      where: { organizationId, resolvedAt: { not: null } },
+      select: { createdAt: true, resolvedAt: true },
+      orderBy: { resolvedAt: "desc" },
+      take: 1000,
     }),
-    db.contract.findMany({
-      where: { organizationId },
-      include: contractDetailsInclude,
-      orderBy: { endDate: "asc" },
+
+    // ── Contract metrics ──
+    db.contract.groupBy({
+      by: ["status"],
+      where: { organizationId, status: { in: ["ACTIVE", "EXPIRING_SOON", "EXPIRED", "RENEWED"] } },
+      _count: true,
     }),
-    db.job.findMany({
-      where: { organizationId },
-      include: jobDetailsInclude,
-      orderBy: { scheduledDate: "desc" },
+    db.contract.count({
+      where: { organizationId, status: { in: ["EXPIRING_SOON", "EXPIRED"] } },
     }),
-    db.user.findMany({
+    db.contract.count({
       where: {
         organizationId,
-        role: "TECHNICIAN",
+        status: { notIn: ["EXPIRED", "CANCELLED", "RENEWED"] },
+        endDate: { gte: referenceDate, lte: sevenDaysFromNow },
       },
-      select: {
-        id: true,
-        status: true,
-      },
+    }),
+
+    // ── Job counts ──
+    db.job.count({ where: { organizationId, status: "PENDING" } }),
+    db.job.count({ where: { organizationId, scheduledDate: today } }),
+
+    // ── Display queries (need full includes for mappers) ──
+    db.invoice.findMany({
+      where: { organizationId, status: "OVERDUE" },
+      include: invoiceDetailsInclude,
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    db.ticket.findMany({
+      where: { organizationId, status: { notIn: ["RESOLVED", "CLOSED"] } },
+      include: ticketDetailsInclude,
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    db.contract.findMany({
+      where: { organizationId, status: { in: ["EXPIRING_SOON", "EXPIRED"] } },
+      include: contractDetailsInclude,
+      orderBy: { endDate: "asc" },
+      take: 5,
+    }),
+    db.job.findMany({
+      where: { organizationId, scheduledDate: today },
+      include: jobDetailsInclude,
+      take: 4,
+    }),
+
+    // ── Revenue chart (narrow select) ──
+    db.invoice.findMany({
+      where: { organizationId, issuedDate: { gte: periodStart } },
+      select: { amount: true, paidAmount: true, issuedDate: true },
+    }),
+
+    // ── Technicians ──
+    db.user.findMany({
+      where: { organizationId, role: "TECHNICIAN" },
+      select: { id: true, status: true },
+      take: 500,
     }),
   ]);
 
-  const referenceDate = getReferenceDate([
-    ...invoices.map((invoice) => invoice.issuedDate),
-    ...jobs.map((job) => job.scheduledDate),
-    ...tickets.map((ticket) => ticket.createdAt),
-    ...contracts.map((contract) => contract.endDate),
-  ]);
+  // ── Compute metrics ──
+  const totalDue = Math.max(0, (dueSums._sum.amount ?? 0) - (dueSums._sum.paidAmount ?? 0));
+  const overdueAmount = Math.max(0, (overdueAgg._sum.amount ?? 0) - (overdueAgg._sum.paidAmount ?? 0));
+  const overdueCount = overdueAgg._count;
 
-  const todayJobs = jobs.filter((job) => toDateString(job.scheduledDate) === toDateString(referenceDate));
-  const overdueInvoices = invoices.filter((invoice) => invoice.status === "OVERDUE");
-  const recentTickets = tickets
-    .filter((ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status))
-    .slice(0, 5);
-  const expiringContracts = contracts
-    .filter((contract) => ["EXPIRING_SOON", "EXPIRED"].includes(contract.status))
-    .slice(0, 5);
-
-  const totalDue = customers.reduce((sum, customer) => {
-    return (
-      sum +
-      customer.invoices.reduce((invoiceSum, invoice) => {
-        if (!["ISSUED", "OVERDUE", "PARTIAL"].includes(invoice.status)) {
-          return invoiceSum;
-        }
-
-        return invoiceSum + Math.max(0, invoice.amount - invoice.paidAmount);
-      }, 0)
-    );
-  }, 0);
-
-  const overdueAmount = overdueInvoices.reduce(
-    (sum, invoice) => sum + Math.max(0, invoice.amount - invoice.paidAmount),
-    0,
-  );
-  const openTickets = tickets.filter((ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status));
-  const criticalTickets = openTickets.filter((ticket) => ticket.priority === "CRITICAL");
-  const expiringContractCount = contracts.filter((contract) =>
-    ["EXPIRING_SOON", "EXPIRED"].includes(contract.status),
-  ).length;
-  const activeCustomers = customers.filter((customer) => customer.status === "ACTIVE").length;
-
-  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-  const monthlyInvoices = invoices.filter((invoice) => invoice.issuedDate >= monthStart);
-  const monthlyBilled = monthlyInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
-  const monthlyCollected = monthlyInvoices.reduce((sum, invoice) => sum + invoice.paidAmount, 0);
+  const monthlyInvoices = revenueInvoices.filter((inv) => inv.issuedDate >= monthStart);
+  const monthlyBilled = monthlyInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+  const monthlyCollected = monthlyInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const collectionRate = monthlyBilled > 0 ? Math.round((monthlyCollected / monthlyBilled) * 100) : 0;
 
-  const resolvedTickets = tickets.filter((ticket) => ticket.resolvedAt);
   const avgResolutionHours = resolvedTickets.length
     ? Math.round(
-        resolvedTickets.reduce((sum, ticket) => {
-          return sum + (ticket.resolvedAt!.getTime() - ticket.createdAt.getTime()) / (1000 * 60 * 60);
+        resolvedTickets.reduce((sum, t) => {
+          return sum + (t.resolvedAt!.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60);
         }, 0) / resolvedTickets.length,
       )
     : 0;
 
-  const renewableContracts = contracts.filter((contract) =>
-    ["ACTIVE", "EXPIRING_SOON", "EXPIRED", "RENEWED"].includes(contract.status),
-  );
-  const renewalBase = renewableContracts.length;
-  const renewedContracts = renewableContracts.filter((contract) => contract.status === "RENEWED").length;
+  const renewalMap = new Map(renewalGroups.map((g) => [g.status, g._count]));
+  const renewalBase =
+    (renewalMap.get("ACTIVE") ?? 0) +
+    (renewalMap.get("EXPIRING_SOON") ?? 0) +
+    (renewalMap.get("EXPIRED") ?? 0) +
+    (renewalMap.get("RENEWED") ?? 0);
+  const renewedContracts = renewalMap.get("RENEWED") ?? 0;
   const renewalRate = renewalBase > 0 ? Math.round((renewedContracts / renewalBase) * 100) : 0;
 
-  const techniciansActive = technicians.filter((technician) =>
-    ["on_job", "en_route"].includes(technician.status),
-  ).length;
+  const techniciansActive = technicians.filter((t) => ["on_job", "en_route"].includes(t.status)).length;
   const technicianUtilization = technicians.length
     ? Math.round((techniciansActive / technicians.length) * 100)
     : 0;
@@ -174,14 +210,14 @@ export async function getDashboardDataForOrganization(
   const metrics: DashboardMetrics = {
     totalDue,
     overdueAmount,
-    overdueCount: overdueInvoices.length,
-    openTickets: openTickets.length,
-    criticalTickets: criticalTickets.length,
+    overdueCount,
+    openTickets: openTicketsCount,
+    criticalTickets: criticalTicketsCount,
     expiringContracts: expiringContractCount,
-    todayJobs: todayJobs.length,
+    todayJobs: todayJobsCount,
     activeCustomers,
-    totalCustomers: customers.length,
-    totalAssets: assets,
+    totalCustomers,
+    totalAssets,
     monthlyCollected,
     monthlyBilled,
     collectionRate,
@@ -190,31 +226,7 @@ export async function getDashboardDataForOrganization(
     technicianUtilization,
   };
 
-  const thirtyDaysAgo = addDays(referenceDate, -30);
-  const sevenDaysFromNow = addDays(referenceDate, 7);
-
-  const longOverdueCount = invoices.filter(
-    (inv) => inv.status === "OVERDUE" && inv.dueDate < thirtyDaysAgo,
-  ).length;
-
-  const criticalUnassignedCount = tickets.filter(
-    (t) =>
-      t.priority === "CRITICAL" &&
-      !t.assignedToId &&
-      !["RESOLVED", "CLOSED"].includes(t.status),
-  ).length;
-
-  const expiringThisWeekCount = contracts.filter(
-    (c) =>
-      !["EXPIRED", "CANCELLED", "RENEWED"].includes(c.status) &&
-      c.endDate >= referenceDate &&
-      c.endDate <= sevenDaysFromNow,
-  ).length;
-
-  const pendingJobsCount = jobs.filter((j) => j.status === "PENDING").length;
-
-  const draftInvoicesCount = invoices.filter((inv) => inv.status === "DRAFT").length;
-
+  // ── Action items ──
   const allActionCandidates: (ActionItem | false)[] = [
     longOverdueCount > 0 && {
       key: "long_overdue",
@@ -262,13 +274,13 @@ export async function getDashboardDataForOrganization(
     .filter((item): item is ActionItem => Boolean(item))
     .slice(0, 5);
 
-  const periodMonths = getPeriodMonths(period, referenceDate);
+  // ── Revenue chart ──
   const revenueChartData = buildLastMonths(referenceDate, periodMonths).map((bucket) => {
-    invoices.forEach((invoice) => {
-      const key = `${invoice.issuedDate.getFullYear()}-${invoice.issuedDate.getMonth()}`;
+    revenueInvoices.forEach((inv) => {
+      const key = `${inv.issuedDate.getFullYear()}-${inv.issuedDate.getMonth()}`;
       if (key === bucket.key) {
-        bucket.billed += invoice.amount;
-        bucket.collected += invoice.paidAmount;
+        bucket.billed += inv.amount;
+        bucket.collected += inv.paidAmount;
       }
     });
 
@@ -283,10 +295,10 @@ export async function getDashboardDataForOrganization(
   return {
     metrics,
     actionItems,
-    overdueInvoices: overdueInvoices.slice(0, 5).map(mapInvoice),
+    overdueInvoices: overdueInvoices.map(mapInvoice),
     recentTickets: recentTickets.map(mapTicket),
     expiringContracts: expiringContracts.map(mapContract),
-    todayJobs: todayJobs.slice(0, 4).map(mapJob),
+    todayJobs: todayJobs.map(mapJob),
     activeTechniciansCount: techniciansActive,
     revenueChartData,
   };

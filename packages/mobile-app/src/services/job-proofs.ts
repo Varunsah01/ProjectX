@@ -133,6 +133,7 @@ export async function uploadJobProof(
       resourceId: jobId,
       contentType,
       ext,
+      clientProofId: draft.id,
     });
 
     const response = await request<DetailResponse<JobProofDto>>(`/jobs/${jobId}/proofs`, {

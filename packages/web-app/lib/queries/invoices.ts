@@ -2,11 +2,13 @@ import { Prisma, InvoiceStatus, InvoiceType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { invoiceDetailsInclude, mapInvoice } from "@/lib/data-mappers";
 import {
+  addDays,
   buildContains,
   buildPagination,
   getDaysDifference,
   getOrganizationContext,
   normalizeListParams,
+  startOfDay,
   toDateString,
   toEnumValue,
 } from "@/lib/query-utils";
@@ -117,97 +119,128 @@ export async function getCollectionsDataForOrganization(
     pageSize?: number;
   } = {},
 ): Promise<CollectionsData> {
-  const invoices = await db.invoice.findMany({
-    where: {
-      organizationId,
-      status: {
-        in: ["ISSUED", "OVERDUE", "PARTIAL"],
-      },
-    },
-    include: invoiceDetailsInclude,
-    orderBy: {
-      dueDate: "asc",
-    },
-  });
+  const referenceDate = new Date();
+  const today = startOfDay(referenceDate);
+  const d30 = addDays(today, -30);
+  const d60 = addDays(today, -60);
+  const d90 = addDays(today, -90);
 
-  const referenceDate =
-    invoices.reduce<Date | null>((latest, invoice) => {
-      if (!latest || invoice.dueDate > latest) {
-        return invoice.dueDate;
-      }
+  const baseWhere: Prisma.InvoiceWhereInput = {
+    organizationId,
+    status: { in: ["ISSUED", "OVERDUE", "PARTIAL"] },
+  };
 
-      return latest;
-    }, null) ?? new Date();
+  // ── Bucket aggregates (summary across ALL non-paid invoices) ──
+  const [notDueAgg, b030Agg, b3060Agg, b6090Agg, b90PlusAgg] =
+    await Promise.all([
+      db.invoice.aggregate({
+        where: { ...baseWhere, dueDate: { gte: today } },
+        _sum: { amount: true, paidAmount: true },
+        _count: true,
+      }),
+      db.invoice.aggregate({
+        where: { ...baseWhere, dueDate: { gte: d30, lt: today } },
+        _sum: { amount: true, paidAmount: true },
+        _count: true,
+      }),
+      db.invoice.aggregate({
+        where: { ...baseWhere, dueDate: { gte: d60, lt: d30 } },
+        _sum: { amount: true, paidAmount: true },
+        _count: true,
+      }),
+      db.invoice.aggregate({
+        where: { ...baseWhere, dueDate: { gte: d90, lt: d60 } },
+        _sum: { amount: true, paidAmount: true },
+        _count: true,
+      }),
+      db.invoice.aggregate({
+        where: { ...baseWhere, dueDate: { lt: d90 } },
+        _sum: { amount: true, paidAmount: true },
+        _count: true,
+      }),
+    ]);
 
-  const rows: CollectionRow[] = invoices.map((invoiceRecord) => {
+  function bucketBalance(agg: typeof notDueAgg) {
+    return Math.max(0, (agg._sum.amount ?? 0) - (agg._sum.paidAmount ?? 0));
+  }
+
+  const notDueAmount = bucketBalance(notDueAgg);
+  const b030Amount = bucketBalance(b030Agg);
+  const b3060Amount = bucketBalance(b3060Agg);
+  const b6090Amount = bucketBalance(b6090Agg);
+  const b90PlusAmount = bucketBalance(b90PlusAgg);
+
+  const totalOutstanding = notDueAmount + b030Amount + b3060Amount + b6090Amount + b90PlusAmount;
+  const overdueAmount = b030Amount + b3060Amount + b6090Amount + b90PlusAmount;
+  const criticalAmount = b6090Amount + b90PlusAmount;
+
+  const buckets = [
+    { label: "Not Yet Due", key: "not_due", color: "bg-blue-500", amount: notDueAmount, count: notDueAgg._count },
+    { label: "0-30 Days", key: "0-30", color: "bg-amber-500", amount: b030Amount, count: b030Agg._count },
+    { label: "30-60 Days", key: "30-60", color: "bg-orange-500", amount: b3060Amount, count: b3060Agg._count },
+    { label: "60-90 Days", key: "60-90", color: "bg-red-500", amount: b6090Amount, count: b6090Agg._count },
+    { label: "90+ Days", key: "90+", color: "bg-red-700", amount: b90PlusAmount, count: b90PlusAgg._count },
+  ];
+
+  // ── Paginated rows with DB-level filters ──
+  const search = params.search?.trim().toLowerCase() ?? "";
+  const bucketFilter = params.bucket?.trim() ?? "all";
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.max(1, params.pageSize ?? 20);
+
+  const bucketDateWhere: Prisma.InvoiceWhereInput =
+    bucketFilter === "not_due"
+      ? { dueDate: { gte: today } }
+      : bucketFilter === "0-30"
+        ? { dueDate: { gte: d30, lt: today } }
+        : bucketFilter === "30-60"
+          ? { dueDate: { gte: d60, lt: d30 } }
+          : bucketFilter === "60-90"
+            ? { dueDate: { gte: d90, lt: d60 } }
+            : bucketFilter === "90+"
+              ? { dueDate: { lt: d90 } }
+              : {};
+
+  const rowsWhere: Prisma.InvoiceWhereInput = {
+    ...baseWhere,
+    ...bucketDateWhere,
+    ...(search
+      ? { customer: { name: { contains: search, mode: "insensitive" as const } } }
+      : {}),
+  };
+
+  const [totalCount, invoiceRecords] = await Promise.all([
+    db.invoice.count({ where: rowsWhere }),
+    db.invoice.findMany({
+      where: rowsWhere,
+      include: invoiceDetailsInclude,
+      orderBy: { dueDate: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const normalizedPage = Math.min(page, totalPages);
+
+  const rows: CollectionRow[] = invoiceRecords.map((invoiceRecord) => {
     const invoice = mapInvoice(invoiceRecord);
     const balance = Math.max(0, invoice.amount - invoice.paidAmount);
     const daysOverdue = getDaysDifference(invoiceRecord.dueDate, referenceDate);
     let bucket = "not_due";
-
-    if (daysOverdue > 90) {
-      bucket = "90+";
-    } else if (daysOverdue > 60) {
-      bucket = "60-90";
-    } else if (daysOverdue > 30) {
-      bucket = "30-60";
-    } else if (daysOverdue > 0) {
-      bucket = "0-30";
-    }
-
-    return {
-      ...invoice,
-      balance,
-      daysOverdue,
-      bucket,
-    };
-  }).sort((left, right) => right.daysOverdue - left.daysOverdue);
-
-  const totalOutstanding = rows.reduce((sum, row) => sum + row.balance, 0);
-  const overdueAmount = rows
-    .filter((row) => row.daysOverdue > 0)
-    .reduce((sum, row) => sum + row.balance, 0);
-  const criticalAmount = rows
-    .filter((row) => row.daysOverdue > 60)
-    .reduce((sum, row) => sum + row.balance, 0);
-
-  const buckets = [
-    { label: "Not Yet Due", key: "not_due", color: "bg-blue-500" },
-    { label: "0-30 Days", key: "0-30", color: "bg-amber-500" },
-    { label: "30-60 Days", key: "30-60", color: "bg-orange-500" },
-    { label: "60-90 Days", key: "60-90", color: "bg-red-500" },
-    { label: "90+ Days", key: "90+", color: "bg-red-700" },
-  ].map((bucket) => ({
-    ...bucket,
-    amount: rows
-      .filter((row) => row.bucket === bucket.key)
-      .reduce((sum, row) => sum + row.balance, 0),
-    count: rows.filter((row) => row.bucket === bucket.key).length,
-  }));
-
-  const search = params.search?.trim().toLowerCase() ?? "";
-  const bucket = params.bucket?.trim() ?? "all";
-  const page = Math.max(1, params.page ?? 1);
-  const pageSize = Math.max(1, params.pageSize ?? 20);
-  const filteredRows = rows.filter((row) => {
-    const matchSearch = !search || row.customerName.toLowerCase().includes(search);
-    const matchBucket = bucket === "all" || row.bucket === bucket;
-    return matchSearch && matchBucket;
+    if (daysOverdue > 90) bucket = "90+";
+    else if (daysOverdue > 60) bucket = "60-90";
+    else if (daysOverdue > 30) bucket = "30-60";
+    else if (daysOverdue > 0) bucket = "0-30";
+    return { ...invoice, balance, daysOverdue, bucket };
   });
-  const totalCount = filteredRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const normalizedPage = Math.min(page, totalPages);
-  const paginatedRows = filteredRows.slice(
-    (normalizedPage - 1) * pageSize,
-    normalizedPage * pageSize,
-  );
 
   return {
     totalOutstanding,
     overdueAmount,
     criticalAmount,
     buckets,
-    rows: paginatedRows,
+    rows,
     totalCount,
     page: normalizedPage,
     pageSize,

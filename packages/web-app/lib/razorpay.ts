@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { InvoiceStatus, RefundStatus } from "@prisma/client";
+import { InvoiceStatus, Prisma, RefundStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import Razorpay from "razorpay";
 import { db } from "@/lib/db";
@@ -312,6 +312,7 @@ interface RefundWebhookEntity {
   amount?: number;
   status?: string;
   notes?: Record<string, string | number> | null;
+  error_description?: string;
 }
 
 function mapRefundStatus(status: string | undefined): RefundStatus | null {
@@ -426,6 +427,14 @@ export async function applyRefundWebhookEvent({
         amountPaisa: refundAmount,
         processedAt:
           status === "PROCESSED" ? new Date() : status === "FAILED" ? null : refund.processedAt,
+        ...(status === "FAILED" && refundEntity.error_description
+          ? {
+              notes: {
+                ...(refund.notes as object),
+                errorDescription: refundEntity.error_description,
+              } as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     });
 
@@ -451,6 +460,7 @@ export async function applyRefundWebhookEvent({
       invoiceId: recompute?.invoiceId ?? payment.invoiceId,
       refundId: refund.id,
       status,
+      errorDescription: refundEntity.error_description,
     };
   });
 }

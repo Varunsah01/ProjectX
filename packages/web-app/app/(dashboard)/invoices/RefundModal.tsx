@@ -37,7 +37,7 @@ export function RefundModal({ payment, isOpen, onClose, onSuccess }: Props) {
   }, [isOpen, payment.id]);
 
   const isAmountValid = amount > 0 && amount <= refundableRupees;
-  const isReasonValid = reason.trim().length > 0;
+  const isReasonValid = reason.trim().length >= 10;
 
   function handleClose() {
     if (!isPending) onClose();
@@ -108,6 +108,11 @@ export function RefundModal({ payment, isOpen, onClose, onSuccess }: Props) {
             placeholder="Customer request, duplicate charge, service not delivered…"
             className={INPUT_CLS}
           />
+          {reason.trim().length > 0 && reason.trim().length < 10 && (
+            <p className="mt-1 text-xs text-red-500">
+              Reason must be at least 10 characters
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">

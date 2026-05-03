@@ -171,3 +171,19 @@ export function consumeRateLimit({
 }: RateLimitOptions & { key: string }): RateLimitResult {
   return consumeMemoryRateLimit(key, { limit, windowMs });
 }
+
+export async function rateLimitOrg(
+  orgId: string,
+  route: string,
+  opts: RateLimitOptions,
+): Promise<RateLimitResult> {
+  return rateLimit(`org:${orgId}:${route}`, opts);
+}
+
+export async function rateLimitUser(
+  userId: string,
+  route: string,
+  opts: RateLimitOptions,
+): Promise<RateLimitResult> {
+  return rateLimit(`user:${userId}:${route}`, opts);
+}

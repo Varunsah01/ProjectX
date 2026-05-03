@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system";
 import type { AuthenticatedRequest } from "./api";
 import { ApiError } from "./api";
+import { compressForUpload } from "./image-pipeline";
 import { logTestEvent, logTestError } from "./test-logger";
 
 export type UploadKind = "job-proof" | "complaint-proof";
@@ -33,8 +34,51 @@ export async function uploadProof(
     resourceId: string;
     contentType: string;
     ext: string;
+    clientProofId?: string;
   },
 ): Promise<UploadResult> {
+  // --- Compression + caching (images only) ---
+  let uploadUri = input.localUri;
+  let cachedCompressedUri: string | null = null;
+
+  if (
+    input.contentType.startsWith("image/") &&
+    input.clientProofId &&
+    FileSystem.cacheDirectory
+  ) {
+    const cachedPath = `${FileSystem.cacheDirectory}compressed-proof-${input.clientProofId}.jpg`;
+    const cacheInfo = await FileSystem.getInfoAsync(cachedPath);
+
+    if (cacheInfo.exists) {
+      // Offline retry — reuse the previously compressed file; skip re-compression.
+      logTestEvent("upload", "compress-cache-reused", {
+        kind: input.kind,
+        resourceId: input.resourceId,
+      });
+      uploadUri = cachedPath;
+      cachedCompressedUri = cachedPath;
+    } else {
+      const originalInfo = await FileSystem.getInfoAsync(input.localUri, { size: true });
+      const originalBytes = originalInfo.exists ? originalInfo.size : 0;
+      const compressed = await compressForUpload(input.localUri);
+
+      logTestEvent("upload", "compress-info", {
+        kind: input.kind,
+        resourceId: input.resourceId,
+        originalBytes,
+        compressedBytes: compressed.sizeBytes,
+      });
+
+      if (compressed.uri !== input.localUri) {
+        // ImageManipulator wrote a temp file; copy to cacheDir for retry durability.
+        await FileSystem.copyAsync({ from: compressed.uri, to: cachedPath });
+        uploadUri = cachedPath;
+        cachedCompressedUri = cachedPath;
+      }
+    }
+  }
+
+  // --- Acquire presigned URL ---
   let signResponse: SignResponse;
 
   try {
@@ -69,9 +113,10 @@ export async function uploadProof(
     resourceId: input.resourceId,
   });
 
+  // --- PUT to S3 ---
   const uploadResponse = await FileSystem.uploadAsync(
     signResponse.uploadUrl,
-    input.localUri,
+    uploadUri,
     {
       httpMethod: "PUT",
       uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
@@ -88,6 +133,11 @@ export async function uploadProof(
     throw new Error(
       `Upload to storage failed with status ${uploadResponse.status}.`,
     );
+  }
+
+  // --- Cleanup cached compressed file on success ---
+  if (cachedCompressedUri) {
+    await FileSystem.deleteAsync(cachedCompressedUri, { idempotent: true });
   }
 
   logTestEvent("upload", "s3-put-success", {

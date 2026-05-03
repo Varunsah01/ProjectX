@@ -1,10 +1,11 @@
+import * as Sentry from "@sentry/nextjs";
 import {
   applyRefundWebhookEvent,
   finalizeCapturedPayment,
   markPaymentFailed,
   revalidatePaymentPaths,
 } from "@/lib/razorpay";
-import { notifyRefundProcessed } from "@/lib/notifications";
+import { notifyCustomerPaymentReceived, notifyRefundProcessed } from "@/lib/notifications";
 
 export interface RazorpayWebhookEvent {
   id?: string;
@@ -24,6 +25,7 @@ export interface RazorpayWebhookEvent {
         amount?: number;
         status?: string;
         notes?: Record<string, string | number> | null;
+        error_description?: string;
       };
     };
   };
@@ -50,6 +52,7 @@ export async function processWebhookEvent(
     });
 
     revalidatePaymentPaths(result.invoiceId);
+    await notifyCustomerPaymentReceived(result.invoiceId);
     return;
   }
 
@@ -74,6 +77,7 @@ export async function processWebhookEvent(
         amount: refundEntity.amount,
         status: refundEntity.status,
         notes: refundEntity.notes ?? null,
+        error_description: refundEntity.error_description,
       },
       eventType: eventType as "refund.created" | "refund.processed" | "refund.failed",
     });
@@ -84,6 +88,18 @@ export async function processWebhookEvent(
 
     if (result?.status === "PROCESSED" && result.refundId) {
       await notifyRefundProcessed(result.refundId);
+    }
+
+    if (eventType === "refund.failed" && result?.refundId) {
+      Sentry.captureException(
+        new Error(`Razorpay refund failed: ${result.refundId}`),
+        {
+          tags: {
+            refundId: result.refundId,
+            reason: refundEntity.error_description ?? "unknown",
+          },
+        },
+      );
     }
   }
 }

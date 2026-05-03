@@ -117,7 +117,7 @@ export async function GET(
           id: entry.id,
           date: toDateTimeString(entry.createdAt),
           action: entry.action,
-          by: entry.byUser.name,
+          by: entry.byUser?.name ?? "Customer",
           note: entry.note ?? undefined,
         })),
         linkedJobs: complaint.jobs.map((job) => ({
