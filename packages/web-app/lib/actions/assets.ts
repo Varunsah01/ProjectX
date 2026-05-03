@@ -249,8 +249,12 @@ export async function deleteAssetAction(id: string) {
       return actionFailure("Asset not found");
     }
 
+    const now = new Date();
     await db.$transaction([
-      db.asset.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.asset.updateMany({
+        where: { id, organizationId: user.organizationId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       db.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -267,5 +271,41 @@ export async function deleteAssetAction(id: string) {
     return actionSuccess({ id });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to delete asset"));
+  }
+}
+
+export async function restoreAssetAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+
+    const existing = await db.asset.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: { not: null } },
+    });
+
+    if (!existing) {
+      return actionFailure("Asset not found or not deleted");
+    }
+
+    await db.$transaction([
+      db.asset.updateMany({
+        where: { id, organizationId: user.organizationId },
+        data: { deletedAt: null },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "RESTORE",
+          entity: "Asset",
+          entityId: id,
+          before: { deletedAt: existing.deletedAt },
+        }),
+      }),
+    ]);
+
+    revalidatePath("/assets");
+    revalidatePath("/recycle-bin");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to restore asset"));
   }
 }

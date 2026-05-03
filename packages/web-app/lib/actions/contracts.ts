@@ -400,8 +400,12 @@ export async function deleteContractAction(id: string) {
       return actionFailure("Contract not found");
     }
 
+    const now = new Date();
     await db.$transaction([
-      db.contract.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.contract.updateMany({
+        where: { id, organizationId: user.organizationId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       db.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -418,5 +422,41 @@ export async function deleteContractAction(id: string) {
     return actionSuccess({ id });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to delete contract"));
+  }
+}
+
+export async function restoreContractAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+
+    const existing = await db.contract.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: { not: null } },
+    });
+
+    if (!existing) {
+      return actionFailure("Contract not found or not deleted");
+    }
+
+    await db.$transaction([
+      db.contract.updateMany({
+        where: { id, organizationId: user.organizationId },
+        data: { deletedAt: null },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "RESTORE",
+          entity: "Contract",
+          entityId: id,
+          before: { deletedAt: existing.deletedAt },
+        }),
+      }),
+    ]);
+
+    revalidatePath("/contracts");
+    revalidatePath("/recycle-bin");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to restore contract"));
   }
 }

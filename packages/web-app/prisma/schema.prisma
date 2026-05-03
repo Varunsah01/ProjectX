@@ -375,6 +375,7 @@ model Customer {
   whatsappOptOut   Boolean             @default(false) @map("whatsapp_opt_out")
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
+  deletedAt        DateTime?           @map("deleted_at")
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assets           Asset[]
   contracts        Contract[]
@@ -386,6 +387,7 @@ model Customer {
   magicLinks       CustomerMagicLink[]
 
   @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([status])
   @@index([createdAt])
   @@map("customers")
@@ -409,6 +411,7 @@ model Asset {
   nextServiceDate  DateTime?    @map("next_service_date") @db.Date
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
+  deletedAt        DateTime?    @map("deleted_at")
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer         Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   contracts        Contract[]
@@ -416,6 +419,7 @@ model Asset {
   jobs             Job[]
 
   @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([customerId])
   @@index([status])
   @@index([createdAt])
@@ -443,6 +447,7 @@ model Contract {
   notes           String?
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
   organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
   asset           Asset              @relation(fields: [assetId], references: [id])
@@ -452,6 +457,7 @@ model Contract {
 
   @@index([organizationId])
   @@index([organizationId, nextBillingDate])
+  @@index([organizationId, deletedAt])
   @@index([customerId])
   @@index([status])
   @@index([createdAt])
@@ -504,6 +510,7 @@ model Invoice {
   notes          String?
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
+  deletedAt      DateTime?         @map("deleted_at")
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   contract       Contract?         @relation(fields: [contractId], references: [id], onDelete: SetNull)
@@ -513,6 +520,7 @@ model Invoice {
 
   @@index([organizationId, status, dueDate])
   @@index([organizationId, customerId, createdAt(sort: Desc)])
+  @@index([organizationId, deletedAt])
   @@index([status])
   @@index([dueDate])
   @@index([createdAt])
@@ -615,6 +623,7 @@ model Ticket {
   proofMetadata  Json             @default("[]") @map("proof_metadata")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
+  deletedAt      DateTime?        @map("deleted_at")
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
   asset          Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
@@ -623,6 +632,7 @@ model Ticket {
   jobs           Job[]
 
   @@index([organizationId, status, createdAt(sort: Desc)])
+  @@index([organizationId, deletedAt])
   @@index([customerId])
   @@index([status])
   @@index([createdAt])
@@ -665,6 +675,7 @@ model Job {
   proofMetadata  Json         @default("[]") @map("proof_metadata")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
+  deletedAt      DateTime?    @map("deleted_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ticket         Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -673,6 +684,7 @@ model Job {
 
   @@index([organizationId, technicianId, status, scheduledDate])
   @@index([organizationId, customerId, createdAt(sort: Desc)])
+  @@index([organizationId, deletedAt])
   @@index([status])
   @@index([scheduledDate])
   @@index([createdAt])

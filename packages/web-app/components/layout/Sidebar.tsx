@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "./SidebarContext";
@@ -40,6 +42,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggle, setMobileOpen } = useSidebar();
+  const { data: session } = useSession();
+  const activeRole = session?.user?.activeRole;
+  const showRecycleBin = activeRole === "ADMIN" || activeRole === "MANAGER";
 
   const sidebarContent = (
     <>
@@ -99,6 +104,37 @@ export function Sidebar() {
               </li>
             );
           })}
+          {showRecycleBin && (() => {
+            const isActive = pathname.startsWith("/recycle-bin");
+            return (
+              <li key="/recycle-bin">
+                <Link
+                  href="/recycle-bin"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                    isActive
+                      ? "bg-brand-50 text-brand-700 shadow-sm shadow-brand-100"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                  title={collapsed ? "Recycle Bin" : undefined}
+                >
+                  <Trash2
+                    className={cn(
+                      "h-5 w-5 shrink-0 transition-colors",
+                      isActive
+                        ? "text-brand-600"
+                        : "text-slate-400 group-hover:text-slate-600"
+                    )}
+                  />
+                  {!collapsed && "Recycle Bin"}
+                  {isActive && !collapsed && (
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-600" />
+                  )}
+                </Link>
+              </li>
+            );
+          })()}
         </ul>
       </nav>
 

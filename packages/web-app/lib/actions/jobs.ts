@@ -207,8 +207,12 @@ export async function deleteJobAction(id: string) {
       return actionFailure("Job not found");
     }
 
+    const now = new Date();
     await db.$transaction([
-      db.job.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.job.updateMany({
+        where: { id, organizationId: user.organizationId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       db.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -224,5 +228,41 @@ export async function deleteJobAction(id: string) {
     return actionSuccess({ id });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to delete job"));
+  }
+}
+
+export async function restoreJobAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+
+    const existing = await db.job.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: { not: null } },
+    });
+
+    if (!existing) {
+      return actionFailure("Job not found or not deleted");
+    }
+
+    await db.$transaction([
+      db.job.updateMany({
+        where: { id, organizationId: user.organizationId },
+        data: { deletedAt: null },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "RESTORE",
+          entity: "Job",
+          entityId: id,
+          before: { deletedAt: existing.deletedAt },
+        }),
+      }),
+    ]);
+
+    revalidatePath("/jobs");
+    revalidatePath("/recycle-bin");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to restore job"));
   }
 }

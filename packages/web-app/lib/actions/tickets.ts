@@ -287,8 +287,12 @@ export async function deleteTicketAction(id: string) {
       return actionFailure("Complaint not found");
     }
 
+    const now = new Date();
     await db.$transaction([
-      db.ticket.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.ticket.updateMany({
+        where: { id, organizationId: user.organizationId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       db.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -305,5 +309,41 @@ export async function deleteTicketAction(id: string) {
     return actionSuccess({ id });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to delete complaint"));
+  }
+}
+
+export async function restoreTicketAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+
+    const existing = await db.ticket.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: { not: null } },
+    });
+
+    if (!existing) {
+      return actionFailure("Complaint not found or not deleted");
+    }
+
+    await db.$transaction([
+      db.ticket.updateMany({
+        where: { id, organizationId: user.organizationId },
+        data: { deletedAt: null },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "RESTORE",
+          entity: "Ticket",
+          entityId: id,
+          before: { deletedAt: existing.deletedAt },
+        }),
+      }),
+    ]);
+
+    revalidatePath("/complaints");
+    revalidatePath("/recycle-bin");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to restore complaint"));
   }
 }

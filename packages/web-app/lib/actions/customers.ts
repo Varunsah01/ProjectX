@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { PreferredChannel } from "@prisma/client";
 import { requireRole, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { buildAuditLog } from "@/lib/audit/log";
@@ -298,6 +299,32 @@ export async function getCustomerNotesAction(customerId: string) {
   }
 }
 
+const updateMessagingPreferencesSchema = z.object({
+  customerId: z.string().min(1),
+  preferredChannel: z.enum(["EMAIL", "SMS", "WHATSAPP"]),
+  whatsappOptOut: z.boolean(),
+});
+
+export async function updateCustomerMessagingPreferencesAction(input: unknown) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+    const values = updateMessagingPreferencesSchema.parse(input);
+
+    await db.customer.update({
+      where: { id: values.customerId, organizationId: user.organizationId },
+      data: {
+        preferredChannel: values.preferredChannel as PreferredChannel,
+        whatsappOptOut: values.whatsappOptOut,
+      },
+    });
+
+    revalidatePath(`/customers/${values.customerId}`);
+    return actionSuccess(null);
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to update messaging preferences"));
+  }
+}
+
 export async function deleteCustomerAction(id: string) {
   try {
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
@@ -310,8 +337,12 @@ export async function deleteCustomerAction(id: string) {
       return actionFailure("Customer not found");
     }
 
+    const now = new Date();
     await db.$transaction([
-      db.customer.deleteMany({ where: { id, organizationId: user.organizationId } }),
+      db.customer.updateMany({
+        where: { id, organizationId: user.organizationId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
       db.auditLog.create({
         data: buildAuditLog({
           actor: user,
@@ -328,5 +359,42 @@ export async function deleteCustomerAction(id: string) {
     return actionSuccess({ id });
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to delete customer"));
+  }
+}
+
+export async function restoreCustomerAction(id: string) {
+  try {
+    const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
+
+    const existing = await db.customer.findFirst({
+      where: { id, organizationId: user.organizationId, deletedAt: { not: null } },
+    });
+
+    if (!existing) {
+      return actionFailure("Customer not found or not deleted");
+    }
+
+    await db.$transaction([
+      db.customer.updateMany({
+        where: { id, organizationId: user.organizationId },
+        data: { deletedAt: null },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "RESTORE",
+          entity: "Customer",
+          entityId: id,
+          before: { deletedAt: existing.deletedAt },
+        }),
+      }),
+    ]);
+
+    revalidatePath("/customers");
+    revalidatePath("/recycle-bin");
+    revalidatePath("/");
+    return actionSuccess({ id });
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to restore customer"));
   }
 }

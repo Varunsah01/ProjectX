@@ -5,11 +5,13 @@ export type AuditAction =
   | "CREATE"
   | "UPDATE"
   | "DELETE"
+  | "RESTORE"
   | "STATUS_CHANGE"
   | "LOGIN"
   | "LOGOUT"
   | "EXPORT"
-  | "REFUND";
+  | "REFUND"
+  | "REMINDER_SENT";
 
 export interface AuditActor {
   id: string;
