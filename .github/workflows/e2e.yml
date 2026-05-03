@@ -1,0 +1,120 @@
+name: E2E
+
+on:
+  schedule:
+    # Nightly at 02:00 UTC on main
+    - cron: "0 2 * * *"
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+# Only run on PRs when the 'needs-e2e' label is added
+# (schedule + workflow_dispatch always run)
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recuring_e2e?schema=public
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/recuring_e2e?schema=public
+  NEXTAUTH_SECRET: e2e-nextauth-secret
+  NEXTAUTH_URL: http://localhost:3001
+  NEXT_PUBLIC_APP_URL: http://localhost:3001
+  PLAYWRIGHT_BASE_URL: http://localhost:3001
+  # Cron secret used by invoice.spec.ts
+  CRON_SECRET: e2e-cron-secret
+  # Webhook secret used by payment.spec.ts (must match what the app reads)
+  RAZORPAY_WEBHOOK_SECRET: e2e-webhook-secret
+  # Razorpay SDK keys — not needed for webhook tests (no live API calls)
+  RAZORPAY_KEY_ID: rzp_test_e2e_placeholder
+  RAZORPAY_KEY_SECRET: rzp_test_e2e_placeholder
+  # SMTP — point at a no-op sink so email sends don't fail
+  SMTP_HOST: localhost
+  SMTP_PORT: "1025"
+  SMTP_USER: ""
+  SMTP_PASSWORD: ""
+  FROM_EMAIL: no-reply@e2e.test
+
+jobs:
+  e2e:
+    name: e2e
+    # Only run on PRs if the trigger was label addition AND the label is needs-e2e
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'needs-e2e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recuring_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema packages/web-app/prisma/schema.prisma
+
+      - name: Apply database schema
+        run: npx prisma db push --schema packages/web-app/prisma/schema.prisma --skip-generate
+
+      - name: Install Playwright browsers
+        working-directory: packages/web-app
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web app
+        working-directory: packages/web-app
+        run: npx next build
+
+      - name: Run Playwright e2e tests
+        working-directory: packages/web-app
+        run: npx playwright test
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: packages/web-app/playwright-report/
+          retention-days: 14
+
+      - name: Upload test traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: packages/web-app/test-results/
+          retention-days: 7
