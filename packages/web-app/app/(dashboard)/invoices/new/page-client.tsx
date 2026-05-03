@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { track, Events } from "@/lib/analytics";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -116,6 +117,9 @@ export default function NewInvoicePageClient({
         return;
       }
 
+      if (!draft) {
+        track(Events.FIRST_INVOICE_CREATED);
+      }
       toast.success(draft ? "Draft saved" : "Invoice created");
       router.push(`/invoices/${result.data.id}`);
       router.refresh();

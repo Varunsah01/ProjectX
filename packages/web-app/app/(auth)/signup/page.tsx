@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { track, Events } from "@/lib/analytics";
 
 type SignupErrors = {
   name?: string;
@@ -99,6 +100,7 @@ export default function SignupPage() {
       return;
     }
 
+    track(Events.SIGNUP_COMPLETED);
     router.push(signInResult.url ?? callbackUrl);
     router.refresh();
   }

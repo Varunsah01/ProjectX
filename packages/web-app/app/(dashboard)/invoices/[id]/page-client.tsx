@@ -24,6 +24,7 @@ import { updateInvoiceSchema } from "@/lib/validations/invoice";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { computeGstForLine, isInterStateSupply } from "@/lib/tax/gst";
 import type { Invoice } from "@/lib/types";
+import { track, Events } from "@/lib/analytics";
 
 interface LineItem {
   id?: string;
@@ -99,6 +100,15 @@ export default function InvoiceDetailPageClient({
     setErrors({});
     setIsEditing(false);
   }, [invoice]);
+
+  // Fire payment_received once when admin first views a PAID invoice
+  useEffect(() => {
+    if (!invoice || (invoice.status as string) !== "paid") return;
+    const key = `payment_received_fired_${invoice.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    track(Events.PAYMENT_RECEIVED, { invoice_id: invoice.id });
+  }, [invoice?.id, invoice?.status]);
 
   if (!invoice) {
     return (

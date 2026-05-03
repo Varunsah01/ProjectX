@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { CookieBanner } from "@/components/ui/CookieBanner";
 import "./globals.css";
 
 const inter = Inter({
@@ -43,6 +47,33 @@ export const metadata: Metadata = {
   },
 };
 
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Project X",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://recuring.in",
+  logo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://recuring.in"}/logo.png`,
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "sales",
+    email: "hello@recuring.in",
+  },
+};
+
+const softwareSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Project X",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  offers: {
+    "@type": "Offer",
+    priceCurrency: "INR",
+  },
+  description:
+    "The all-in-one operations platform for Indian service businesses.",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -50,6 +81,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
+        />
+      </head>
       <body className="font-sans">
         {/* Skip to content link for accessibility */}
         <a
@@ -58,7 +99,12 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        {children}
+        <AnalyticsProvider>
+          {children}
+          <CookieBanner />
+        </AnalyticsProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

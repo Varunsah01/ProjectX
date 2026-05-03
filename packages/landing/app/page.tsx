@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -46,6 +47,18 @@ const CTASection = dynamic(
   () => import("@/components/sections/CTASection").then((m) => ({ default: m.CTASection })),
   { ssr: true }
 );
+
+export const metadata: Metadata = {
+  title: "Project X — AMC & Service Operations Platform for India",
+  description:
+    "Manage AMC contracts, automate recurring billing, dispatch technicians, and collect faster. Purpose-built for Indian field service businesses.",
+  openGraph: {
+    title: "Project X — AMC & Service Operations Platform for India",
+    description:
+      "Manage AMC contracts, automate recurring billing, dispatch technicians, and collect faster. Purpose-built for Indian field service businesses.",
+    url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://recuring.in",
+  },
+};
 
 export default function LandingPage() {
   return (

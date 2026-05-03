@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
+import { track, Events } from "@/lib/analytics";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,11 @@ export function DemoRequestForm() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<FormStatus>("idle");
 
+  // Fire pricing_viewed once per page load (demo page is the conversion touchpoint)
+  useEffect(() => {
+    track(Events.PRICING_VIEWED);
+  }, []);
+
   const set =
     (field: keyof FormData) =>
     (
@@ -218,6 +224,10 @@ export function DemoRequestForm() {
         return;
       }
 
+      track(Events.DEMO_REQUEST_SUBMITTED, {
+        industry: data.industry,
+        scale: data.scale,
+      });
       setStatus("success");
     } catch {
       setStatus("error");

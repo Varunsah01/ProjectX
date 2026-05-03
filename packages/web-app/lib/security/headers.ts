@@ -10,7 +10,7 @@ export const cspHeader = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.ingest.sentry.io https://*.upstash.io",
+  "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.ingest.sentry.io https://*.upstash.io https://*.posthog.com https://us.i.posthog.com https://eu.i.posthog.com",
   "frame-src https://api.razorpay.com https://checkout.razorpay.com",
 ].join("; ");
 
