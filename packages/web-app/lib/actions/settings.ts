@@ -60,6 +60,8 @@ export async function updateBusinessProfileAction(input: unknown) {
       grievanceOfficerName: values.grievanceOfficerName || null,
       grievanceOfficerEmail: values.grievanceOfficerEmail || null,
       grievanceOfficerPhone: values.grievanceOfficerPhone || null,
+      accountantEmail: values.accountantEmail || null,
+      exportFormat: values.exportFormat || null,
     };
 
     await db.$transaction([

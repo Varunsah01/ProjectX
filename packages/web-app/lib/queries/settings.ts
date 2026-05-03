@@ -103,6 +103,8 @@ export async function getSettingsDataForOrganization(
           grievanceOfficerName: organization.grievanceOfficerName ?? undefined,
           grievanceOfficerEmail: organization.grievanceOfficerEmail ?? undefined,
           grievanceOfficerPhone: organization.grievanceOfficerPhone ?? undefined,
+          accountantEmail: organization.accountantEmail ?? undefined,
+          exportFormat: organization.exportFormat ?? undefined,
         }
       : null,
     teamMembers: teamMembers.map(mapTeamMember),

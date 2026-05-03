@@ -42,5 +42,14 @@ export const recordInvoicePaymentSchema = z.object({
   amount: z.number().min(0, "Payment amount must be positive").optional(),
 });
 
+export const reconcilePaymentSchema = z.object({
+  invoiceId: z.string().uuid("Invalid invoice ID"),
+  amount: z.number().min(1, "Amount must be at least 1 paisa"),
+  method: z.enum(["cash", "bank_transfer", "upi", "cheque", "online", "razorpay"]),
+  razorpayPaymentId: z.string().trim().optional().or(z.literal("")),
+  notes: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
+export type ReconcilePaymentInput = z.infer<typeof reconcilePaymentSchema>;

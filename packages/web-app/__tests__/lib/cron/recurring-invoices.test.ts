@@ -70,8 +70,10 @@ function makeContract(overrides: Record<string, unknown> = {}) {
     nextBillingDate: now,
     lastBilledDate: new Date("2024-12-15"),
     status: "ACTIVE" as const,
-    plan: { name: "Basic AMC" },
+    plan: { name: "Basic AMC", hsnSac: null, gstRatePercent: 0, gstApplicable: false },
     asset: { name: "AC Unit #1" },
+    organization: { placeOfBusinessState: "" },
+    customer: { billingState: "" },
     ...overrides,
   };
 }

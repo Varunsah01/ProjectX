@@ -15,9 +15,11 @@ import {
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
 import {
   createInvoiceSchema,
+  reconcilePaymentSchema,
   recordInvoicePaymentSchema,
   updateInvoiceSchema,
 } from "@/lib/validations/invoice";
+import { randomUUID } from "crypto";
 import { recalculateInvoice } from "@/lib/tax/invoice-totals";
 
 const listInvoicesSchema = z.object({
@@ -405,6 +407,65 @@ export async function recordInvoicePaymentAction(input: unknown) {
     return actionSuccess(detail!);
   } catch (error) {
     return actionFailure(getActionError(error, "Failed to record payment"));
+  }
+}
+
+export async function reconcilePaymentAction(input: unknown) {
+  try {
+    const user = await requireRole([UserRole.ADMIN]);
+    const values = reconcilePaymentSchema.parse(input);
+
+    const existing = await db.invoice.findFirst({
+      where: { id: values.invoiceId, organizationId: user.organizationId },
+    });
+
+    if (!existing) {
+      return actionFailure("Invoice not found");
+    }
+
+    const remaining = existing.amount - existing.paidAmount;
+    if (values.amount > remaining) {
+      return actionFailure(`Amount exceeds remaining balance of ${remaining}`);
+    }
+
+    const paidAmount = Math.min(existing.amount, existing.paidAmount + values.amount);
+    const status =
+      paidAmount >= existing.amount ? "PAID" : paidAmount > 0 ? "PARTIAL" : existing.status;
+
+    await db.$transaction([
+      db.payment.create({
+        data: {
+          invoiceId: existing.id,
+          razorpayOrderId: `manual-${randomUUID()}`,
+          razorpayPaymentId: values.razorpayPaymentId || null,
+          amount: values.amount,
+          status: "captured",
+          method: values.method,
+        },
+      }),
+      db.invoice.update({
+        where: { id: existing.id },
+        data: { paidAmount, status },
+      }),
+      db.auditLog.create({
+        data: buildAuditLog({
+          actor: user,
+          action: "STATUS_CHANGE",
+          entity: "Invoice",
+          entityId: existing.id,
+          before: { status: existing.status, paidAmount: existing.paidAmount },
+          after: { status, paidAmount, method: values.method, reconciled: true },
+        }),
+      }),
+    ]);
+
+    const detail = await getInvoiceDetailForOrganization(user.organizationId, existing.id);
+    revalidatePath("/invoices");
+    revalidatePath(`/invoices/${existing.id}`);
+    revalidatePath("/reconciliation");
+    return actionSuccess(detail!);
+  } catch (error) {
+    return actionFailure(getActionError(error, "Failed to reconcile payment"));
   }
 }
 

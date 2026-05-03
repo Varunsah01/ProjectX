@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { requireRole, UserRole } from "@/lib/auth-utils";
+import { requireRole, blockIfImpersonated, UserRole } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { buildAuditLog } from "@/lib/audit/log";
 import { actionFailure, actionSuccess, getActionError } from "@/lib/query-utils";
@@ -19,6 +19,7 @@ export type InitiateRefundInput = z.infer<typeof initiateRefundSchema>;
 
 export async function initiateRefund(input: unknown) {
   try {
+    await blockIfImpersonated();
     const user = await requireRole([UserRole.ADMIN, UserRole.MANAGER]);
     const values = initiateRefundSchema.parse(input);
 

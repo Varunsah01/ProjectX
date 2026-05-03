@@ -556,6 +556,8 @@ export interface BusinessProfile {
   grievanceOfficerName?: string;
   grievanceOfficerEmail?: string;
   grievanceOfficerPhone?: string;
+  accountantEmail?: string;
+  exportFormat?: string;
 }
 
 export interface SettingsData {

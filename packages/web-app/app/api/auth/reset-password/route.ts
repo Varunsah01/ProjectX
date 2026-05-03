@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { splitRawToken, verifyTokenHash } from "@/lib/auth-tokens";
 import { db } from "@/lib/db";
+import { verifyImpersonationToken } from "@/lib/security/impersonation";
 
 const bodySchema = z.object({
   token: z
@@ -14,6 +15,19 @@ const bodySchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    // Block password resets during impersonation
+    const cookieHeader = request.headers.get("cookie") ?? "";
+    const impMatch = cookieHeader.match(/(?:^|;\s*)__impersonate=([^;]+)/);
+    if (impMatch?.[1]) {
+      const imp = await verifyImpersonationToken(impMatch[1]);
+      if (imp) {
+        return NextResponse.json(
+          { error: "Password reset is not permitted during impersonation" },
+          { status: 403 },
+        );
+      }
+    }
+
     const body = await request.json();
     const parsed = bodySchema.safeParse(body);
 

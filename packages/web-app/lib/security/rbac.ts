@@ -121,6 +121,7 @@ const pagePrefixesByRole: Record<UserRole, string[]> = {
     "/import",
   ],
   TECHNICIAN: ["/jobs", "/complaints"],
+  SUPPORT: ["/admin"],
 };
 
 export function hasPermission(role: UserRole, permission: Permission) {
@@ -136,6 +137,11 @@ export function hasPermission(role: UserRole, permission: Permission) {
     return agentAllowedPermissions.has(permission);
   }
 
+  // SUPPORT has no org-level permissions (they operate via impersonation)
+  if (role === "SUPPORT") {
+    return false;
+  }
+
   return technicianAllowedPermissions.has(permission);
 }
 
@@ -148,6 +154,12 @@ export function assertPermission(role: UserRole, permission: Permission) {
 export function canAccessPath(role: UserRole, pathname: string) {
   if (pathname.startsWith("/api/")) {
     return true;
+  }
+
+  // SUPPORT users can access /admin/* and when impersonating, the full dashboard
+  // The middleware handles the impersonation case separately
+  if (role === "SUPPORT") {
+    return pathname.startsWith("/admin") || pathname === "/";
   }
 
   return pagePrefixesByRole[role].some((prefix) =>

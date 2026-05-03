@@ -44,6 +44,8 @@ export const updateBusinessProfileSchema = z.object({
   grievanceOfficerName: z.string().trim().max(200).optional().or(z.literal("")),
   grievanceOfficerEmail: z.string().trim().email("Invalid email").optional().or(z.literal("")),
   grievanceOfficerPhone: z.string().trim().max(20).optional().or(z.literal("")),
+  accountantEmail: z.string().trim().email("Invalid email").optional().or(z.literal("")),
+  exportFormat: z.enum(["tally", "zoho"]).optional().or(z.literal("")),
 });
 
 export const createTeamMemberSchema = z.object({

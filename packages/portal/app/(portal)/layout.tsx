@@ -3,6 +3,8 @@ import { getPortalSession } from "@/lib/portal-auth";
 import { getOrganizationBranding } from "@/lib/organization";
 import { PortalShell } from "@/components/layout/PortalShell";
 import { PortalSessionProvider } from "@/components/providers/PortalSessionProvider";
+import { GrowthBookProvider } from "@/components/providers/GrowthBookProvider";
+import { getSerializedFeatures } from "@/lib/feature-flags/server";
 
 export default async function PortalLayout({
   children,
@@ -19,11 +21,19 @@ export default async function PortalLayout({
     redirect("/org-not-found");
   }
 
+  const serializedFeatures = await getSerializedFeatures();
+  const attributes = {
+    userId: session.user.customerId,
+    orgId: session.user.organizationId,
+  };
+
   return (
-    <PortalSessionProvider>
-      <PortalShell orgName={org.name} orgLogo={org.logo}>
-        {children}
-      </PortalShell>
-    </PortalSessionProvider>
+    <GrowthBookProvider serializedFeatures={serializedFeatures} attributes={attributes}>
+      <PortalSessionProvider>
+        <PortalShell orgName={org.name} orgLogo={org.logo}>
+          {children}
+        </PortalShell>
+      </PortalSessionProvider>
+    </GrowthBookProvider>
   );
 }

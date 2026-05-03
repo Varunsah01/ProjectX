@@ -14,10 +14,15 @@ vi.mock("@/lib/db", () => {
     findUnique: vi.fn(),
     findMany: vi.fn(),
   };
+  const mockOrgMembership = {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+  };
   return {
     db: {
       session: mockSession,
       user: mockUser,
+      orgMembership: mockOrgMembership,
     },
   };
 });
@@ -41,7 +46,8 @@ const mockSessionCreate = vi.mocked(db.session.create);
 const mockSessionFind = vi.mocked(db.session.findUnique);
 const mockSessionDeleteMany = vi.mocked(db.session.deleteMany);
 const mockUserFind = vi.mocked(db.user.findUnique);
-const mockUserFindMany = vi.mocked(db.user.findMany);
+const mockOrgMembershipFindMany = vi.mocked(db.orgMembership.findMany);
+const mockOrgMembershipFindFirst = vi.mocked(db.orgMembership.findFirst);
 const mockCompare = vi.mocked(compare);
 
 beforeEach(() => {
@@ -141,6 +147,9 @@ describe("getMobileSession", () => {
       csrfToken: "csrf-abc",
     } as never);
     mockUserFind.mockResolvedValue(makeTechnician() as never);
+    mockOrgMembershipFindFirst.mockResolvedValue({
+      organizationId: "org-1",
+    } as never);
 
     const req = new Request("http://localhost/api/mobile/v1/jobs", {
       headers: { Authorization: "Bearer valid-token" },
@@ -281,7 +290,7 @@ describe("authenticateTechnician", () => {
   });
 
   it("returns null when user not found", async () => {
-    mockUserFindMany.mockResolvedValue([]);
+    mockOrgMembershipFindMany.mockResolvedValue([]);
 
     const result = await authenticateTechnician({
       identifierType: "phone",
@@ -292,26 +301,27 @@ describe("authenticateTechnician", () => {
   });
 
   it("returns null on wrong password", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockOrgMembershipFindMany.mockResolvedValue([
       {
-        id: "user-1",
         organizationId: "org-1",
-        role: "TECHNICIAN",
-        name: "Tech",
-        email: "tech@test.com",
-        passwordHash: "$2b$10$hash",
-        status: "ACTIVE",
-        phone: "9876543210",
-        territory: null,
-        specialization: null,
-        activeJobs: 0,
-        completedToday: 0,
-        totalJobs: 0,
-        avgRating: 0,
-        completedThisWeek: 0,
-        completedThisMonth: 0,
-        createdAt: new Date(),
-        skills: [],
+        user: {
+          id: "user-1",
+          name: "Tech",
+          email: "tech@test.com",
+          passwordHash: "$2b$10$hash",
+          status: "ACTIVE",
+          phone: "9876543210",
+          territory: null,
+          specialization: null,
+          activeJobs: 0,
+          completedToday: 0,
+          totalJobs: 0,
+          avgRating: 0,
+          completedThisWeek: 0,
+          completedThisMonth: 0,
+          createdAt: new Date(),
+          skills: [],
+        },
       },
     ] as never);
     mockCompare.mockResolvedValue(false as never);
@@ -325,26 +335,27 @@ describe("authenticateTechnician", () => {
   });
 
   it("returns user on correct password", async () => {
-    mockUserFindMany.mockResolvedValue([
+    mockOrgMembershipFindMany.mockResolvedValue([
       {
-        id: "user-1",
         organizationId: "org-1",
-        role: "TECHNICIAN",
-        name: "Tech User",
-        email: "tech@test.com",
-        passwordHash: "$2b$10$hash",
-        status: "ACTIVE",
-        phone: "9876543210",
-        territory: "North",
-        specialization: "HVAC",
-        activeJobs: 2,
-        completedToday: 1,
-        totalJobs: 50,
-        avgRating: 4.5,
-        completedThisWeek: 5,
-        completedThisMonth: 20,
-        createdAt: new Date("2024-06-01"),
-        skills: ["AC", "Fridge"],
+        user: {
+          id: "user-1",
+          name: "Tech User",
+          email: "tech@test.com",
+          passwordHash: "$2b$10$hash",
+          status: "ACTIVE",
+          phone: "9876543210",
+          territory: "North",
+          specialization: "HVAC",
+          activeJobs: 2,
+          completedToday: 1,
+          totalJobs: 50,
+          avgRating: 4.5,
+          completedThisWeek: 5,
+          completedThisMonth: 20,
+          createdAt: new Date("2024-06-01"),
+          skills: ["AC", "Fridge"],
+        },
       },
     ] as never);
     mockCompare.mockResolvedValue(true as never);

@@ -7,6 +7,19 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TicketListCard } from "@/components/tickets/TicketListCard";
 import { Pagination } from "@/components/ui/Pagination";
+import { FeatureGate } from "@/components/ui/FeatureGate";
+
+function ComingSoon() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="mb-4 rounded-full bg-slate-100 p-4">
+        <MessageSquare className="h-8 w-8 text-slate-400" />
+      </div>
+      <h2 className="text-lg font-semibold text-slate-700">Support Tickets</h2>
+      <p className="mt-1 text-sm text-slate-500">This section is coming soon.</p>
+    </div>
+  );
+}
 
 export default async function TicketsPage({
   searchParams,
@@ -24,6 +37,7 @@ export default async function TicketsPage({
   });
 
   return (
+    <FeatureGate flag="portal.tickets" fallback={<ComingSoon />}>
     <div>
       <PageHeader
         title="Support Tickets"
@@ -57,5 +71,6 @@ export default async function TicketsPage({
         </>
       )}
     </div>
+    </FeatureGate>
   );
 }

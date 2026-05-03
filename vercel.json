@@ -2,5 +2,7 @@
   "framework": "nextjs",
   "installCommand": "npm install --workspace=packages/web-app --include-workspace-root",
   "outputDirectory": "packages/web-app/.next",
-  "crons": []
+  "crons": [
+    { "path": "/api/cron/backup-verify", "schedule": "0 4 * * 0" }
+  ]
 }

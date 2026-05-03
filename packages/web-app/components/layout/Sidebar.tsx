@@ -15,17 +15,21 @@ import {
   Shield,
   ShieldCheck,
   BarChart3,
+  ArrowLeftRight,
   Upload,
   Settings,
   ChevronLeft,
   ChevronRight,
   X,
   Trash2,
+  Search,
+  DatabaseBackup,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "./SidebarContext";
 
 const navItems = [
+  { label: "Account Lookup", href: "/admin/lookup", icon: Search, supportOnly: true },
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Customers", href: "/customers", icon: Users },
   { label: "Assets", href: "/assets", icon: Package },
@@ -36,8 +40,10 @@ const navItems = [
   { label: "Technicians", href: "/technicians", icon: Wrench },
   { label: "Contracts", href: "/contracts", icon: Shield },
   { label: "Reports", href: "/reports", icon: BarChart3 },
+  { label: "Reconciliation", href: "/reconciliation", icon: ArrowLeftRight, adminOnly: true },
   { label: "Import", href: "/import", icon: Upload },
   { label: "Compliance", href: "/compliance", icon: ShieldCheck, adminOnly: true },
+  { label: "Backup Status", href: "/admin/ops/backups", icon: DatabaseBackup, adminOnly: true },
   { label: "Settings", href: "/settings", icon: Settings },
 ] as const;
 
@@ -74,6 +80,9 @@ export function Sidebar() {
         <ul className="space-y-1">
           {navItems.map((item) => {
             if ("adminOnly" in item && item.adminOnly && activeRole !== "ADMIN") {
+              return null;
+            }
+            if ("supportOnly" in item && item.supportOnly && (activeRole as string) !== "SUPPORT") {
               return null;
             }
             const isActive =

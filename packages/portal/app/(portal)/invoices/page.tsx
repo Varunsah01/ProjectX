@@ -7,6 +7,19 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InvoiceStatusFilter } from "@/components/invoices/InvoiceStatusFilter";
 import { InvoiceListCard } from "@/components/invoices/InvoiceListCard";
 import { Pagination } from "@/components/ui/Pagination";
+import { FeatureGate } from "@/components/ui/FeatureGate";
+
+function ComingSoon({ title }: { title: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="mb-4 rounded-full bg-slate-100 p-4">
+        <FileText className="h-8 w-8 text-slate-400" />
+      </div>
+      <h2 className="text-lg font-semibold text-slate-700">{title}</h2>
+      <p className="mt-1 text-sm text-slate-500">This section is coming soon.</p>
+    </div>
+  );
+}
 
 export default async function InvoicesPage({
   searchParams,
@@ -25,6 +38,7 @@ export default async function InvoicesPage({
   });
 
   return (
+    <FeatureGate flag="portal.invoices" fallback={<ComingSoon title="Invoices" />}>
     <div>
       <PageHeader title="Invoices" subtitle="View and pay your invoices" />
 
@@ -54,5 +68,6 @@ export default async function InvoicesPage({
         </>
       )}
     </div>
+    </FeatureGate>
   );
 }

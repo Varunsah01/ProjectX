@@ -21,6 +21,7 @@ import { useSync } from "../hooks/useSync";
 import { AuthProvider } from "../providers/AuthProvider";
 import { SyncProvider } from "../providers/SyncProvider";
 import { JobStateProvider, useJobState } from "../providers/JobStateProvider";
+import { FeatureFlagsProvider } from "../providers/FeatureFlagsProvider";
 import { getApiTargetNotice } from "../services/api";
 import {
   dismissDeviceCheck,
@@ -44,7 +45,9 @@ export default function AppRoot() {
     <AuthProvider>
       <SyncProvider>
         <JobStateProvider>
-          <MobileApp />
+          <FeatureFlagsProvider>
+            <MobileApp />
+          </FeatureFlagsProvider>
         </JobStateProvider>
       </SyncProvider>
     </AuthProvider>

@@ -5,6 +5,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { auth } from "@/auth";
 import { AuthSessionProvider } from "@/components/providers/AuthSessionProvider";
 import { AnalyticsProvider } from "@/components/providers/AnalyticsProvider";
+import { GrowthBookProvider } from "@/components/providers/GrowthBookProvider";
+import { getSerializedFeatures } from "@/lib/feature-flags/server";
 import "./globals.css";
 
 const inter = Inter({
@@ -23,14 +25,26 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
+  const serializedFeatures = await getSerializedFeatures();
+
+  const attributes = {
+    userId: session?.user?.id,
+    orgId: session?.user?.activeOrgId,
+    role: session?.user?.activeRole,
+  };
 
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
         <AuthSessionProvider session={session}>
-          <AnalyticsProvider session={session} />
-          {children}
-          <Toaster richColors position="top-right" />
+          <GrowthBookProvider
+            serializedFeatures={serializedFeatures}
+            attributes={attributes}
+          >
+            <AnalyticsProvider session={session} />
+            {children}
+            <Toaster richColors position="top-right" />
+          </GrowthBookProvider>
         </AuthSessionProvider>
         <Analytics />
       </body>

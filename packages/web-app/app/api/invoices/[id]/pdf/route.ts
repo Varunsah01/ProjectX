@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { InvoicePdfDocument } from "@/lib/pdf-templates/invoice-pdf";
+import { renderBasicInvoicePdf } from "@/lib/pdf-templates/invoice-pdf-basic";
 import { sanitizeFilename } from "@/lib/pdf-templates/shared";
 import { getPresignedGetUrl, isStorageConfigured } from "@/lib/storage/s3";
+import { evalFeature } from "@/lib/feature-flags/server";
 
 export const runtime = "nodejs";
 
@@ -67,6 +69,55 @@ export async function GET(
 
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // Feature flag: `invoices.gst-pdf-template`
+    // ON  (default) → full GST breakdown PDF
+    // OFF            → simple fallback PDF with no tax columns (safe roll-back)
+    const useGstTemplate = await evalFeature("invoices.gst-pdf-template", {
+      userId: user.id,
+      orgId: user.organizationId,
+      role: user.role,
+    });
+
+    if (!useGstTemplate) {
+      const pdfData = {
+        organization: {
+          ...invoice.organization,
+          logoUrl: null,
+          signatureUrl: null,
+        },
+        customer: invoice.customer,
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          issuedDate: invoice.issuedDate,
+          dueDate: invoice.dueDate,
+          amount: invoice.amount,
+          paidAmount: invoice.paidAmount,
+          placeOfSupply: invoice.placeOfSupply,
+          isInterState: invoice.isInterState,
+          subtotalAmount: invoice.subtotalAmount,
+          cgstAmount: invoice.cgstAmount,
+          sgstAmount: invoice.sgstAmount,
+          igstAmount: invoice.igstAmount,
+          totalTaxAmount: invoice.totalTaxAmount,
+          notes: invoice.notes,
+          items: invoice.items.map((item) => ({
+            ...item,
+            gstRatePercent:
+              item.gstRatePercent != null ? Number(item.gstRatePercent) : null,
+          })),
+        },
+      };
+      const basicBuffer = await renderBasicInvoicePdf(pdfData);
+      const filename = sanitizeFilename(`invoice-${invoice.invoiceNumber}.pdf`);
+      return new NextResponse(new Uint8Array(basicBuffer), {
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Disposition": `inline; filename="${filename}"`,
+          "Content-Type": "application/pdf",
+        },
+      });
     }
 
     // Resolve presigned GET URLs for images

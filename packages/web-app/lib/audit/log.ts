@@ -16,7 +16,10 @@ export type AuditAction =
   | "CONSENT_WITHDRAW"
   | "DSR_REQUEST"
   | "DSR_PROCESS"
-  | "BREACH_LOG";
+  | "BREACH_LOG"
+  | "IMPERSONATE_START"
+  | "IMPERSONATE_END"
+  | "IMPERSONATION_BLOCKED";
 
 export interface AuditActor {
   id: string;
@@ -32,6 +35,7 @@ export interface AuditParams {
   after?: Record<string, unknown> | null;
   ip?: string;
   userAgent?: string;
+  actUserId?: string; // Set when action is taken during impersonation
 }
 
 const redactedKeys = /(password|secret|token|signature)/i;
@@ -110,6 +114,7 @@ export function buildAuditLog(params: AuditParams): Prisma.AuditLogUncheckedCrea
   return {
     organizationId: params.actor.organizationId,
     userId: params.actor.id,
+    actUserId: params.actUserId ?? null,
     action: params.action,
     entity: params.entity,
     entityId: params.entityId,

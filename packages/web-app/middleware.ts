@@ -21,6 +21,7 @@ const csrfExemptPrefixes = [
   "/api/cron/invoice-reminders",
   "/api/health",
   "/api/status",
+  "/api/admin/impersonate",
 ];
 const rateLimitExemptPrefixes = [
   "/api/auth/",
@@ -164,6 +165,18 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
 
   if (request.auth?.user && publicRoutes.has(pathname)) {
     return applySecurityHeaders(NextResponse.redirect(new URL("/", nextUrl)));
+  }
+
+  // SUPPORT role: redirect to /admin/lookup when not impersonating and not already on /admin/*
+  if (
+    request.auth?.user?.activeRole === "SUPPORT" &&
+    !isApiRoute &&
+    !pathname.startsWith("/admin") &&
+    !request.cookies.get("__impersonate")
+  ) {
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/admin/lookup", nextUrl)),
+    );
   }
 
   if (

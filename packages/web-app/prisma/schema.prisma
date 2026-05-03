@@ -14,6 +14,7 @@ enum UserRole {
   MANAGER
   AGENT
   TECHNICIAN
+  SUPPORT
 }
 
 enum CustomerStatus {
@@ -215,6 +216,9 @@ model Organization {
   grievanceOfficerName  String?          @map("grievance_officer_name")
   grievanceOfficerEmail String?          @map("grievance_officer_email")
   grievanceOfficerPhone String?          @map("grievance_officer_phone")
+  accountantEmail       String?          @map("accountant_email")
+  exportFormat          String?          @map("export_format")
+  lastExportSentAt      DateTime?        @map("last_export_sent_at")
   createdAt             DateTime         @default(now()) @map("created_at")
   updatedAt             DateTime         @updatedAt @map("updated_at")
   users                 User[]
@@ -285,6 +289,9 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   createdBreachLogs       BreachLog[]              @relation("BreachLogCreator")
   processedDsrs           DsrRequest[]             @relation("DsrProcessedBy")
+  impersonationsSent      ImpersonationSession[]   @relation("SupportImpersonations")
+  impersonationsReceived  ImpersonationSession[]   @relation("TargetImpersonations")
+  actedAuditLogs          AuditLog[]               @relation("ImpersonationAuditLogs")
 
   @@index([organizationId])
   @@index([role])
@@ -760,6 +767,7 @@ model AuditLog {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @map("organization_id") @db.Uuid
   userId         String       @map("user_id") @db.Uuid
+  actUserId      String?      @map("act_user_id") @db.Uuid
   action         String
   entity         String
   entityId       String       @map("entity_id")
@@ -769,10 +777,29 @@ model AuditLog {
   createdAt      DateTime     @default(now()) @map("created_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id])
+  actUser        User?        @relation("ImpersonationAuditLogs", fields: [actUserId], references: [id])
 
   @@index([organizationId, entity, entityId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model ImpersonationSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  supportUserId String    @map("support_user_id") @db.Uuid
+  targetUserId  String    @map("target_user_id") @db.Uuid
+  targetOrgId   String    @map("target_org_id") @db.Uuid
+  reason        String
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  ip            String?
+  userAgent     String?   @map("user_agent")
+  supportUser   User      @relation("SupportImpersonations", fields: [supportUserId], references: [id])
+  targetUser    User      @relation("TargetImpersonations", fields: [targetUserId], references: [id])
+
+  @@index([supportUserId, startedAt])
+  @@index([targetUserId])
+  @@map("impersonation_sessions")
 }
 
 model CustomerNote {
@@ -993,4 +1020,23 @@ model DsrRequest {
   @@index([organizationId, dataPrincipalId, dataPrincipalType])
   @@index([createdAt])
   @@map("dsr_requests")
+}
+
+enum BackupVerificationStatus {
+  OK
+  FAIL
+}
+
+model BackupVerification {
+  id         String                   @id @default(uuid()) @db.Uuid
+  runAt      DateTime                 @default(now()) @map("run_at")
+  branchName String                   @map("branch_name")
+  branchId   String                   @map("branch_id")
+  durationMs Int                      @map("duration_ms")
+  status     BackupVerificationStatus
+  error      String?
+  counts     Json                     @default("{}")
+
+  @@index([runAt])
+  @@map("backup_verifications")
 }

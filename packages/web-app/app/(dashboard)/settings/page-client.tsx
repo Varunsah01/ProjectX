@@ -374,6 +374,42 @@ function BusinessProfileTab({
         </div>
       </div>
 
+      <div className="mt-6 border-t border-slate-100 pt-6">
+        <h4 className="text-sm font-semibold text-slate-900 mb-4">Accountant Export</h4>
+        <p className="text-xs text-slate-500 mb-4">
+          Configure weekly automated exports to your accountant. Exports are sent every
+          Monday at 9 AM IST covering the previous week.
+        </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Accountant Email
+            </label>
+            <input
+              type="email"
+              value={form.accountantEmail || ""}
+              onChange={(e) => update("accountantEmail", e.target.value)}
+              placeholder="accountant@example.com"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Export Format
+            </label>
+            <select
+              value={form.exportFormat || ""}
+              onChange={(e) => update("exportFormat", e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            >
+              <option value="">Select format...</option>
+              <option value="tally">Tally Prime XML</option>
+              <option value="zoho">Zoho Books CSV</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-6 border-t border-slate-100 pt-6 flex items-center gap-3">
         <button
           onClick={() =>
