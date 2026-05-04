@@ -90,8 +90,19 @@ export async function sendInvoiceReminders(
         if (daysSinceDue < days) continue;
         if (sentStages.has(stage)) continue;
 
-        // Record first — prevents double-send if email throws
-        await db.invoiceReminder.create({ data: { invoiceId: invoice.id, stage } });
+        // Atomic check-and-create inside a transaction to prevent double-send
+        // under concurrent cron runs. HTTP calls (email/notifications) happen
+        // OUTSIDE the transaction after it commits.
+        const didCreate = await db.$transaction(async (tx) => {
+          const existing = await tx.invoiceReminder.findFirst({
+            where: { invoiceId: invoice.id, stage },
+          });
+          if (existing) return false;
+          await tx.invoiceReminder.create({ data: { invoiceId: invoice.id, stage } });
+          return true;
+        });
+
+        if (!didCreate) break; // concurrent run already handled this stage
 
         const balance = Math.max(0, invoice.amount - invoice.paidAmount);
         const invoiceUrl = `${getAppUrl()}/invoices/${invoice.id}`;

@@ -94,10 +94,19 @@ export async function sendContractRenewalReminders(
         continue;
       }
 
-      // Record first — unique constraint prevents double-send races
-      await db.contractReminder.create({
-        data: { contractId: contract.id, stage },
+      // Atomic check-and-create inside a transaction to prevent double-send
+      // under concurrent cron runs. HTTP calls (email/notifications) happen
+      // OUTSIDE the transaction after it commits.
+      const didCreate = await db.$transaction(async (tx) => {
+        const existing = await tx.contractReminder.findFirst({
+          where: { contractId: contract.id, stage },
+        });
+        if (existing) return false;
+        await tx.contractReminder.create({ data: { contractId: contract.id, stage } });
+        return true;
       });
+
+      if (!didCreate) continue; // concurrent run already handled this contract
 
       const contractUrl = `${getAppUrl()}/contracts/${contract.id}`;
       const html = renderEmailTemplate(

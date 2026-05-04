@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/nextjs";
 import { getNextNumber } from "@/lib/actions/helpers";
 import { addBillingCycle, formatBillingCycleLabel, startOfDay } from "@/lib/billing";
 import { db } from "@/lib/db";
+import { withCronLock, type CronLockResult } from "@/lib/cron/lock";
+import { logger } from "@/lib/log";
 import { notifyInvoiceCreated } from "@/lib/notifications";
 import { recalculateInvoice } from "@/lib/tax/invoice-totals";
 
@@ -19,26 +21,25 @@ function formatPeriodDate(value: Date) {
   });
 }
 
-export type RecurringInvoiceGenerationResult =
-  | { skipped: "locked" }
-  | {
-      count: number;
-      invoiceIds: string[];
-      contractIds: string[];
-      failed: Record<string, string>;
-    };
+export type RecurringInvoiceStats = {
+  count: number;
+  invoiceIds: string[];
+  contractIds: string[];
+  failed: Record<string, string>;
+};
+
+export type RecurringInvoiceGenerationResult = CronLockResult<RecurringInvoiceStats>;
 
 export async function generateRecurringInvoices(
   referenceDate = new Date(),
 ): Promise<RecurringInvoiceGenerationResult> {
-  const lockResult = await db.$queryRaw<{ pg_try_advisory_lock: boolean }[]>`
-    SELECT pg_try_advisory_lock(hashtext('cron:generate-invoices'))
-  `;
-  if (!lockResult[0].pg_try_advisory_lock) {
-    return { skipped: "locked" as const };
-  }
+  return withCronLock("generate-invoices", async () => {
+    const start = Date.now();
+    logger.info(
+      { event: "cron.start", name: "generate-invoices" },
+      "cron starting",
+    );
 
-  try {
     const today = startOfDay(referenceDate);
     const dueContracts = await db.contract.findMany({
       where: {
@@ -224,13 +225,27 @@ export async function generateRecurringInvoices(
       }
     }
 
-    return {
+    const stats: RecurringInvoiceStats = {
       count: invoiceIds.length,
       invoiceIds,
       contractIds: [...contractIds],
       failed,
     };
-  } finally {
-    await db.$queryRaw`SELECT pg_advisory_unlock(hashtext('cron:generate-invoices'))`;
-  }
+
+    logger.info(
+      {
+        event: "cron.finish",
+        name: "generate-invoices",
+        durationMs: Date.now() - start,
+        stats: {
+          invoicesGenerated: stats.count,
+          contractCount: stats.contractIds.length,
+          failedOrgs: Object.keys(stats.failed).length,
+        },
+      },
+      "cron finished",
+    );
+
+    return stats;
+  });
 }

@@ -17,7 +17,7 @@ function getPortalUrl() {
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 
-async function getCustomerIdByEmail(email: string): Promise<string> {
+async function getCustomerIdByEmail(email: string): Promise<string | null> {
   const customer = await db.customer.findFirst({
     where: {
       email: email.toLowerCase(),
@@ -26,11 +26,7 @@ async function getCustomerIdByEmail(email: string): Promise<string> {
     select: { id: true },
   });
 
-  if (!customer) {
-    throw new Error(`No active customer found for email: ${email}`);
-  }
-
-  return customer.id;
+  return customer?.id ?? null;
 }
 
 const portalAuthConfig: NextAuthConfig = {
@@ -51,6 +47,10 @@ const portalAuthConfig: NextAuthConfig = {
         token: string;
         provider: unknown;
       }) {
+        // Silently skip for unknown emails to prevent account enumeration
+        const customerId = await getCustomerIdByEmail(email);
+        if (!customerId) return;
+
         const portalUrl = getPortalUrl();
         const verifyUrl = `${portalUrl}/api/auth/callback/email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
@@ -105,13 +105,17 @@ const portalAuthConfig: NextAuthConfig = {
   },
   adapter: {
     async createVerificationToken({ identifier, expires, token }) {
-      await db.customerMagicLink.create({
-        data: {
-          customerId: await getCustomerIdByEmail(identifier),
-          token: hashToken(token),
-          expiresAt: expires,
-        },
-      });
+      const customerId = await getCustomerIdByEmail(identifier);
+      if (customerId) {
+        await db.customerMagicLink.create({
+          data: {
+            customerId,
+            token: hashToken(token),
+            expiresAt: expires,
+          },
+        });
+      }
+      // Always return token data to prevent account enumeration
       return { identifier, expires, token };
     },
     async useVerificationToken({ identifier, token }) {

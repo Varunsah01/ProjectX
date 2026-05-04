@@ -19,16 +19,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn("email", {
+      await signIn("email", {
         email: email.trim().toLowerCase(),
         redirect: false,
       });
-
-      if (result?.error) {
-        setError("Unable to send login link. Please check your email and try again.");
-      } else {
-        setSent(true);
-      }
+      // Always show "check your email" to prevent account enumeration
+      setSent(true);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -44,8 +40,8 @@ export default function LoginPage() {
         </div>
         <h1 className="mb-2 text-xl font-semibold text-slate-900">Check your email</h1>
         <p className="mb-6 text-sm text-slate-600">
-          We sent a sign-in link to <strong>{email}</strong>. Click the link in the email to
-          access your account.
+          If an account exists for <strong>{email}</strong>, we sent a sign-in link.
+          Click the link in the email to access your account.
         </p>
         <p className="text-xs text-slate-500">
           The link expires in 15 minutes. Check your spam folder if you don&apos;t see it.

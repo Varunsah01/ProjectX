@@ -6,7 +6,8 @@ export function isInIstSendWindow(now = new Date()): boolean {
   const IST_OFFSET_MIN = 5 * 60 + 30;
   const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
   const istHour = Math.floor(((utcMin + IST_OFFSET_MIN) % 1440) / 60);
-  return istHour >= 8 && istHour < 21;
+  // Allowed window: 08:00–21:59 IST
+  return istHour >= 8 && istHour < 22;
 }
 
 /** UTC midnight that corresponds to today's IST calendar date. */

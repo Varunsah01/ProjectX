@@ -78,11 +78,29 @@ export async function notifyCustomer(
   const providerName = resolveMessagingProviderName();
   const provider = getMessagingProvider();
 
-  let channel: "SMS" | "WHATSAPP";
-  let providerMessageId: string | undefined;
-  let status: MessageStatus = MessageStatus.QUEUED;
-  let error: string | undefined;
+  const channel: "SMS" | "WHATSAPP" =
+    customer.preferredChannel === PreferredChannel.WHATSAPP ? "WHATSAPP" : "SMS";
 
+  // Create the log row before sending so a record always exists,
+  // even if the DB write after a successful send were to fail.
+  let logId: string | undefined;
+  try {
+    const log = await db.messageLog.create({
+      data: {
+        organizationId: customer.organizationId,
+        customerId: customer.id,
+        channel,
+        kind,
+        status: MessageStatus.QUEUED,
+      },
+      select: { id: true },
+    });
+    logId = log.id;
+  } catch (dbErr) {
+    logger.error({ event: "msg.log.error", kind, err: dbErr }, "Failed to create MessageLog");
+  }
+
+  let providerMessageId: string | undefined;
   try {
     if (customer.preferredChannel === PreferredChannel.WHATSAPP) {
       const templateId = process.env[
@@ -100,9 +118,7 @@ export async function notifyCustomer(
         templateId,
         config.waParams(payload),
       );
-      channel = "WHATSAPP";
       providerMessageId = result.messageId;
-      status = MessageStatus.SENT;
     } else {
       const dltTemplateId = process.env[config.smsDltEnvKey]?.trim();
       if (!dltTemplateId) {
@@ -117,33 +133,28 @@ export async function notifyCustomer(
         config.smsBody(payload),
         dltTemplateId,
       );
-      channel = "SMS";
       providerMessageId = result.messageId;
-      status = MessageStatus.SENT;
+    }
+
+    if (logId) {
+      await db.messageLog
+        .update({ where: { id: logId }, data: { status: MessageStatus.SENT, providerMessageId, sentAt: new Date() } })
+        .catch((dbErr) => {
+          logger.error({ event: "msg.log.error", kind, err: dbErr }, "Failed to update MessageLog to SENT");
+        });
     }
   } catch (err) {
-    channel = customer.preferredChannel === PreferredChannel.WHATSAPP ? "WHATSAPP" : "SMS";
-    status = MessageStatus.FAILED;
-    error = err instanceof Error ? err.message : String(err);
+    const error = err instanceof Error ? err.message : String(err);
     logger.error(
       { event: "msg.send.error", kind, channel, customerId: customer.id, err },
       "Customer message failed",
     );
+    if (logId) {
+      await db.messageLog
+        .update({ where: { id: logId }, data: { status: MessageStatus.FAILED, error } })
+        .catch((dbErr) => {
+          logger.error({ event: "msg.log.error", kind, err: dbErr }, "Failed to update MessageLog to FAILED");
+        });
+    }
   }
-
-  await db.messageLog
-    .create({
-      data: {
-        organizationId: customer.organizationId,
-        customerId: customer.id,
-        channel,
-        kind,
-        providerMessageId,
-        status,
-        error,
-      },
-    })
-    .catch((dbErr) => {
-      logger.error({ event: "msg.log.error", kind, err: dbErr }, "Failed to persist MessageLog");
-    });
 }

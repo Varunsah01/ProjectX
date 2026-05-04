@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { compare } from "bcrypt";
 import { UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
+import { generateCsrfToken } from "@/lib/csrf";
 import { toDateString } from "@/lib/query-utils";
 
 const MOBILE_SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
@@ -226,7 +227,7 @@ export async function authenticateTechnician({
 
 export async function createMobileSession(userId: string) {
   const sessionToken = randomBytes(32).toString("hex");
-  const csrfToken = randomBytes(32).toString("hex");
+  const csrfToken = await generateCsrfToken(sessionToken);
   const expires = new Date(Date.now() + MOBILE_SESSION_MAX_AGE_MS);
 
   await db.session.create({
@@ -291,10 +292,14 @@ export async function getMobileSession(request: Request): Promise<MobileSessionR
     return null;
   }
 
+  // Return HMAC-derived CSRF token (matches middleware validation, handles
+  // migration of old sessions that stored a random token).
+  const csrfToken = await generateCsrfToken(token);
+
   return {
     token,
     user: buildMobileUser(user, membership.organizationId),
-    csrfToken: session.csrfToken,
+    csrfToken,
   };
 }
 
@@ -322,5 +327,11 @@ export function validateMobileCsrf(
     return false;
   }
 
-  return headerToken === session.csrfToken;
+  // Timing-safe comparison
+  if (headerToken.length !== session.csrfToken.length) return false;
+  let result = 0;
+  for (let i = 0; i < headerToken.length; i++) {
+    result |= headerToken.charCodeAt(i) ^ session.csrfToken.charCodeAt(i);
+  }
+  return result === 0;
 }

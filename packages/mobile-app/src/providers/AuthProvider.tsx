@@ -24,6 +24,7 @@ type AuthContextValue = {
   isLoading: boolean;
   hasSessionToken: boolean;
   user: User | null;
+  csrfToken: string | null;
   sessionNotice: AuthSessionNotice | null;
   signIn: (credentials: LoginRequest) => Promise<void>;
   requestOtp: (phone: string) => Promise<{ expiresAt: string }>;
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [sessionNotice, setSessionNotice] = useState<AuthSessionNotice | null>(null);
 
   const persistSession = useCallback(async (nextToken: string, nextUser: User, nextCsrfToken?: string) => {
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ops.push(SecureStore.setItemAsync(CSRF_STORAGE_KEY, nextCsrfToken));
     }
     await Promise.all(ops);
+    setCsrfToken(nextCsrfToken ?? null);
     logTestEvent("auth", "session-persisted", {
       userId: nextUser.id,
       role: nextUser.role,
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearSession = useCallback(async () => {
     setToken(null);
     setUser(null);
+    setCsrfToken(null);
     setSessionNotice(null);
     await Promise.all([
       SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY),
@@ -282,6 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       hasSessionToken: Boolean(token),
       user,
+      csrfToken,
       sessionNotice,
       signIn,
       requestOtp,
@@ -291,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       request,
     }),
     [
+      csrfToken,
       isLoading,
       request,
       refreshSession,

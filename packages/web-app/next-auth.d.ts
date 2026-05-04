@@ -8,6 +8,7 @@ declare module "next-auth" {
       activeOrgId: string;
       activeRole: UserRole;
       isEmailVerified: boolean;
+      csrfSeed: string;
       memberships: Array<{
         organizationId: string;
         role: UserRole;
@@ -41,5 +42,6 @@ declare module "next-auth/jwt" {
     tokenVersion?: number;
     tokenVersionCheckedAt?: number;
     isEmailVerified?: boolean;
+    csrfSeed?: string;
   }
 }

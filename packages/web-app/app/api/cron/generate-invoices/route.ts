@@ -81,28 +81,24 @@ async function handleGenerateInvoices(request: Request) {
   }
 
   const start = Date.now();
-  const runDate = new Date().toISOString();
-  logger.info(
-    { event: "cron.start", name: "generate-invoices", runDate },
-    "cron starting",
-  );
 
   try {
-    const result = await generateRecurringInvoices();
+    const lockResult = await generateRecurringInvoices();
 
-    if ("skipped" in result) {
+    if ("skipped" in lockResult) {
       logger.info(
         {
           event: "cron.skipped",
           name: "generate-invoices",
-          runDate,
-          reason: result.skipped,
+          reason: lockResult.skipped,
           durationMs: Date.now() - start,
         },
         "cron skipped",
       );
-      return NextResponse.json({ skipped: result.skipped });
+      return NextResponse.json({ skipped: lockResult.skipped });
     }
+
+    const result = lockResult.result;
 
     revalidatePath("/");
     revalidatePath("/contracts");
@@ -117,22 +113,6 @@ async function handleGenerateInvoices(request: Request) {
       revalidatePath(`/invoices/${invoiceId}`);
     }
 
-    logger.info(
-      {
-        event: "cron.finish",
-        name: "generate-invoices",
-        runDate,
-        durationMs: Date.now() - start,
-        status: 200,
-        stats: {
-          count: result.count,
-          contractCount: result.contractIds.length,
-          invoiceCount: result.invoiceIds.length,
-        },
-      },
-      "cron finished",
-    );
-
     return NextResponse.json({
       success: true,
       count: result.count,
@@ -143,7 +123,6 @@ async function handleGenerateInvoices(request: Request) {
       {
         event: "cron.error",
         name: "generate-invoices",
-        runDate,
         durationMs: Date.now() - start,
         err: error,
       },

@@ -2,6 +2,7 @@ import NextAuth, { type Session } from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import authConfig from "@/auth.config";
 import { requestContext } from "@/lib/request-context";
+import { generateCsrfToken, verifyCsrfToken } from "@/lib/csrf";
 import { applySecurityHeaders } from "@/lib/security/headers";
 import { rateLimit, rateLimitOrg, rateLimitUser, type RateLimitResult } from "@/lib/security/rate-limit";
 import { canAccessPath } from "@/lib/security/rbac";
@@ -11,17 +12,24 @@ const { auth } = NextAuth(authConfig);
 type AuthedRequest = NextRequest & { auth: Session | null };
 
 const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/accept-invitation"]);
+// Routes exempt from all CSRF checks (origin + token)
 const csrfExemptPrefixes = [
   "/api/auth/",
-  "/api/mobile/v1/",
-  "/api/mobile/",
-  "/api/webhooks/razorpay",
-  "/api/cron/generate-invoices",
-  "/api/cron/contract-renewals",
-  "/api/cron/invoice-reminders",
+  "/api/webhooks/",
+  "/api/cron/",
   "/api/health",
   "/api/status",
   "/api/admin/impersonate",
+  "/api/leads",
+];
+
+// Mobile auth routes exempt from mobile CSRF token check
+const mobileCsrfExemptPrefixes = [
+  "/api/mobile/v1/auth/login",
+  "/api/mobile/v1/auth/logout",
+  "/api/mobile/v1/auth/otp/",
+  "/api/mobile/auth/login",
+  "/api/mobile/auth/logout",
 ];
 const rateLimitExemptPrefixes = [
   "/api/auth/",
@@ -134,22 +142,53 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
     }
   }
 
-  if (
-    isMutationMethod(request.method) &&
-    !isExemptPath(pathname, csrfExemptPrefixes)
-  ) {
-    const origin = request.headers.get("origin");
-    const referer = request.headers.get("referer");
-    const isSameOrigin =
-      origin === nextUrl.origin ||
-      Boolean(referer && referer.startsWith(nextUrl.origin));
+  // ── CSRF ────────────────────────────────────────────────────────────────
+  if (isMutationMethod(request.method)) {
+    const isMobileRoute = pathname.startsWith("/api/mobile/");
 
-    if (!isSameOrigin) {
-      return isApiRoute
-        ? buildApiError("Invalid request origin", 403)
-        : applySecurityHeaders(
-            NextResponse.redirect(new URL("/login", nextUrl)),
-          );
+    if (isMobileRoute) {
+      // Mobile routes: validate X-CSRF-Token against HMAC of Bearer token
+      if (!isExemptPath(pathname, mobileCsrfExemptPrefixes)) {
+        const bearerToken = request.headers
+          .get("authorization")
+          ?.replace(/^Bearer\s+/i, "")
+          .trim();
+        const csrfHeader = request.headers.get("x-csrf-token");
+
+        if (
+          !bearerToken ||
+          !csrfHeader ||
+          !(await verifyCsrfToken(csrfHeader, bearerToken))
+        ) {
+          return buildApiError("invalid_csrf_token", 403);
+        }
+      }
+    } else if (!isExemptPath(pathname, csrfExemptPrefixes)) {
+      // Web routes: Origin/Referer check
+      const origin = request.headers.get("origin");
+      const referer = request.headers.get("referer");
+      const isSameOrigin =
+        origin === nextUrl.origin ||
+        Boolean(referer && referer.startsWith(nextUrl.origin));
+
+      if (!isSameOrigin) {
+        return isApiRoute
+          ? buildApiError("Invalid request origin", 403)
+          : applySecurityHeaders(
+              NextResponse.redirect(new URL("/login", nextUrl)),
+            );
+      }
+
+      // For authenticated API routes: also require X-CSRF-Token
+      if (isApiRoute && request.auth?.user?.csrfSeed) {
+        const csrfHeader = request.headers.get("x-csrf-token");
+        if (
+          !csrfHeader ||
+          !(await verifyCsrfToken(csrfHeader, request.auth.user.csrfSeed))
+        ) {
+          return buildApiError("invalid_csrf_token", 403);
+        }
+      }
     }
   }
 
@@ -209,6 +248,18 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
       headers: requestHeaders,
     },
   });
+
+  // Set non-HttpOnly CSRF cookie so browser JS can read it for API calls
+  if (request.auth?.user?.csrfSeed && !isApiRoute) {
+    const csrfToken = await generateCsrfToken(request.auth.user.csrfSeed);
+    response.cookies.set("csrf-token", csrfToken, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+  }
+
   return applySecurityHeaders(response);
 }
 

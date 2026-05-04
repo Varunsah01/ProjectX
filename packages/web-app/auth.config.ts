@@ -10,6 +10,11 @@ const authConfig = {
   },
   callbacks: {
     jwt({ token, user, trigger, session }) {
+      // Ensure every session has a CSRF seed (auto-assigns on first encounter)
+      if (!token.csrfSeed) {
+        token.csrfSeed = crypto.randomUUID();
+      }
+
       // Initial sign-in: populate from the user object returned by authorize()
       if (user?.activeOrgId) {
         token.activeOrgId = user.activeOrgId;
@@ -43,6 +48,7 @@ const authConfig = {
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? session.user.id;
+        session.user.csrfSeed = (token.csrfSeed as string) ?? "";
         session.user.activeRole =
           (token.activeRole as typeof session.user.activeRole) ??
           session.user.activeRole;

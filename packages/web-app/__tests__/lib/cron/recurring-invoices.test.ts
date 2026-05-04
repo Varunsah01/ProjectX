@@ -14,12 +14,19 @@ vi.mock("@/lib/db", () => {
     db: {
       contract: { findMany: vi.fn(), update: vi.fn() },
       invoice: { create: vi.fn() },
-      $queryRaw: vi.fn().mockResolvedValue([{ pg_try_advisory_lock: true }]),
       $transaction: vi.fn((fn: (tx: typeof txClient) => Promise<unknown>) => fn(txClient)),
       __txClient: txClient,
     },
   };
 });
+
+vi.mock("@/lib/cron/lock", () => ({
+  withCronLock: vi.fn(async (_name: string, fn: () => Promise<unknown>) => ({
+    result: await fn(),
+  })),
+  getISTDate: vi.fn(() => new Date()),
+  isInIstSendWindow: vi.fn(() => true),
+}));
 
 vi.mock("@/lib/actions/helpers", () => ({
   getNextNumber: vi.fn(),
@@ -94,9 +101,9 @@ describe("generateRecurringInvoices", () => {
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
     assertNotSkipped(result);
 
-    expect(result.count).toBe(1);
-    expect(result.invoiceIds).toEqual(["inv-new-1"]);
-    expect(result.contractIds).toEqual(["contract-1"]);
+    expect(result.result.count).toBe(1);
+    expect(result.result.invoiceIds).toEqual(["inv-new-1"]);
+    expect(result.result.contractIds).toEqual(["contract-1"]);
 
     expect(mockInvoiceCreate).toHaveBeenCalledOnce();
     const createArg = mockInvoiceCreate.mock.calls[0][0] as { data: Record<string, unknown> };
@@ -117,9 +124,9 @@ describe("generateRecurringInvoices", () => {
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
     assertNotSkipped(result);
 
-    expect(result.count).toBe(0);
-    expect(result.invoiceIds).toEqual([]);
-    expect(result.contractIds).toEqual([]);
+    expect(result.result.count).toBe(0);
+    expect(result.result.invoiceIds).toEqual([]);
+    expect(result.result.contractIds).toEqual([]);
     expect(mockInvoiceCreate).not.toHaveBeenCalled();
   });
 
@@ -129,9 +136,9 @@ describe("generateRecurringInvoices", () => {
     const result = await generateRecurringInvoices();
     assertNotSkipped(result);
 
-    expect(result.count).toBe(0);
-    expect(result.invoiceIds).toEqual([]);
-    expect(result.contractIds).toEqual([]);
+    expect(result.result.count).toBe(0);
+    expect(result.result.invoiceIds).toEqual([]);
+    expect(result.result.contractIds).toEqual([]);
   });
 
   it("continues processing other contracts when one fails", async () => {
@@ -153,8 +160,8 @@ describe("generateRecurringInvoices", () => {
     assertNotSkipped(result);
 
     // The good contract should still produce an invoice
-    expect(result.count).toBe(1);
-    expect(result.invoiceIds).toEqual(["inv-good"]);
+    expect(result.result.count).toBe(1);
+    expect(result.result.invoiceIds).toEqual(["inv-good"]);
     expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledOnce();
   });
 
@@ -178,8 +185,8 @@ describe("generateRecurringInvoices", () => {
     const result = await generateRecurringInvoices(new Date("2025-01-15"));
     assertNotSkipped(result);
 
-    expect(result.count).toBe(3);
-    expect(result.invoiceIds).toEqual(["inv-1", "inv-2", "inv-3"]);
+    expect(result.result.count).toBe(3);
+    expect(result.result.invoiceIds).toEqual(["inv-1", "inv-2", "inv-3"]);
     expect(mockContractUpdate).toHaveBeenCalledOnce();
   });
 
