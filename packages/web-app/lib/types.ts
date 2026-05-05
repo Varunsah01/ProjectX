@@ -463,6 +463,17 @@ export interface DashboardData {
 
 export type RevenuePeriod = "3m" | "6m" | "12m" | "ytd";
 
+export interface OnboardingStatus {
+  dismissed: boolean;
+  steps: {
+    hasProfile: boolean;
+    hasCustomers: boolean;
+    hasInvoices: boolean;
+    hasTeamMembers: boolean;
+    hasPlans: boolean;
+  };
+}
+
 export interface CollectionsBucket {
   label: string;
   key: string;

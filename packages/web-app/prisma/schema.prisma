@@ -252,7 +252,7 @@ model User {
   name                    String
   email                   String                   @unique
   emailVerified           DateTime?                @map("email_verified")
-  passwordHash            String                   @map("password_hash")
+  passwordHash            String?                  @map("password_hash")
   role                    UserRole?
   status                  String
   avatar                  String?
@@ -270,6 +270,7 @@ model User {
   completedThisMonth      Int                      @default(0) @map("completed_this_month")
   tokenVersion            Int                      @default(0) @map("token_version")
   lastActiveAt            DateTime?                @map("last_active_at")
+  onboardingDismissedAt   DateTime?                @map("onboarding_dismissed_at")
   createdAt               DateTime                 @default(now()) @map("created_at")
   organization            Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   accounts                Account[]

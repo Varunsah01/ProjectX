@@ -42,6 +42,7 @@ export const SITE_CONFIG = {
 export const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "Industries", href: "#industries" },
+  { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "#faq" },
 ];
 
@@ -260,7 +261,7 @@ export const FAQ_ITEMS = [
   {
     question: "How is pricing handled?",
     answer:
-      "We do not publish fixed pricing online. Every business is different in size, service type, and what they actually need from the platform. After your demo call, we put together a custom commercial proposal based on your team size, the modules you need, and how your operation works. No hidden fees, no one-size-fits-all plans — the pricing conversation happens directly with our team, and is tailored to deliver the best value for your specific business.",
+      "Starter plans begin at ₹1,999 per month. See our pricing page at recuring.in/pricing for a full tier breakdown, included features, and annual pricing. For larger teams or custom requirements, book a demo and we will build a proposal around your business.",
   },
   {
     question: "Is there a demo before I commit to anything?",
@@ -291,6 +292,100 @@ export const FAQ_ITEMS = [
     question: "Is our business data secure?",
     answer:
       "All data is encrypted in transit and at rest, hosted on AWS India (Mumbai region) servers, and backed up daily. Your customer records, contract history, and operational data are stored on Indian infrastructure and are never shared with third parties.",
+  },
+];
+
+export const PRICING_TIERS = [
+  {
+    id: "starter",
+    name: "Starter",
+    tagline: "For small teams getting off Excel",
+    monthlyPrice: 1999,
+    annualPrice: 1599,
+    annualTotal: 19188,
+    cta: { label: "Start Free Trial", href: "/book-demo?plan=starter" },
+    highlight: false,
+    seats: 3,
+    customerLimit: 100,
+    features: [
+      "Customer Management",
+      "Asset Tracking",
+      "Recurring Billing & GST Invoices",
+      "Collections & Payment Reminders",
+      "Complaint Management",
+      "AMC & Contract Management",
+      "Email & WhatsApp Reminders",
+    ],
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    tagline: "For growing teams with field operations",
+    monthlyPrice: 4999,
+    annualPrice: 3999,
+    annualTotal: 47988,
+    cta: { label: "Start Free Trial", href: "/book-demo?plan=growth" },
+    highlight: true,
+    seats: 10,
+    customerLimit: 1000,
+    features: [
+      "Everything in Starter",
+      "Technician Mobile App",
+      "GPS Job Tracking & Proof of Service",
+      "Customer Self-Service Portal",
+      "Multi-location / Multi-branch",
+      "Advanced Reports & Analytics",
+      "Priority Support",
+    ],
+  },
+  {
+    id: "scale",
+    name: "Scale",
+    tagline: "For large operations that need SLAs",
+    monthlyPrice: null,
+    annualPrice: null,
+    annualTotal: null,
+    cta: { label: "Book a Demo", href: "/book-demo?plan=scale" },
+    highlight: false,
+    seats: null,
+    customerLimit: null,
+    features: [
+      "Everything in Growth",
+      "Unlimited Seats & Customers",
+      "API Access & Webhooks",
+      "Dedicated Customer Success Manager",
+      "Custom SLA & Uptime Guarantee",
+      "White-label Customer Portal",
+      "Custom Integrations",
+    ],
+  },
+] as const;
+
+export const PRICING_FAQ_ITEMS = [
+  {
+    question: "Is there a free trial?",
+    answer:
+      "Yes — book a demo and we set you up with a 14-day trial on the plan that fits your business. No credit card required.",
+  },
+  {
+    question: "What counts as a 'seat'?",
+    answer:
+      "A seat is any office staff member who logs into the web dashboard — admin, operations, billing staff. Field technicians who only use the mobile app do not count as seats.",
+  },
+  {
+    question: "What happens when I hit the customer limit?",
+    answer:
+      "We will flag it before you hit the limit. On Starter and Growth you can upgrade your plan or archive inactive customers. On Scale there is no limit.",
+  },
+  {
+    question: "Can I switch plans mid-year?",
+    answer:
+      "Yes. Upgrading is immediate and prorated. Downgrading takes effect at the next billing cycle.",
+  },
+  {
+    question: "Are GST and invoicing included in all plans?",
+    answer:
+      "Yes. All plans include GST-compliant invoice generation with HSN/SAC codes, GSTIN capture, and tax breakdowns — no add-ons required.",
   },
 ];
 

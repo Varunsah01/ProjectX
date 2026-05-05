@@ -241,6 +241,7 @@ export default function ComplaintsPageClient({
           {
             key: "ticket",
             header: "Ticket",
+            mobilePriority: "primary",
             render: (ticket) => (
               <div>
                 <p className="font-medium text-slate-900">{ticket.subject}</p>
@@ -253,6 +254,7 @@ export default function ComplaintsPageClient({
           {
             key: "customer",
             header: "Customer",
+            mobilePriority: "secondary",
             render: (ticket) => (
               <div>
                 <p className="text-sm text-slate-700">{ticket.customerName}</p>
@@ -265,11 +267,14 @@ export default function ComplaintsPageClient({
           {
             key: "priority",
             header: "Priority",
+            mobilePriority: "meta",
             render: (ticket) => <StatusBadge status={ticket.priority} />,
           },
           {
             key: "assignee",
             header: "Assigned To",
+            mobilePriority: "meta",
+            mobileCardLabel: "Assignee",
             render: (ticket) => (
               <span className="text-sm text-slate-600">
                 {ticket.assignedTo || "Unassigned"}
@@ -279,6 +284,7 @@ export default function ComplaintsPageClient({
           {
             key: "created",
             header: "Created",
+            mobilePriority: "hide",
             render: (ticket) => (
               <span className="text-sm text-slate-600">
                 {formatDateTime(ticket.createdAt)}
@@ -288,6 +294,7 @@ export default function ComplaintsPageClient({
           {
             key: "status",
             header: "Status",
+            mobilePriority: "meta",
             render: (ticket) => <StatusBadge status={ticket.status} />,
           },
         ]}

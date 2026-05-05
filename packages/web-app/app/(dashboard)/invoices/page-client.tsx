@@ -201,6 +201,7 @@ export default function InvoicesPageClient({
           {
             key: "invoice",
             header: "Invoice",
+            mobilePriority: "primary",
             render: (invoice) => (
               <div>
                 <p className="font-medium text-slate-900">{invoice.invoiceNumber}</p>
@@ -211,11 +212,14 @@ export default function InvoicesPageClient({
           {
             key: "customer",
             header: "Customer",
+            mobilePriority: "secondary",
             render: (invoice) => invoice.customerName,
           },
           {
             key: "amount",
             header: "Amount",
+            mobilePriority: "meta",
+            mobileCardLabel: "Amount",
             render: (invoice) => (
               <span className="font-medium">{formatCurrency(invoice.amount)}</span>
             ),
@@ -223,6 +227,7 @@ export default function InvoicesPageClient({
           {
             key: "paid",
             header: "Paid",
+            mobilePriority: "hide",
             render: (invoice) => (
               <span
                 className={
@@ -236,6 +241,7 @@ export default function InvoicesPageClient({
           {
             key: "balance",
             header: "Balance",
+            mobilePriority: "hide",
             render: (invoice) => {
               const balance = invoice.amount - invoice.paidAmount;
               return balance > 0 ? (
@@ -250,16 +256,19 @@ export default function InvoicesPageClient({
           {
             key: "due",
             header: "Due Date",
+            mobilePriority: "hide",
             render: (invoice) => formatDate(invoice.dueDate),
           },
           {
             key: "status",
             header: "Status",
+            mobilePriority: "meta",
             render: (invoice) => <StatusBadge status={invoice.status} />,
           },
           {
             key: "actions",
             header: "Actions",
+            mobilePriority: "secondary",
             className: "w-48",
             render: (invoice) => {
               const balance = invoice.amount - invoice.paidAmount;

@@ -261,6 +261,7 @@ export default function JobsPageClient({
           {
             key: "job",
             header: "Job",
+            mobilePriority: "primary",
             render: (job) => (
               <div>
                 <p className="font-medium text-slate-900">{job.jobNumber}</p>
@@ -271,6 +272,7 @@ export default function JobsPageClient({
           {
             key: "customer",
             header: "Customer",
+            mobilePriority: "secondary",
             render: (job) => (
               <div>
                 <p className="text-sm text-slate-700">{job.customerName}</p>
@@ -283,11 +285,14 @@ export default function JobsPageClient({
           {
             key: "asset",
             header: "Asset",
+            mobilePriority: "hide",
             render: (job) => job.assetName || "-",
           },
           {
             key: "technician",
             header: "Technician",
+            mobilePriority: "meta",
+            mobileCardLabel: "Assigned to",
             render: (job) => (
               <span className="text-sm font-medium text-slate-700">
                 {job.technicianName}
@@ -297,11 +302,14 @@ export default function JobsPageClient({
           {
             key: "scheduled",
             header: "Scheduled",
+            mobilePriority: "meta",
+            mobileCardLabel: "Scheduled",
             render: (job) => formatDate(job.scheduledDate),
           },
           {
             key: "status",
             header: "Status",
+            mobilePriority: "meta",
             render: (job) => <StatusBadge status={job.status} />,
           },
         ]}

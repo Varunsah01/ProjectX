@@ -215,6 +215,7 @@ export default function ContractsPageClient({
           {
             key: "contract",
             header: "Contract",
+            mobilePriority: "primary",
             render: (contract) => (
               <div>
                 <p className="font-medium text-slate-900">{contract.contractNumber}</p>
@@ -225,21 +226,25 @@ export default function ContractsPageClient({
           {
             key: "customer",
             header: "Customer",
+            mobilePriority: "secondary",
             render: (contract) => contract.customerName,
           },
           {
             key: "asset",
             header: "Asset",
+            mobilePriority: "hide",
             render: (contract) => contract.assetName,
           },
           {
             key: "plan",
             header: "Plan",
+            mobilePriority: "hide",
             render: (contract) => contract.plan,
           },
           {
             key: "period",
             header: "Period",
+            mobilePriority: "hide",
             render: (contract) => (
               <div className="text-xs">
                 <p>{formatDate(contract.startDate)}</p>
@@ -250,6 +255,7 @@ export default function ContractsPageClient({
           {
             key: "visits",
             header: "Visits",
+            mobilePriority: "hide",
             render: (contract) => (
               <div>
                 <span className="font-medium">{contract.visitsUsed}</span>
@@ -260,11 +266,14 @@ export default function ContractsPageClient({
           {
             key: "value",
             header: "Value",
+            mobilePriority: "meta",
+            mobileCardLabel: "Value",
             render: (contract) => formatCurrency(contract.value),
           },
           {
             key: "status",
             header: "Status",
+            mobilePriority: "meta",
             render: (contract) => <StatusBadge status={contract.status} />,
           },
         ]}

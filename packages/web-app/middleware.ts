@@ -206,6 +206,19 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
     return applySecurityHeaders(NextResponse.redirect(new URL("/", nextUrl)));
   }
 
+  // Authenticated user with no org yet (e.g. just signed up with Google).
+  // Send them to onboarding before they can reach the dashboard.
+  if (
+    request.auth?.user &&
+    !request.auth.user.activeOrgId &&
+    !pathname.startsWith("/onboarding") &&
+    !isApiRoute
+  ) {
+    return applySecurityHeaders(
+      NextResponse.redirect(new URL("/onboarding/create-org", nextUrl)),
+    );
+  }
+
   // SUPPORT role: redirect to /admin/lookup when not impersonating and not already on /admin/*
   if (
     request.auth?.user?.activeRole === "SUPPORT" &&

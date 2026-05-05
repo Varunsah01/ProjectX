@@ -16,7 +16,7 @@ import {
   getOrganizationContext,
   startOfDay,
 } from "@/lib/query-utils";
-import type { ActionItem, DashboardData, DashboardMetrics, RevenuePeriod } from "@/lib/types";
+import type { ActionItem, DashboardData, DashboardMetrics, OnboardingStatus, RevenuePeriod } from "@/lib/types";
 
 function getPeriodMonths(period: RevenuePeriod, referenceDate: Date): number {
   if (period === "3m") return 3;
@@ -307,4 +307,41 @@ export async function getDashboardDataForOrganization(
 export async function getDashboardData(period: RevenuePeriod = "6m") {
   const user = await getOrganizationContext();
   return getDashboardDataForOrganization(user.organizationId, period);
+}
+
+export async function getOnboardingStatusForOrganization(
+  organizationId: string,
+  userId: string,
+): Promise<OnboardingStatus> {
+  const [org, customerCount, invoiceCount, memberCount, planCount, user] = await Promise.all([
+    db.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { gstin: true, legalName: true },
+    }),
+    db.customer.count({ where: { organizationId } }),
+    db.invoice.count({ where: { organizationId } }),
+    db.orgMembership.count({ where: { organizationId } }),
+    db.plan.count({ where: { organizationId } }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { onboardingDismissedAt: true },
+    }),
+  ]);
+
+  return {
+    dismissed: !!user?.onboardingDismissedAt,
+    steps: {
+      hasProfile: !!(org.gstin || org.legalName),
+      hasCustomers: customerCount > 0,
+      hasInvoices: invoiceCount > 0,
+      hasTeamMembers: memberCount > 1,
+      hasPlans: planCount > 0,
+    },
+  };
+}
+
+export async function getOnboardingStatus(): Promise<OnboardingStatus | null> {
+  const user = await getOrganizationContext();
+  if (user.role !== "ADMIN") return null;
+  return getOnboardingStatusForOrganization(user.organizationId, user.id);
 }

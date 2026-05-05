@@ -18,11 +18,12 @@ import {
   CalendarPlus,
   MessageSquarePlus,
 } from "lucide-react";
+import { OnboardingChecklist } from "@/components/ui/OnboardingChecklist";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { DashboardData, RevenuePeriod } from "@/lib/types";
+import type { DashboardData, OnboardingStatus, RevenuePeriod } from "@/lib/types";
 
 const PERIOD_OPTIONS: { value: RevenuePeriod; label: string }[] = [
   { value: "3m", label: "3M" },
@@ -41,9 +42,11 @@ function formatYAxisLabel(value: number): string {
 export default function DashboardPageClient({
   data,
   period,
+  onboarding,
 }: {
   data: DashboardData;
   period: RevenuePeriod;
+  onboarding: OnboardingStatus | null;
 }) {
   const router = useRouter();
   const { metrics, actionItems, overdueInvoices, recentTickets, expiringContracts, todayJobs, activeTechniciansCount, revenueChartData } = data;
@@ -59,6 +62,8 @@ export default function DashboardPageClient({
         title="Dashboard"
         subtitle="Welcome back. Here's what needs your attention today."
       />
+
+      {onboarding && <OnboardingChecklist onboarding={onboarding} />}
 
       {/* Quick actions */}
       <div className="mb-6 flex flex-wrap gap-2">

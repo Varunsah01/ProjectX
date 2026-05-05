@@ -37,10 +37,14 @@ const authConfig = {
         token.isEmailVerified = !!user.isEmailVerified;
       }
 
-      // Org switch: triggered by client calling useSession().update()
+      // Org switch or onboarding completion:
+      // triggered by client calling useSession().update()
       if (trigger === "update" && session?.activeOrgId) {
         token.activeOrgId = session.activeOrgId as string;
-        token.activeRole = session.activeRole as typeof token.activeRole;
+        token.activeRole  = session.activeRole as typeof token.activeRole;
+        if (session?.memberships) {
+          token.memberships = session.memberships as typeof token.memberships;
+        }
       }
 
       return token;

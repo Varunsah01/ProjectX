@@ -212,6 +212,7 @@ export default function CustomersPageClient({
           {
             key: "name",
             header: "Customer",
+            mobilePriority: "primary",
             render: (customer) => (
               <div>
                 <p className="font-medium text-slate-900">{customer.name}</p>
@@ -222,6 +223,8 @@ export default function CustomersPageClient({
           {
             key: "contact",
             header: "Contact",
+            mobilePriority: "meta",
+            mobileCardLabel: "Contact",
             render: (customer) => (
               <div>
                 <p className="text-slate-700">{customer.phone}</p>
@@ -232,6 +235,7 @@ export default function CustomersPageClient({
           {
             key: "category",
             header: "Category",
+            mobilePriority: "hide",
             render: (customer) => (
               <span className="text-sm text-slate-600">{customer.category}</span>
             ),
@@ -239,11 +243,14 @@ export default function CustomersPageClient({
           {
             key: "assets",
             header: "Assets",
+            mobilePriority: "hide",
             render: (customer) => customer.assetsCount,
           },
           {
             key: "due",
             header: "Due Amount",
+            mobilePriority: "meta",
+            mobileCardLabel: "Due",
             render: (customer) => (
               <span
                 className={
@@ -259,6 +266,7 @@ export default function CustomersPageClient({
           {
             key: "status",
             header: "Status",
+            mobilePriority: "secondary",
             render: (customer) => <StatusBadge status={customer.status} />,
           },
         ]}

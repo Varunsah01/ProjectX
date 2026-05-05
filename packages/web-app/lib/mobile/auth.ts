@@ -11,7 +11,7 @@ type TechnicianRecord = {
   id: string;
   name: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   status: string;
   phone: string | null;
   territory: string | null;
@@ -213,6 +213,11 @@ export async function authenticateTechnician({
   const result = await findTechnicianByIdentifier(identifierType, trimmedIdentifier);
 
   if (!result || result.status === "INACTIVE") {
+    return null;
+  }
+
+  if (!result.passwordHash) {
+    // OAuth-only user — no password to compare against
     return null;
   }
 
