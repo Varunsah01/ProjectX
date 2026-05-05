@@ -5,7 +5,7 @@ export type LeadRow = {
   id: string;
   name: string;
   email: string;
-  phone: string;
+  phone: string | null;
   company: string;
   message: string | null;
   source: string;
