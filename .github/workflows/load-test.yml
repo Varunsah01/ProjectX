@@ -1,0 +1,187 @@
+name: Load Tests (manual)
+
+# Manual-only — never runs automatically.
+# Requires an explicit base_url to prevent accidental production runs.
+#
+# Required secrets (set in repo Settings → Secrets → Actions):
+#   NEON_API_KEY        — Neon API key (for ephemeral branch creation)
+#   NEON_PROJECT_ID     — Neon project ID
+#   CRON_SECRET         — matches CRON_SECRET in the target deployment
+#   WEB_TEST_EMAIL      — email of a seeded ADMIN/MANAGER account
+#   WEB_TEST_PASSWORD   — password for the web test account
+#   MOBILE_TEST_CREDS   — comma-separated phone:password pairs
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Target base URL (no trailing slash). Must NOT be production."
+        required: true
+        type: string
+      scenario:
+        description: "Which scenario to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - auth
+          - dashboard
+          - mobile
+          - cron-spike
+
+permissions:
+  contents: read
+
+env:
+  K6_VERSION: "0.55.0"
+
+jobs:
+  load-test:
+    name: "k6 load test — ${{ inputs.scenario }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # ── 2. Validate target is not production ───────────────────────────────
+      - name: Reject production URL
+        run: |
+          if echo "${{ inputs.base_url }}" | grep -qiE "(production|prod\.|app\.recuring|app\.projectx)"; then
+            echo "ERROR: base_url appears to point at production. Aborting."
+            exit 1
+          fi
+          echo "Target: ${{ inputs.base_url }}"
+
+      # ── 3. Node + dependencies (for prisma migrate) ────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-node20-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      # ── 4. Create ephemeral Neon branch ───────────────────────────────────
+      - name: Create Neon staging branch
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"endpoints":[{"type":"read_write"}],"branch":{"name":"load-test-${{ github.run_id }}"}}')
+
+          echo "Neon API response: $RESPONSE"
+
+          BRANCH_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch']['id'])")
+          CONNECTION_URI=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['connection_uris'][0]['connection_uri'])")
+
+          echo "branch_id=${BRANCH_ID}" >> "$GITHUB_OUTPUT"
+          echo "connection_uri=${CONNECTION_URI}" >> "$GITHUB_OUTPUT"
+          echo "Created branch: ${BRANCH_ID}"
+
+      # ── 5. Run migrations on the branch ───────────────────────────────────
+      - name: Apply migrations to branch
+        working-directory: packages/web-app
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.connection_uri }}
+          DIRECT_URL: ${{ steps.neon.outputs.connection_uri }}
+        run: npx prisma migrate deploy
+
+      # ── 6. Install k6 ─────────────────────────────────────────────────────
+      - name: Install k6
+        run: |
+          curl -fsSL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin k6-v${K6_VERSION}-linux-amd64/k6
+          k6 version
+
+      # ── 7. Run load tests ──────────────────────────────────────────────────
+      - name: Run auth scenario
+        if: inputs.scenario == 'all' || inputs.scenario == 'auth'
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          WEB_TEST_EMAIL: ${{ secrets.WEB_TEST_EMAIL }}
+          WEB_TEST_PASSWORD: ${{ secrets.WEB_TEST_PASSWORD }}
+        run: |
+          k6 run \
+            --out json=results-auth.json \
+            -e BASE_URL="${BASE_URL}" \
+            -e WEB_TEST_EMAIL="${WEB_TEST_EMAIL}" \
+            -e WEB_TEST_PASSWORD="${WEB_TEST_PASSWORD}" \
+            tests/load/k6/auth.js
+
+      - name: Run dashboard scenario
+        if: inputs.scenario == 'all' || inputs.scenario == 'dashboard'
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          WEB_TEST_EMAIL: ${{ secrets.WEB_TEST_EMAIL }}
+          WEB_TEST_PASSWORD: ${{ secrets.WEB_TEST_PASSWORD }}
+        run: |
+          k6 run \
+            --out json=results-dashboard.json \
+            -e BASE_URL="${BASE_URL}" \
+            -e WEB_TEST_EMAIL="${WEB_TEST_EMAIL}" \
+            -e WEB_TEST_PASSWORD="${WEB_TEST_PASSWORD}" \
+            tests/load/k6/dashboard.js
+
+      - name: Run mobile scenario
+        if: inputs.scenario == 'all' || inputs.scenario == 'mobile'
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          MOBILE_TEST_CREDS: ${{ secrets.MOBILE_TEST_CREDS }}
+        run: |
+          k6 run \
+            --out json=results-mobile.json \
+            -e BASE_URL="${BASE_URL}" \
+            -e MOBILE_TEST_CREDS="${MOBILE_TEST_CREDS}" \
+            tests/load/k6/mobile-job-cycle.js
+
+      - name: Run cron-spike scenario
+        if: inputs.scenario == 'all' || inputs.scenario == 'cron-spike'
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          k6 run \
+            --out json=results-cron-spike.json \
+            -e BASE_URL="${BASE_URL}" \
+            -e CRON_SECRET="${CRON_SECRET}" \
+            tests/load/k6/cron-spike.js
+
+      # ── 8. Upload results ──────────────────────────────────────────────────
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ inputs.scenario }}-${{ github.run_id }}
+          path: results-*.json
+          retention-days: 30
+
+      # ── 9. Delete Neon branch (always, even on failure) ───────────────────
+      - name: Delete Neon staging branch
+        if: always() && steps.neon.outputs.branch_id != ''
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          curl -s -X DELETE \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${{ steps.neon.outputs.branch_id }}" \
+            -H "Authorization: Bearer ${NEON_API_KEY}"
+          echo "Deleted branch ${{ steps.neon.outputs.branch_id }}"

@@ -1,0 +1,61 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Sign Up & Setup
+
+## 1. Create Your Account
+
+1. Go to **[app.recuring.in](https://app.recuring.in)** and click **Get Started**.
+2. Enter your **name**, **email address**, and a strong **password**.
+3. Check your inbox for a verification email and click the link to confirm.
+4. You'll be taken to the **Organisation Setup** screen.
+
+## 2. Configure Your Organisation
+
+Fill in the following fields:
+
+| Field | Required | Notes |
+|---|---|---|
+| Organisation Name | Yes | Appears on all invoices |
+| Display Name | No | Short name for the dashboard |
+| GSTIN | Conditional | Required if GST-registered |
+| PAN | Yes | Used for TDS compliance |
+| State | Yes | Determines CGST/SGST vs IGST |
+| Address | Yes | Appears on invoices |
+| Phone | Yes | Customer-facing contact |
+| Email | Yes | Reply-to on invoice emails |
+
+> **Tip:** You can update all these fields later in **Settings → Organisation**.
+
+## 3. Upload Your Logo
+
+1. In **Settings → Organisation**, click **Upload Logo**.
+2. Select a PNG or JPG file (max 2 MB, recommended 512×512 px).
+3. The logo appears on invoices, the customer portal, and email headers.
+
+## 4. Add Bank Details
+
+Go to **Settings → Bank Account** and enter:
+- Bank Name
+- Account Number
+- IFSC Code
+- Account Holder Name
+
+This information prints on invoices below the totals for NEFT/RTGS payments.
+
+## 5. Connect Razorpay (Optional)
+
+If you collect payments online, connect Razorpay so invoices include a **Pay Now** button.
+
+See [Razorpay Setup →](/how-tos/razorpay-setup) for the step-by-step guide.
+
+## 6. Configure GST Rates
+
+Go to **Settings → Tax Rates** and add your applicable rates (e.g., 18% GST for services). The system supports multiple rates — each contract or invoice line item can use a different rate.
+
+See [GST Setup →](/how-tos/gst-setup) for details.
+
+---
+
+Next: [Add Your First Customer →](/getting-started/first-customer)

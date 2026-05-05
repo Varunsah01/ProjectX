@@ -344,16 +344,20 @@ enum LeadStatus {
 }
 
 model Lead {
-  id        String     @id @default(uuid()) @db.Uuid
-  name      String
-  email     String
-  phone     String
-  company   String
-  message   String?
-  source    String     @default("book-demo")
-  status    LeadStatus @default(NEW)
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  id               String     @id @default(uuid()) @db.Uuid
+  name             String
+  email            String
+  phone            String?
+  company          String
+  role             String?
+  companySize      String?    @map("company_size")
+  industry         String?
+  preferredContact String?    @map("preferred_contact")
+  message          String?
+  source           String     @default("book-demo")
+  status           LeadStatus @default(NEW)
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
   @@index([status, createdAt(sort: Desc)])
   @@map("leads")

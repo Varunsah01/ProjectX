@@ -1,0 +1,25 @@
+{
+  "name": "@project-x/docs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "build": "next build",
+    "start": "next start -p 3003",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "nextra": "2.13.4",
+    "nextra-theme-docs": "2.13.4",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "swagger-ui-react": "^5.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/swagger-ui-react": "^4.18.3",
+    "typescript": "^5"
+  }
+}

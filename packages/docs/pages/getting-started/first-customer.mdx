@@ -1,0 +1,54 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Your First Customer
+
+## Open the Customer Form
+
+From the sidebar, click **Customers → Add Customer** (or press `N` on the customers list page).
+
+## Fill In the Details
+
+### Basic Information
+
+| Field | Required | Notes |
+|---|---|---|
+| Name | Yes | Company or individual name |
+| Email | Yes | Used for invoice delivery |
+| Phone | Yes | Primary contact number |
+| Category | No | Tag for filtering (e.g., "AMC", "One-time") |
+
+### Billing Address
+
+Enter the customer's complete billing address — **Street, City, State, PIN**. The state is critical: if the customer's state differs from your organisation's state, invoices will use **IGST** instead of CGST+SGST.
+
+### GST Details
+
+| Field | Required | Notes |
+|---|---|---|
+| GSTIN | Conditional | Required if customer is GST-registered |
+| PAN | No | For TDS purposes |
+| Billing State | Yes | Used for IGST/CGST+SGST determination |
+
+> **Important:** An incorrect billing state causes the wrong tax type to be applied on invoices. Double-check with your customer if unsure.
+
+### Portal Access
+
+Toggle **Enable Portal Access** to give this customer login access to the [Customer Portal](/concepts/customers#portal-access). They'll receive a welcome email with setup instructions.
+
+## Save the Customer
+
+Click **Save Customer**. You'll land on the customer detail page where you can:
+- Add **assets** (equipment under service)
+- Create a **contract** (AMC or recurring service agreement)
+- Log **complaints**
+- View **invoices**
+
+## Bulk Import
+
+If you have many existing customers, use [Bulk Import →](/how-tos/bulk-import) to upload them via CSV instead of adding one by one.
+
+---
+
+Next: [Send Your First Invoice →](/getting-started/first-invoice)

@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-[0_32px_80px_-40px_rgba(15,23,42,0.45)]">
+      <>
         <div className="mb-6 space-y-2">
           <h1 className="text-3xl font-semibold text-slate-900">
             Check your email
@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
 
-        <p className="text-center text-sm text-slate-500">
+        <p className="text-sm text-slate-500">
           <Link
             href="/login"
             className="font-medium text-brand-600 hover:text-brand-700"
@@ -56,12 +56,12 @@ export default function ForgotPasswordPage() {
             Back to sign in
           </Link>
         </p>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-[0_32px_80px_-40px_rgba(15,23,42,0.45)]">
+    <>
       <div className="mb-8 space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-600">
           Password Recovery
@@ -70,25 +70,39 @@ export default function ForgotPasswordPage() {
           Forgot password?
         </h1>
         <p className="text-sm text-slate-500">
-          Enter your email and we&apos;ll send you a link to reset your
-          password.
+          Trouble signing in? You&apos;re in good company — most resets take
+          30&nbsp;seconds.
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="forgot-email"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Email
           </label>
           <input
+            id="forgot-email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={!!error}
+            aria-describedby={error ? "forgot-email-error" : undefined}
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="you@company.com"
           />
           {error ? (
-            <p className="mt-1.5 text-xs text-red-600">{error}</p>
+            <p
+              id="forgot-email-error"
+              role="alert"
+              aria-live="polite"
+              className="mt-1.5 text-xs text-red-600"
+            >
+              {error}
+            </p>
           ) : null}
         </div>
 
@@ -101,7 +115,7 @@ export default function ForgotPasswordPage() {
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-sm text-slate-500">
         Remember your password?{" "}
         <Link
           href="/login"
@@ -110,6 +124,6 @@ export default function ForgotPasswordPage() {
           Sign in
         </Link>
       </p>
-    </div>
+    </>
   );
 }

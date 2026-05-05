@@ -1,0 +1,90 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Bulk Import
+
+Bulk Import lets you upload customers, assets, and contracts from a CSV file — useful when migrating from a spreadsheet or another system.
+
+## Supported Import Types
+
+| Type | What It Creates |
+|---|---|
+| Customers | Customer records (name, email, billing details) |
+| Assets | Equipment linked to existing customers |
+| Contracts | Service agreements linked to existing customers |
+
+## Step 1: Download the Template
+
+1. Go to **Import** in the sidebar.
+2. Select the import type (Customers / Assets / Contracts).
+3. Click **Download Template** to get the correctly formatted CSV.
+
+> Always start from the template — the column order and headers must match exactly.
+
+## Step 2: Fill In the CSV
+
+### Customers CSV — Required Columns
+
+| Column | Description | Example |
+|---|---|---|
+| `name` | Customer name | Acme Corp |
+| `email` | Contact email | admin@acme.com |
+| `phone` | Phone number | 9876543210 |
+| `billing_state` | State name (full) | Maharashtra |
+| `billing_city` | City | Mumbai |
+| `billing_address` | Street address | 42 MG Road |
+| `billing_pin` | 6-digit PIN | 400001 |
+
+### Optional Columns
+
+| Column | Description |
+|---|---|
+| `gstin` | Customer's GSTIN |
+| `pan` | PAN number |
+| `category` | Segment label |
+| `notes` | Internal notes |
+
+### Assets CSV — Required Columns
+
+| Column | Description |
+|---|---|
+| `customer_email` | Email of the customer to link to |
+| `name` | Asset name |
+| `type` | Equipment category |
+
+### Contracts CSV — Required Columns
+
+| Column | Description |
+|---|---|
+| `customer_email` | Email of the customer |
+| `title` | Contract description |
+| `start_date` | YYYY-MM-DD |
+| `end_date` | YYYY-MM-DD |
+| `billing_frequency` | monthly / quarterly / half_yearly / annual |
+| `amount` | Amount per billing cycle (excluding GST) |
+
+## Step 3: Upload and Preview
+
+1. Click **Choose File** and select your CSV.
+2. Recuring validates the file and shows a **preview table** with:
+   - Rows that will be imported (green)
+   - Rows with errors (red, with error message)
+3. Fix any errors in your CSV and re-upload if needed.
+
+## Step 4: Commit the Import
+
+1. Review the preview.
+2. Click **Import X Records**.
+3. A progress indicator shows how many records have been processed.
+4. When complete, you'll see a summary: `X imported, Y skipped (duplicates), Z failed`.
+
+## Duplicate Handling
+
+- **Customers**: Duplicate detection uses the `email` field. Existing records are skipped (not updated).
+- **Assets**: No deduplication — each row creates a new asset.
+- **Contracts**: No deduplication — each row creates a new contract.
+
+## Import History
+
+Previous imports are logged under **Import → History**. Each entry shows the file name, date, record counts, and any errors.

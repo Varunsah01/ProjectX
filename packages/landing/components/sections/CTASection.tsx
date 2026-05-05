@@ -41,7 +41,7 @@ export function CTASection() {
                 <Button
                   variant="white"
                   size="lg"
-                  href="mailto:hello@projectx.in"
+                  href="/book-demo?intent=talk"
                 >
                   Talk to Us
                   <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
-import { NAV_LINKS, SITE_CONFIG } from "@/lib/constants";
+import { NAV_LINKS } from "@/lib/constants";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -51,13 +52,15 @@ export function Navbar() {
         <Container>
           <div className="flex h-16 items-center justify-between lg:h-20">
             {/* Logo */}
-            <a href="/" className="flex items-center gap-2.5 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand shadow-lg shadow-brand-500/20 transition-transform group-hover:scale-105">
-                <span className="text-lg font-bold text-white">X</span>
-              </div>
-              <span className="text-xl font-bold text-slate-900">
-                {SITE_CONFIG.name}
-              </span>
+            <a href="/" className="flex items-center group">
+              <Image
+                src="/logo.svg"
+                alt="Project X"
+                width={140}
+                height={36}
+                priority
+                className="transition-transform group-hover:scale-[1.02]"
+              />
             </a>
 
             {/* Desktop Nav */}
@@ -77,7 +80,7 @@ export function Navbar() {
             {/* Desktop CTA */}
             <div className="hidden items-center gap-3 lg:flex">
               <a
-                href="mailto:hello@projectx.in"
+                href="/book-demo?intent=talk"
                 className="text-sm font-medium text-slate-600 transition-colors hover:text-brand-600 px-3 py-2"
               >
                 Talk to Us
@@ -179,7 +182,7 @@ export function Navbar() {
                   <Button
                     variant="primary"
                     size="md"
-                    href="mailto:hello@projectx.in"
+                    href="/book-demo?intent=talk"
                   >
                     Talk to Us
                   </Button>

@@ -6,15 +6,29 @@ import { sendEmail } from "@/lib/email";
 type DemoRequestBody = {
   fullName: string;
   email: string;
-  phone: string;
   company: string;
+  role?: string;
+  companySize?: string;
   industry: string;
-  scale: string;
-  currentTools?: string;
+  preferredContact?: string;
   message?: string;
 };
 
 // ─── Validation ───────────────────────────────────────────────────────────────
+
+const DISPOSABLE_DOMAINS = new Set([
+  "mailinator.com", "guerrillamail.com", "temp-mail.org", "throwam.com",
+  "yopmail.com", "sharklasers.com", "guerrillamailblock.com", "grr.la",
+  "guerrillamail.info", "guerrillamail.biz", "guerrillamail.de",
+  "guerrillamail.net", "guerrillamail.org", "spam4.me", "trashmail.com",
+  "trashmail.me", "trashmail.net", "maildrop.cc", "dispostable.com",
+  "fakeinbox.com", "tempr.email", "discard.email", "spamgourmet.com",
+]);
+
+function isDisposableEmail(email: string): boolean {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  return DISPOSABLE_DOMAINS.has(domain);
+}
 
 function isValidBody(body: unknown): body is DemoRequestBody {
   if (!body || typeof body !== "object") return false;
@@ -22,10 +36,9 @@ function isValidBody(body: unknown): body is DemoRequestBody {
   return (
     typeof b.fullName === "string" && b.fullName.trim().length >= 2 &&
     typeof b.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email.trim()) &&
-    typeof b.phone === "string" && b.phone.replace(/\D/g, "").length >= 10 &&
+    !isDisposableEmail(b.email as string) &&
     typeof b.company === "string" && b.company.trim().length > 0 &&
-    typeof b.industry === "string" && b.industry.trim().length > 0 &&
-    typeof b.scale === "string" && b.scale.trim().length > 0
+    typeof b.industry === "string" && b.industry.trim().length > 0
   );
 }
 
@@ -48,11 +61,11 @@ function notifyHtml(d: DemoRequestBody) {
       <table style="width:100%;border-collapse:collapse">
         ${row("Name", d.fullName)}
         ${row("Email", `<a href="mailto:${d.email}" style="color:#0f766e">${d.email}</a>`)}
-        ${row("Phone", d.phone)}
         ${row("Company", d.company)}
+        ${d.role ? row("Role", d.role) : ""}
+        ${d.companySize ? row("Company size", d.companySize) : ""}
         ${row("Industry", d.industry)}
-        ${row("Scale", d.scale)}
-        ${d.currentTools ? row("Current tools", d.currentTools) : ""}
+        ${d.preferredContact ? row("Preferred contact", d.preferredContact) : ""}
         ${d.message ? row("Message", d.message.replace(/\n/g, "<br>")) : ""}
       </table>
     </div>
@@ -95,16 +108,6 @@ function confirmationHtml(firstName: string) {
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
-function buildLeadMessage(body: DemoRequestBody) {
-  const sections = [
-    body.message?.trim(),
-    body.industry ? `Industry: ${body.industry}` : null,
-    body.scale ? `Scale: ${body.scale}` : null,
-    body.currentTools ? `Current tools: ${body.currentTools}` : null,
-  ].filter((value): value is string => Boolean(value && value.length > 0));
-  return sections.join("\n\n") || undefined;
-}
-
 async function persistLeadToWebApp(body: DemoRequestBody) {
   const token = process.env.LANDING_LEAD_TOKEN?.trim();
   const baseUrl =
@@ -125,9 +128,12 @@ async function persistLeadToWebApp(body: DemoRequestBody) {
       body: JSON.stringify({
         name: body.fullName.trim(),
         email: body.email.trim(),
-        phone: body.phone.trim(),
         company: body.company.trim(),
-        message: buildLeadMessage(body),
+        role: body.role?.trim() || undefined,
+        companySize: body.companySize?.trim() || undefined,
+        industry: body.industry?.trim() || undefined,
+        preferredContact: body.preferredContact?.trim() || undefined,
+        message: body.message?.trim() || undefined,
         source: "book-demo",
       }),
     });
@@ -146,7 +152,7 @@ async function persistLeadToWebApp(body: DemoRequestBody) {
 async function sendFallbackEmails(body: DemoRequestBody) {
   const notifyEmail =
     process.env.DEMO_NOTIFY_EMAIL || process.env.SMTP_USER || "";
-  const firstName = body.fullName.trim().split(" ")[0];
+  const firstName = body.fullName.trim().split(" ")[0] ?? body.fullName.trim();
 
   const [notifyResult, confirmResult] = await Promise.allSettled([
     notifyEmail

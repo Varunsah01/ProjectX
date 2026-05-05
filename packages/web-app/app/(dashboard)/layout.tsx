@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { SidebarProvider, useSidebar } from "@/components/layout/SidebarContext";
 import { EmailVerificationBanner } from "@/components/ui/EmailVerificationBanner";
 import { ImpersonationBanner } from "@/components/ui/ImpersonationBanner";
@@ -18,6 +19,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         }`}
       >
         <Header />
+        <CommandPalette />
         <ImpersonationBanner />
         <EmailVerificationBanner />
         <main className="p-4 sm:p-6">{children}</main>

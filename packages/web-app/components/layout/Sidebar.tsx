@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Users,
@@ -24,35 +25,73 @@ import {
   Trash2,
   Search,
   DatabaseBackup,
+  FileText,
+  Webhook,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "./SidebarContext";
 
-const navItems = [
-  { label: "Account Lookup", href: "/admin/lookup", icon: Search, supportOnly: true },
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Customers", href: "/customers", icon: Users },
-  { label: "Assets", href: "/assets", icon: Package },
-  { label: "Invoices", href: "/invoices", icon: Receipt },
-  { label: "Collections", href: "/collections", icon: Wallet },
-  { label: "Complaints", href: "/complaints", icon: AlertCircle },
-  { label: "Jobs", href: "/jobs", icon: Briefcase },
-  { label: "Technicians", href: "/technicians", icon: Wrench },
-  { label: "Contracts", href: "/contracts", icon: Shield },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
-  { label: "Reconciliation", href: "/reconciliation", icon: ArrowLeftRight, adminOnly: true },
-  { label: "Import", href: "/import", icon: Upload },
-  { label: "Compliance", href: "/compliance", icon: ShieldCheck, adminOnly: true },
-  { label: "Backup Status", href: "/admin/ops/backups", icon: DatabaseBackup, adminOnly: true },
-  { label: "Settings", href: "/settings", icon: Settings },
-] as const;
+type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  adminOnly?: true;
+  supportOnly?: true;
+  managerOnly?: true;
+};
+
+type NavGroup = {
+  title: string;
+  items: NavItem[];
+};
+
+export const navGroups: NavGroup[] = [
+  {
+    title: "Operations",
+    items: [
+      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Customers", href: "/customers", icon: Users },
+      { label: "Assets", href: "/assets", icon: Package },
+      { label: "Jobs", href: "/jobs", icon: Briefcase },
+      { label: "Technicians", href: "/technicians", icon: Wrench },
+      { label: "Complaints", href: "/complaints", icon: AlertCircle },
+    ],
+  },
+  {
+    title: "Finance",
+    items: [
+      { label: "Invoices", href: "/invoices", icon: Receipt },
+      { label: "Collections", href: "/collections", icon: Wallet },
+      { label: "Reconciliation", href: "/reconciliation", icon: ArrowLeftRight, adminOnly: true },
+      { label: "Contracts", href: "/contracts", icon: Shield },
+    ],
+  },
+  {
+    title: "Insights",
+    items: [
+      { label: "Reports", href: "/reports", icon: BarChart3 },
+      { label: "Compliance", href: "/compliance", icon: ShieldCheck, adminOnly: true },
+    ],
+  },
+  {
+    title: "Admin",
+    items: [
+      { label: "Import", href: "/import", icon: Upload },
+      { label: "Audit Log", href: "/audit-log", icon: FileText, adminOnly: true },
+      { label: "Account Lookup", href: "/admin/lookup", icon: Search, supportOnly: true },
+      { label: "Backup Status", href: "/admin/ops/backups", icon: DatabaseBackup, adminOnly: true },
+      { label: "Webhooks", href: "/webhooks", icon: Webhook, adminOnly: true },
+      { label: "Recycle Bin", href: "/recycle-bin", icon: Trash2, managerOnly: true },
+      { label: "Settings", href: "/settings", icon: Settings },
+    ],
+  },
+];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggle, setMobileOpen } = useSidebar();
   const { data: session } = useSession();
   const activeRole = session?.user?.activeRole;
-  const showRecycleBin = activeRole === "ADMIN" || activeRole === "MANAGER";
 
   const sidebarContent = (
     <>
@@ -69,93 +108,80 @@ export function Sidebar() {
         {/* Mobile close */}
         <button
           onClick={() => setMobileOpen(false)}
+          aria-label="Close navigation menu"
           className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 lg:hidden"
         >
-          <X className="h-5 w-5" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            if ("adminOnly" in item && item.adminOnly && activeRole !== "ADMIN") {
-              return null;
-            }
-            if ("supportOnly" in item && item.supportOnly && (activeRole as string) !== "SUPPORT") {
-              return null;
-            }
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+        <div className={collapsed ? "space-y-4" : "space-y-6"}>
+          {navGroups.map((group) => {
+            const visibleItems = group.items.filter((item) => {
+              if (item.adminOnly && activeRole !== "ADMIN") return false;
+              if (item.supportOnly && (activeRole as string) !== "SUPPORT") return false;
+              if (item.managerOnly && activeRole !== "ADMIN" && activeRole !== "MANAGER") return false;
+              return true;
+            });
+            if (visibleItems.length === 0) return null;
             return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                    isActive
-                      ? "bg-brand-50 text-brand-700 shadow-sm shadow-brand-100"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <item.icon
-                    className={cn(
-                      "h-5 w-5 shrink-0 transition-colors",
-                      isActive
-                        ? "text-brand-600"
-                        : "text-slate-400 group-hover:text-slate-600"
-                    )}
-                  />
-                  {!collapsed && item.label}
-                  {isActive && !collapsed && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-600" />
-                  )}
-                </Link>
-              </li>
+              <div key={group.title}>
+                {!collapsed && (
+                  <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    {group.title}
+                  </h3>
+                )}
+                <ul className="space-y-1">
+                  {visibleItems.map((item) => {
+                    const isActive =
+                      item.href === "/"
+                        ? pathname === "/"
+                        : pathname.startsWith(item.href);
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          aria-current={isActive ? "page" : undefined}
+                          aria-label={collapsed ? item.label : undefined}
+                          className={cn(
+                            "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                            isActive
+                              ? "bg-brand-50 text-brand-700 shadow-sm shadow-brand-100"
+                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          )}
+                          title={collapsed ? item.label : undefined}
+                        >
+                          <item.icon
+                            className={cn(
+                              "h-5 w-5 shrink-0 transition-colors",
+                              isActive
+                                ? "text-brand-600"
+                                : "text-slate-400 group-hover:text-slate-600"
+                            )}
+                          />
+                          {!collapsed && item.label}
+                          {isActive && !collapsed && (
+                            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-600" />
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             );
           })}
-          {showRecycleBin && (() => {
-            const isActive = pathname.startsWith("/recycle-bin");
-            return (
-              <li key="/recycle-bin">
-                <Link
-                  href="/recycle-bin"
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                    isActive
-                      ? "bg-brand-50 text-brand-700 shadow-sm shadow-brand-100"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )}
-                  title={collapsed ? "Recycle Bin" : undefined}
-                >
-                  <Trash2
-                    className={cn(
-                      "h-5 w-5 shrink-0 transition-colors",
-                      isActive
-                        ? "text-brand-600"
-                        : "text-slate-400 group-hover:text-slate-600"
-                    )}
-                  />
-                  {!collapsed && "Recycle Bin"}
-                  {isActive && !collapsed && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-600" />
-                  )}
-                </Link>
-              </li>
-            );
-          })()}
-        </ul>
+        </div>
       </nav>
 
       {/* Collapse Toggle - desktop only */}
       <div className="hidden border-t border-slate-200 p-3 lg:block">
         <button
           onClick={toggle}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="flex w-full items-center justify-center gap-2 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
         >
           {collapsed ? (

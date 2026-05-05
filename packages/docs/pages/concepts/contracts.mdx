@@ -1,0 +1,71 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Contracts & AMC
+
+A **Contract** defines a recurring service agreement between you and a customer. It specifies the service scope, billing schedule, and duration. Contracts are the engine that drives automatic invoice generation.
+
+## Contract Fields
+
+| Field | Description |
+|---|---|
+| Customer | Who the contract is with |
+| Title | Description of the service (e.g., "Annual AC Maintenance Contract") |
+| Start Date | When the contract begins |
+| End Date | When the contract expires |
+| Billing Frequency | How often to invoice (Monthly, Quarterly, Half-Yearly, Annual) |
+| Amount | Invoice amount per billing cycle (exclusive of GST) |
+| Tax Rate | GST rate to apply |
+| Assets | Equipment covered under this contract |
+| Auto Renew | Whether to auto-renew when the contract expires |
+| Notes | Internal notes |
+
+## Contract Lifecycle
+
+```
+Draft → Active → Expired (or Cancelled)
+                    ↓ (if Auto Renew)
+                  Active (renewed)
+```
+
+1. **Draft** — Created but not yet active. Invoices are not generated.
+2. **Active** — Invoices are generated automatically on the billing schedule.
+3. **Expired** — The end date has passed. No new invoices are generated.
+4. **Cancelled** — Manually terminated before expiry.
+
+## Auto-Generated Invoices
+
+When a contract is **Active**, Recuring generates invoices automatically:
+- On the contract's start date (first invoice)
+- Then every billing period (monthly, quarterly, etc.) on the same day of the month
+
+You receive a notification each time an invoice is generated. You can review it before it's sent to the customer.
+
+## Auto-Renewal
+
+When **Auto Renew** is enabled:
+- 30 days before the **End Date**, you receive a renewal reminder
+- On the **End Date**, the contract is automatically extended by one billing period
+- A new contract record is created for audit purposes
+
+You can disable auto-renewal at any time from the contract detail page.
+
+## Billing Schedule Example
+
+A contract with:
+- Start Date: 1 April 2026
+- Billing Frequency: Quarterly
+- Amount: ₹15,000 + 18% GST
+
+...generates invoices on **1 April**, **1 July**, **1 October**, **1 January**.
+
+## Jobs and Contracts
+
+Contracts define **what** service is agreed; **Jobs** define **when** and **how** the work is done. You can create planned maintenance jobs directly from a contract:
+
+1. Open the contract.
+2. Click **Schedule Job**.
+3. Assign a technician and date.
+
+See [Jobs →](/concepts/jobs) for details.

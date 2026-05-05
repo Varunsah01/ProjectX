@@ -1,0 +1,37 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Concepts
+
+This section explains the core data model behind Recuring and how the key entities relate to each other.
+
+## Data Model at a Glance
+
+```
+Organisation
+└── Customer
+    ├── Asset (equipment under service)
+    ├── Contract (AMC / recurring agreement)
+    │   └── Invoice (auto-generated per billing cycle)
+    ├── Complaint (support ticket)
+    └── Job (field visit, linked to contract or complaint)
+        └── Technician (assigned staff member)
+```
+
+## Core Entities
+
+| Entity | What it represents |
+|---|---|
+| [Customer](/concepts/customers) | A company or individual you provide services to |
+| [Asset](/concepts/assets) | Equipment or property the customer owns that you maintain |
+| [Contract](/concepts/contracts) | A recurring service agreement — defines billing schedule and scope |
+| [Job](/concepts/jobs) | A field visit or task assigned to a technician |
+| [Complaint](/concepts/complaints) | A customer-raised issue or service request |
+
+## How They Connect
+
+- A **Contract** belongs to a **Customer** and may be linked to one or more **Assets**.
+- **Invoices** are auto-generated from a **Contract** based on its billing schedule.
+- **Jobs** are created from **Contracts** (planned maintenance) or **Complaints** (reactive visits).
+- A **Technician** is assigned to a **Job** and executes it via the mobile app.

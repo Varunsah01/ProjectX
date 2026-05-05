@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Container } from "@/components/ui/Container";
 import { SITE_CONFIG } from "@/lib/constants";
 
@@ -8,7 +9,7 @@ const footerLinks = {
   ],
   Company: [
     { label: "Book a Demo", href: "/book-demo" },
-    { label: "Contact", href: "mailto:hello@projectx.in" },
+    { label: "Contact", href: "/book-demo?intent=talk" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
@@ -23,14 +24,12 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
           {/* Brand */}
           <div className="col-span-2 lg:col-span-1 lg:pr-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand shadow-md shadow-brand-500/20">
-                <span className="text-lg font-bold text-white">X</span>
-              </div>
-              <span className="text-xl font-bold text-slate-900">
-                {SITE_CONFIG.name}
-              </span>
-            </div>
+            <Image
+              src="/logo.svg"
+              alt="Project X"
+              width={140}
+              height={36}
+            />
             <p className="mt-4 text-sm text-slate-500 leading-relaxed">
               The operating system for recurring service businesses in India.
             </p>

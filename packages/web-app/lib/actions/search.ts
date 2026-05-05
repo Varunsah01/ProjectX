@@ -10,7 +10,7 @@ export type SearchResult =
   | { type: "ticket"; id: string; subject: string; priority: string }
   | { type: "job"; id: string; jobNumber: string; jobType: string };
 
-export async function globalSearchAction(query: string) {
+export async function globalSearchAction(query: string, limit = 3) {
   try {
     const user = await getCurrentUser();
     if (!user?.organizationId) {
@@ -36,7 +36,7 @@ export async function globalSearchAction(query: string) {
           ],
         },
         select: { id: true, name: true, city: true },
-        take: 3,
+        take: limit,
       }),
       db.invoice.findMany({
         where: {
@@ -49,7 +49,7 @@ export async function globalSearchAction(query: string) {
           status: true,
           customer: { select: { name: true } },
         },
-        take: 3,
+        take: limit,
       }),
       db.ticket.findMany({
         where: {
@@ -60,7 +60,7 @@ export async function globalSearchAction(query: string) {
           ],
         },
         select: { id: true, subject: true, priority: true },
-        take: 3,
+        take: limit,
       }),
       db.job.findMany({
         where: {
@@ -68,7 +68,7 @@ export async function globalSearchAction(query: string) {
           jobNumber: { contains: q, mode },
         },
         select: { id: true, jobNumber: true, type: true },
-        take: 3,
+        take: limit,
       }),
     ]);
 

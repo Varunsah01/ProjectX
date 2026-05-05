@@ -1,0 +1,87 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Mobile Field Ops
+
+The Recuring mobile app is used by technicians to manage their assigned jobs in the field — from receiving the job notification to uploading completion proof.
+
+## Installing the App
+
+The app is available for:
+- **Android**: [Google Play Store](#) *(search "Recuring Field")*
+- **iOS**: [Apple App Store](#) *(search "Recuring Field")*
+
+## Technician Account Setup
+
+1. As an admin, go to **Technicians → Add Technician** and enter the technician's name, email, and phone.
+2. The technician receives an email with a link to set their password.
+3. They log in to the mobile app with their email and password.
+
+## The Job Workflow
+
+### 1. Receiving a Job
+
+When a job is assigned to the technician, they receive a **push notification**:
+> "New job: AC Servicing at Acme Corp — tomorrow, 10:00 AM"
+
+The job appears on the **Today's Jobs** screen of the app.
+
+### 2. Starting a Job
+
+When the technician arrives on-site:
+1. Open the job in the app.
+2. Tap **Start Job**.
+3. GPS coordinates are recorded as the check-in location.
+
+The job status changes to **In Progress** and is visible in real-time on the admin dashboard.
+
+### 3. Recording Work
+
+The technician completes the checklist items defined for the job type:
+- Each item can be marked **Done**, **Not Applicable**, or **Requires Follow-Up**
+- Technicians can add notes per checklist item
+
+### 4. Uploading Photo Proof
+
+1. Tap **Add Photos**.
+2. Take or select up to 10 photos (before/after equipment photos, work evidence).
+3. Photos are uploaded to secure cloud storage and attached to the job report.
+
+### 5. Customer Signature
+
+1. Tap **Get Signature**.
+2. Hand the phone to the customer.
+3. The customer draws their signature on the screen and taps **Confirm**.
+4. The signature is embedded in the job report.
+
+### 6. Completing the Job
+
+1. Tap **Complete Job**.
+2. A summary is shown — checklist items, photos count, signature status.
+3. Confirm → Job status changes to **Completed**.
+4. A service report PDF is automatically generated and emailed to the customer.
+
+## Offline Mode
+
+The mobile app works offline for essential functions:
+- Viewing assigned jobs
+- Completing checklists
+- Adding notes
+
+Photos and signatures sync when connectivity is restored. The job cannot be marked **Completed** until photos and signature are uploaded.
+
+## Admin Visibility
+
+From the admin dashboard (**Jobs** view), admins can see:
+- Real-time job status (Assigned / In Progress / Completed)
+- Check-in GPS location on a map
+- Photo thumbnails and signature as soon as they sync
+
+## Technician Performance Reports
+
+Go to **Reports → Technician Performance** to see:
+- Jobs completed per technician per period
+- Average job duration
+- On-time completion rate (vs scheduled time)
+- Customer complaint rate linked to each technician

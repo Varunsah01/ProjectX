@@ -1,0 +1,74 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Complaints & Tickets
+
+A **Complaint** (also called a ticket) is a customer-raised issue or service request. Complaints track the full lifecycle from receipt to resolution and can trigger reactive jobs.
+
+## Complaint Fields
+
+| Field | Description |
+|---|---|
+| Customer | Which customer raised the complaint |
+| Asset | Which equipment the complaint is about (optional) |
+| Title | Short summary of the issue |
+| Description | Full details |
+| Priority | Low / Medium / High / Critical |
+| Status | Open / In Progress / Resolved / Closed |
+| Assigned To | Technician or support agent handling it |
+| SLA Due | Deadline for resolution based on priority |
+
+## Raising a Complaint
+
+**By admin/staff:**
+1. Sidebar → **Complaints → New Complaint**
+2. Select customer, optionally link to an asset
+3. Set priority and assign to a team member
+
+**By customer (via portal):**
+1. Customer logs into the portal
+2. Goes to **Support → Raise a Complaint**
+3. Fills in title, description, and optionally uploads a photo
+4. Complaint appears in your dashboard immediately
+
+## Complaint Statuses
+
+| Status | Description |
+|---|---|
+| Open | Received, not yet assigned or acknowledged |
+| In Progress | Being worked on |
+| Resolved | Fix applied; awaiting customer confirmation |
+| Closed | Confirmed resolved by customer or auto-closed |
+
+## Priority and SLA
+
+| Priority | Target Resolution Time |
+|---|---|
+| Low | 5 business days |
+| Medium | 2 business days |
+| High | 1 business day |
+| Critical | 4 hours |
+
+SLA timers start when the complaint is created and pause outside business hours.
+
+> **Note:** SLA configuration (business hours, escalation rules) is currently fixed at these defaults. Custom SLA tiers are on the roadmap.
+
+## Creating a Job from a Complaint
+
+When a complaint requires a site visit:
+
+1. Open the complaint
+2. Click **Create Job**
+3. The job is linked to the complaint; the complaint status moves to **In Progress**
+
+Once the job is completed, the complaint status updates to **Resolved** automatically.
+
+## Complaint History
+
+Every complaint has a full activity log showing:
+- When it was created and by whom (or "Customer Portal")
+- Status changes with timestamps
+- Comments from staff
+- Linked jobs
+- Attachments and photos

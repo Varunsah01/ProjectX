@@ -1,0 +1,67 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Your First Invoice
+
+## Create an Invoice
+
+1. From the sidebar, go to **Invoices → New Invoice**.
+2. Select the **Customer** from the dropdown.
+3. Set the **Invoice Date** and **Due Date**.
+
+## Add Line Items
+
+Click **Add Line Item** for each service or product:
+
+| Field | Notes |
+|---|---|
+| Description | Free text, e.g. "Annual Maintenance Contract — Split AC (Jan–Dec 2026)" |
+| Quantity | Numeric |
+| Unit Price | Exclusive of GST |
+| Tax Rate | Select from your configured rates (e.g., 18%) |
+
+The system auto-calculates:
+- **Taxable Amount** = Qty × Unit Price
+- **CGST + SGST** (same state) or **IGST** (different state)
+- **Total** including tax
+
+## GST Breakdown
+
+| Scenario | Tax Applied |
+|---|---|
+| Your state = Customer's billing state | CGST (9%) + SGST (9%) for 18% GST |
+| Your state ≠ Customer's billing state | IGST (18%) |
+
+The correct type is applied automatically based on the billing state on the customer record.
+
+## Send the Invoice
+
+Once you're happy with the amounts, click **Send Invoice**:
+
+- **Email** — sends a PDF attachment + inline summary to the customer's email address
+- **WhatsApp** — generates a pre-filled WhatsApp message with a payment link (requires Razorpay integration)
+- **Download PDF** — download and share manually
+
+### Razorpay Payment Link
+
+If Razorpay is connected, a **Pay Now** button is embedded in the email. When the customer pays, the invoice status updates to **Paid** automatically via webhook.
+
+## Invoice Statuses
+
+| Status | Meaning |
+|---|---|
+| Draft | Not yet sent; editable |
+| Sent | Delivered to customer |
+| Paid | Full payment received |
+| Partial | Partial payment received |
+| Overdue | Past due date, unpaid |
+| Cancelled | Voided; not counted in revenue |
+
+## Recurring Invoices
+
+For AMC contracts, invoices are generated automatically by the system on the billing schedule. You don't need to create them manually. See [Contracts & AMC →](/concepts/contracts) for details.
+
+---
+
+You're set up! Explore [Concepts →](/concepts) to understand how Recuring's data model works.

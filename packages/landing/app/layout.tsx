@@ -12,6 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://recuring.in"),
   title: "Project X - Recurring Service Operations Platform",
   description:
     "The all-in-one operations platform for Indian service businesses. Manage customers, billing, complaints, technicians, AMC contracts, and collections from one place. Collect faster, serve better, renew more.",

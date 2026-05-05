@@ -1,0 +1,73 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Razorpay Setup
+
+Connecting Razorpay lets you embed a **Pay Now** button in invoices so customers can pay online. When a payment is received, the invoice automatically updates to **Paid**.
+
+## Prerequisites
+
+- An active **Razorpay account** (sign up at razorpay.com)
+- Your Razorpay **Key ID** and **Key Secret** (from the Razorpay Dashboard)
+
+## Step 1: Get Your API Keys
+
+1. Log in to the [Razorpay Dashboard](https://dashboard.razorpay.com/).
+2. Go to **Settings → API Keys**.
+3. If you haven't generated keys yet, click **Generate Test Key** (for testing) or **Generate Live Key** (for production).
+4. Copy the **Key ID** and **Key Secret**.
+
+> Keep your Key Secret confidential. Never share it or commit it to source code.
+
+## Step 2: Enter Keys in Recuring
+
+1. In Recuring, go to **Settings → Payments**.
+2. Enter your **Razorpay Key ID** and **Key Secret**.
+3. Select **Mode**: Test or Live.
+4. Click **Save & Verify** — Recuring will ping Razorpay to confirm the credentials are valid.
+
+## Step 3: Configure the Webhook
+
+Recuring uses Razorpay webhooks to automatically mark invoices as paid.
+
+1. In the Razorpay Dashboard, go to **Settings → Webhooks**.
+2. Click **Add New Webhook**.
+3. Set the **Webhook URL** to:
+   ```
+   https://app.recuring.in/api/webhooks/razorpay
+   ```
+4. Under **Active Events**, enable:
+   - `payment.captured`
+   - `payment.failed`
+   - `refund.created`
+5. Generate a **Webhook Secret** and copy it.
+6. Back in Recuring → **Settings → Payments**, paste the **Webhook Secret**.
+7. Click **Save**.
+
+## Step 4: Test the Integration
+
+1. Create a test invoice for any customer.
+2. Click **Send Invoice** → the email will include a **Pay Now** button.
+3. Use Razorpay's test card (4111 1111 1111 1111, any future expiry, CVV 123) to complete a payment.
+4. Within a few seconds, the invoice status in Recuring should change to **Paid**.
+
+## Refunds
+
+To issue a refund:
+1. Open the paid invoice.
+2. Click **Refund**.
+3. Enter the refund amount (partial or full).
+4. Confirm — Recuring initiates the refund via Razorpay API.
+
+The refund typically reaches the customer in 5–7 business days.
+
+## Switching from Test to Live
+
+When you're ready to go live:
+1. Get your **Live Key ID** and **Live Key Secret** from Razorpay.
+2. Update **Settings → Payments** with the live keys.
+3. Update the Webhook URL if needed (same URL, just ensuring it's the production domain).
+4. Set the **Mode** to **Live**.
+
+> Previous test payments are not visible in Live mode and vice versa.

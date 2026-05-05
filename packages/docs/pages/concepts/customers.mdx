@@ -1,0 +1,64 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Customers
+
+A **Customer** is the central entity in Recuring. Everything — contracts, invoices, assets, jobs, and complaints — belongs to a customer.
+
+## Customer Fields
+
+| Field | Description |
+|---|---|
+| Name | Legal or trading name of the customer |
+| Email | Primary email for invoice delivery |
+| Phone | Primary contact phone |
+| Category | Free-form label for segmentation (e.g., "Enterprise", "Residential") |
+| Billing Address | Street, city, state, PIN — used on invoices |
+| Billing State | Determines IGST vs CGST+SGST |
+| GSTIN | Customer's GST registration number |
+| PAN | Permanent Account Number |
+| Notes | Internal notes (not visible to customer) |
+
+## Billing State
+
+The **Billing State** field is critical for correct GST calculation:
+
+- If the customer's billing state **matches** your organisation's state → **CGST + SGST**
+- If the customer's billing state **differs** → **IGST**
+
+Always verify the billing state when onboarding a new customer.
+
+## Portal Access
+
+When **Portal Access** is enabled, the customer receives login credentials to the **Customer Portal** at `portal.recuring.in`. From the portal, they can:
+
+- View and download all their invoices
+- Pay outstanding invoices via Razorpay
+- View their active contracts and service schedules
+- Raise complaints and track resolution status
+- Download service reports
+
+### Enabling Portal Access
+
+1. Open the customer record.
+2. Toggle **Enable Portal Access**.
+3. Click **Save**.
+
+The customer receives a welcome email with a magic link to set their password.
+
+## Customer Categories
+
+Categories are free-form tags you create. Use them to:
+- Filter customers in reports (e.g., "show revenue from Enterprise customers only")
+- Group bulk-import data
+- Segment for marketing communications
+
+## Deactivating a Customer
+
+You can **deactivate** (soft-delete) a customer when they are no longer active. Deactivated customers:
+- Do not receive auto-generated invoices
+- Are hidden from the default list view
+- Can be restored at any time from **Customers → Archived**
+
+All historical invoices and records remain intact.

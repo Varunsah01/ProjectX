@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { Eye, EyeOff, ChevronDown } from "lucide-react";
 import { track, Events } from "@/lib/analytics";
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter";
 
 type SignupErrors = {
   name?: string;
@@ -34,6 +36,9 @@ export default function SignupPage() {
   });
   const [errors, setErrors] = useState<SignupErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showOptionalConsents, setShowOptionalConsents] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,7 +66,8 @@ export default function SignupPage() {
     }
 
     if (!consents.SERVICE_DELIVERY) {
-      nextErrors.form = "You must consent to data processing for service delivery to create an account.";
+      nextErrors.form =
+        "You must agree to the Terms and Privacy Policy to create an account.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -91,8 +97,17 @@ export default function SignupPage() {
     const result = (await response.json()) as { error?: string };
 
     if (!response.ok) {
+      if (response.status === 409) {
+        router.push(
+          `/login?email=${encodeURIComponent(form.email.trim())}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        );
+        return;
+      }
+
       setErrors({
-        form: result.error ?? "Unable to create your account.",
+        form:
+          result.error ??
+          "Something went wrong. Please try again.",
       });
       setIsSubmitting(false);
       return;
@@ -119,7 +134,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-8 shadow-[0_32px_80px_-40px_rgba(15,23,42,0.45)]">
+    <>
       <div className="mb-8 space-y-2">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-600">
           New Workspace
@@ -132,61 +147,91 @@ export default function SignupPage() {
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="signup-name"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Name
           </label>
           <input
+            id="signup-name"
             type="text"
+            autoComplete="name"
             value={form.name}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, name: event.target.value }))
+            onChange={(e) =>
+              setForm((c) => ({ ...c, name: e.target.value }))
             }
+            aria-invalid={!!errors.name}
+            aria-describedby={errors.name ? "signup-name-error" : undefined}
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="Your full name"
           />
           {errors.name ? (
-            <p className="mt-1.5 text-xs text-red-600">{errors.name}</p>
+            <p id="signup-name-error" className="mt-1.5 text-xs text-red-600">
+              {errors.name}
+            </p>
           ) : null}
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="signup-email"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Email
           </label>
           <input
+            id="signup-email"
             type="email"
+            autoComplete="email"
             value={form.email}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, email: event.target.value }))
+            onChange={(e) =>
+              setForm((c) => ({ ...c, email: e.target.value }))
             }
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "signup-email-error" : undefined}
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="you@company.com"
           />
           {errors.email ? (
-            <p className="mt-1.5 text-xs text-red-600">{errors.email}</p>
+            <p
+              id="signup-email-error"
+              className="mt-1.5 text-xs text-red-600"
+            >
+              {errors.email}
+            </p>
           ) : null}
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label
+            htmlFor="signup-org-name"
+            className="mb-1 block text-sm font-medium text-slate-700"
+          >
             Organization Name
           </label>
           <input
+            id="signup-org-name"
             type="text"
+            autoComplete="organization"
             value={form.organizationName}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                organizationName: event.target.value,
-              }))
+            onChange={(e) =>
+              setForm((c) => ({ ...c, organizationName: e.target.value }))
+            }
+            aria-invalid={!!errors.organizationName}
+            aria-describedby={
+              errors.organizationName ? "signup-org-name-error" : undefined
             }
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            placeholder="Project X Services"
+            placeholder="Your company name"
           />
           {errors.organizationName ? (
-            <p className="mt-1.5 text-xs text-red-600">
+            <p
+              id="signup-org-name-error"
+              className="mt-1.5 text-xs text-red-600"
+            >
               {errors.organizationName}
             </p>
           ) : null}
@@ -194,109 +239,205 @@ export default function SignupPage() {
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="signup-password"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Password
             </label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  password: event.target.value,
-                }))
-              }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder="Minimum 8 characters"
-            />
+            <div className="relative">
+              <input
+                id="signup-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.password}
+                onChange={(e) =>
+                  setForm((c) => ({ ...c, password: e.target.value }))
+                }
+                aria-invalid={!!errors.password}
+                aria-describedby={
+                  errors.password ? "signup-password-error" : undefined
+                }
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                placeholder="Min. 8 characters"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-[18px] -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <PasswordStrengthMeter password={form.password} />
             {errors.password ? (
-              <p className="mt-1.5 text-xs text-red-600">{errors.password}</p>
+              <p
+                id="signup-password-error"
+                className="mt-1.5 text-xs text-red-600"
+              >
+                {errors.password}
+              </p>
             ) : null}
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label
+              htmlFor="signup-confirm-password"
+              className="mb-1 block text-sm font-medium text-slate-700"
+            >
               Confirm Password
             </label>
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  confirmPassword: event.target.value,
-                }))
-              }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              placeholder="Re-enter password"
-            />
+            <div className="relative">
+              <input
+                id="signup-confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={(e) =>
+                  setForm((c) => ({ ...c, confirmPassword: e.target.value }))
+                }
+                aria-invalid={!!errors.confirmPassword}
+                aria-describedby={
+                  errors.confirmPassword
+                    ? "signup-confirm-password-error"
+                    : undefined
+                }
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 pr-10 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                placeholder="Re-enter password"
+              />
+              <button
+                type="button"
+                aria-label={
+                  showConfirmPassword
+                    ? "Hide confirm password"
+                    : "Show confirm password"
+                }
+                aria-pressed={showConfirmPassword}
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                className="absolute right-2.5 top-[18px] -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff size={16} />
+                ) : (
+                  <Eye size={16} />
+                )}
+              </button>
+            </div>
             {errors.confirmPassword ? (
-              <p className="mt-1.5 text-xs text-red-600">
+              <p
+                id="signup-confirm-password-error"
+                className="mt-1.5 text-xs text-red-600"
+              >
                 {errors.confirmPassword}
               </p>
             ) : null}
           </div>
         </div>
 
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-slate-700">
-            Data Processing Consent
-          </p>
-          <p className="text-xs text-slate-500">
-            Under the Digital Personal Data Protection Act, 2023, we need your consent
-            to process your data. Review our{" "}
-            <a href="/privacy" target="_blank" className="text-brand-600 underline">
+        {/* Consent: SERVICE_DELIVERY inline */}
+        <label className="flex items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={consents.SERVICE_DELIVERY}
+            onChange={(e) =>
+              setConsents((c) => ({
+                ...c,
+                SERVICE_DELIVERY: e.target.checked,
+              }))
+            }
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="text-sm text-slate-600">
+            By creating an account you agree to the{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              className="font-medium text-brand-600 hover:text-brand-700"
+            >
+              Terms
+            </a>{" "}
+            and{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              className="font-medium text-brand-600 hover:text-brand-700"
+            >
               Privacy Policy
-            </a>.
-          </p>
-          <label className="flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consents.SERVICE_DELIVERY}
-              onChange={(e) => setConsents((c) => ({ ...c, SERVICE_DELIVERY: e.target.checked }))}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            </a>
+            .
+          </span>
+        </label>
+
+        {/* Optional preferences — collapsed by default */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowOptionalConsents((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+            aria-expanded={showOptionalConsents}
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${showOptionalConsents ? "rotate-180" : ""}`}
+              aria-hidden="true"
             />
-            <span className="text-sm text-slate-700">
-              <strong>Service delivery</strong> — required to provide the core service
-            </span>
-          </label>
-          <label className="flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consents.COMMUNICATION}
-              onChange={(e) => setConsents((c) => ({ ...c, COMMUNICATION: e.target.checked }))}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span className="text-sm text-slate-700">
-              <strong>Communication</strong> — service updates, reminders, and notifications
-            </span>
-          </label>
-          <label className="flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consents.ANALYTICS}
-              onChange={(e) => setConsents((c) => ({ ...c, ANALYTICS: e.target.checked }))}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span className="text-sm text-slate-700">
-              <strong>Analytics</strong> — usage analytics to improve the product
-            </span>
-          </label>
-          <label className="flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consents.MARKETING}
-              onChange={(e) => setConsents((c) => ({ ...c, MARKETING: e.target.checked }))}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span className="text-sm text-slate-700">
-              <strong>Marketing</strong> — product updates and promotional offers
-            </span>
-          </label>
+            Optional preferences
+          </button>
+          {showOptionalConsents && (
+            <div className="mt-3 space-y-2.5 rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <label className="flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={consents.COMMUNICATION}
+                  onChange={(e) =>
+                    setConsents((c) => ({
+                      ...c,
+                      COMMUNICATION: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-xs text-slate-600">
+                  Service updates, reminders, and notifications
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={consents.ANALYTICS}
+                  onChange={(e) =>
+                    setConsents((c) => ({ ...c, ANALYTICS: e.target.checked }))
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-xs text-slate-600">
+                  Usage analytics to improve the product
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={consents.MARKETING}
+                  onChange={(e) =>
+                    setConsents((c) => ({ ...c, MARKETING: e.target.checked }))
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span className="text-xs text-slate-600">
+                  Product updates and promotional offers
+                </span>
+              </label>
+            </div>
+          )}
         </div>
 
         {errors.form ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
             {errors.form}
           </div>
         ) : null}
@@ -310,7 +451,7 @@ export default function SignupPage() {
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-sm text-slate-500">
         Already have an account?{" "}
         <Link
           href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
@@ -319,6 +460,6 @@ export default function SignupPage() {
           Sign in
         </Link>
       </p>
-    </div>
+    </>
   );
 }

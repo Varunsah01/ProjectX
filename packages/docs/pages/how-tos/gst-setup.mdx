@@ -1,0 +1,77 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# GST Setup
+
+This guide explains how to configure GST in Recuring so invoices show correct tax breakdowns.
+
+## Prerequisites
+
+- Your **GSTIN** (15-character GST registration number)
+- Your **registered state** under GST (must match the state in your GST certificate)
+
+## Step 1: Enter Your GSTIN
+
+1. Go to **Settings → Organisation**.
+2. Enter your **GSTIN** in the field provided.
+3. Enter your **State** — this is your organisation's GST-registered state.
+4. Click **Save**.
+
+> The state you enter here determines whether invoices show CGST+SGST (same state as customer) or IGST (different state).
+
+## Step 2: Configure Tax Rates
+
+1. Go to **Settings → Tax Rates**.
+2. Click **Add Tax Rate**.
+3. Fill in:
+   - **Name** (e.g., "GST 18%")
+   - **Rate** (e.g., `18`)
+   - **Description** (optional, e.g., "Standard rate for services")
+4. Click **Save**.
+
+You can create multiple rates (e.g., 5%, 12%, 18%, 28%) for different services.
+
+## Step 3: Apply Tax Rates
+
+Tax rates are applied at the **line item level** when creating invoices, or at the **contract level** so all auto-generated invoices inherit the rate.
+
+### On a Contract
+1. Open the contract → click **Edit**.
+2. Select the **Tax Rate** field.
+3. Save.
+
+All invoices generated from this contract will use the selected rate.
+
+### On a Manual Invoice
+1. New Invoice → Add Line Item.
+2. Select the tax rate in the **Tax** column.
+
+## How CGST / SGST / IGST Works
+
+Recuring determines the tax split automatically:
+
+| Condition | Tax Applied |
+|---|---|
+| Customer billing state = your org state | CGST (half the rate) + SGST (half the rate) |
+| Customer billing state ≠ your org state | IGST (full rate) |
+
+Example: 18% GST rate:
+- Same state → CGST 9% + SGST 9%
+- Different state → IGST 18%
+
+## Composition Scheme
+
+If you are under the **GST Composition Scheme**, contact [support@recuring.in](mailto:support@recuring.in) to enable composition mode. In composition mode:
+- Invoices show "Bill of Supply" instead of "Tax Invoice"
+- Tax amounts are not shown separately
+
+## Reverse Charge
+
+Reverse charge is not currently automated. If you need to record a reverse charge transaction, add a manual note in the invoice description and adjust accordingly. Full reverse charge support is on the roadmap.
+
+## Verifying Your Setup
+
+Create a test invoice with a customer in the same state and another in a different state. Confirm:
+- Same state → two lines: CGST + SGST
+- Different state → one line: IGST

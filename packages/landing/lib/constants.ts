@@ -298,7 +298,7 @@ export const INLINE_CTA_CONTENT = {
   afterFeatures: {
     text: "Want to see how these modules work for your specific business?",
     buttonText: "Talk to Our Team",
-    buttonHref: "mailto:hello@projectx.in",
+    buttonHref: "/book-demo?intent=talk",
   },
   afterTestimonials: {
     text: "Join hundreds of service businesses already running on Project X.",

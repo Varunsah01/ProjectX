@@ -1,0 +1,83 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Tally / Zoho Export
+
+Recuring can export invoice data in formats compatible with **Tally Prime** (XML) and **Zoho Books** (CSV) for accounting reconciliation.
+
+## Accessing the Export
+
+1. Go to **Reports → Accounting Export**.
+2. Select the **Date Range** (e.g., April 2026).
+3. Choose the **Export Format**:
+   - Tally XML
+   - Zoho Books CSV
+4. Click **Export**.
+
+## Tally XML Export
+
+The Tally XML follows the **Tally Prime 3.x** voucher import format.
+
+### What's Included
+
+| Tally Field | Recuring Source |
+|---|---|
+| Voucher Type | "Sales" |
+| Voucher Date | Invoice date |
+| Party Name | Customer name |
+| Ledger | Mapped from tax rate (CGST, SGST, IGST) |
+| Amount | Line item amount |
+| Narration | Invoice number + description |
+
+### Importing into Tally Prime
+
+1. Open Tally Prime.
+2. Go to **Gateway of Tally → Import → Data**.
+3. Select **Vouchers**.
+4. Browse to the downloaded XML file.
+5. Click **Import**.
+6. Tally will show a summary: vouchers created / errors.
+
+### Ledger Mapping
+
+By default, Recuring maps to these Tally ledgers:
+
+| Tax Type | Ledger |
+|---|---|
+| CGST | "Output CGST" |
+| SGST | "Output SGST" |
+| IGST | "Output IGST" |
+| Sales | "Sales - Services" |
+
+If your Tally ledger names differ, contact [support@recuring.in](mailto:support@recuring.in) to configure custom mappings.
+
+## Zoho Books CSV Export
+
+The CSV format matches the **Zoho Books invoice import template** (as of 2026).
+
+### Columns Included
+
+`Invoice#`, `Customer Name`, `Invoice Date`, `Due Date`, `Item Name`, `Quantity`, `Rate`, `Tax%`, `Tax Amount`, `Total`
+
+### Importing into Zoho Books
+
+1. In Zoho Books, go to **Sales → Invoices**.
+2. Click the hamburger menu → **Import Invoices**.
+3. Upload the CSV.
+4. Map columns if prompted (should auto-match).
+5. Click **Import**.
+
+## Common Issues
+
+### Duplicate Invoices in Tally
+
+If you import the same date range twice, you'll get duplicate vouchers. Tally does not deduplicate on import. Always check before re-importing, or delete the previous import's vouchers first.
+
+### Date Format Mismatch
+
+Tally expects dates in `DD-MMM-YYYY` format (e.g., `01-Apr-2026`). Recuring exports in this format by default. If you see date errors in Tally, verify your Tally date format setting under **F12: Configure → Date Format**.
+
+### Missing Ledger Error
+
+If Tally reports "Ledger not found", it means the ledger name in the XML doesn't match an existing ledger in your company. Create the ledger in Tally (e.g., "Output CGST") or request a custom ledger mapping from support.

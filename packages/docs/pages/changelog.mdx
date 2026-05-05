@@ -1,0 +1,73 @@
+import { PageMeta } from "../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Changelog
+
+All notable changes to Recuring are documented here.
+We follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
+---
+
+## [Unreleased]
+
+### In Progress
+- Custom SLA tiers (configurable business hours and escalation rules)
+- Reverse charge GST support
+- Bulk SMS job notifications for technicians
+
+---
+
+## [0.5.0] — 2026-05-04
+
+### Added
+- **Docs site** — Nextra-powered documentation at docs.recuring.in covering all product areas
+- **Backup verification** — Weekly automated test-restore of the database with admin dashboard at `/admin/ops/backups`
+- **DPDP compliance pages** — Privacy policy, grievance officer, and Data Principal rights documentation
+
+---
+
+## [0.4.0] — 2026-04-20
+
+### Added
+- **k6 load test suite** — Capacity baseline scripts for auth, dashboard SSR, mobile job cycle, and cron spike scenarios
+- **Performance baseline document** — Target SLOs documented in `docs/perf/`
+
+---
+
+## [0.3.0] — 2026-04-10
+
+### Added
+- **Customer portal** — Self-service portal for customers to view invoices, contracts, and raise complaints
+- **Multi-organisation membership** — Users can belong to multiple organisations and switch between them
+- **Feature flags** — GrowthBook integration for gradual feature rollouts
+- **SEO** — Landing page and docs meta tags, structured data, sitemap
+
+---
+
+## [0.2.0] — 2026-03-15
+
+### Added
+- **Soft delete** — Customers, assets, and contracts support soft-deletion with restore
+- **Data retention cron** — Automated purge of data past legal retention periods
+- **Org data export** — Admins can export all organisation data as a ZIP archive
+
+### Fixed
+- Invoice GST calculation for partial payments
+- Customer portal session handling on mobile browsers
+
+---
+
+## [0.1.0] — 2026-02-01
+
+### Added
+- Initial release
+- Customer and asset management
+- Contract and AMC billing with auto-invoice generation
+- Razorpay payment integration
+- Field technician mobile app
+- Complaint and ticket management
+- Bulk import (CSV)
+- GST-compliant invoices (CGST/SGST/IGST)
+- Tally XML and Zoho CSV export
+- Admin dashboard with reports

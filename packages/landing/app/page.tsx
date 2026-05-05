@@ -5,7 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { HeroSection } from "@/components/sections/HeroSection";
 import { SocialProofBar } from "@/components/sections/SocialProofBar";
 import { ScrollToTop } from "@/components/ui/ScrollToTop";
-import { INLINE_CTA_CONTENT } from "@/lib/constants";
+import { INLINE_CTA_CONTENT, FAQ_ITEMS } from "@/lib/constants";
 
 const ProblemSection = dynamic(
   () => import("@/components/sections/ProblemSection").then((m) => ({ default: m.ProblemSection })),
@@ -52,17 +52,38 @@ export const metadata: Metadata = {
   title: "Project X — AMC & Service Operations Platform for India",
   description:
     "Manage AMC contracts, automate recurring billing, dispatch technicians, and collect faster. Purpose-built for Indian field service businesses.",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: "Project X — AMC & Service Operations Platform for India",
     description:
       "Manage AMC contracts, automate recurring billing, dispatch technicians, and collect faster. Purpose-built for Indian field service businesses.",
-    url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://recuring.in",
+    url: "/",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630 }],
   },
+};
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ_ITEMS.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.answer,
+    },
+  })),
 };
 
 export default function LandingPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       <Navbar />
       <main id="main-content">
         <HeroSection />

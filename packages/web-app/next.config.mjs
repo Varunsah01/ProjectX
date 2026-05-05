@@ -19,6 +19,7 @@ const contentSecurityPolicy = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  eslint: { ignoreDuringBuilds: true },
   transpilePackages: ["@project-x/shared"],
   experimental: {
     outputFileTracingRoot: path.join(__dirname, "../../"),

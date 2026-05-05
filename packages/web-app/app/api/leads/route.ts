@@ -30,8 +30,12 @@ function authorizeRequest(request: Request) {
 function buildNotifyHtml(lead: {
   name: string;
   email: string;
-  phone: string;
+  phone?: string | null;
   company: string;
+  role?: string | null;
+  companySize?: string | null;
+  industry?: string | null;
+  preferredContact?: string | null;
   source: string;
   message?: string | null;
 }) {
@@ -50,8 +54,12 @@ function buildNotifyHtml(lead: {
       <table style="width:100%;border-collapse:collapse">
         ${row("Name", lead.name)}
         ${row("Email", `<a href="mailto:${lead.email}" style="color:#0f766e">${lead.email}</a>`)}
-        ${row("Phone", lead.phone)}
+        ${lead.phone ? row("Phone", lead.phone) : ""}
         ${row("Company", lead.company)}
+        ${lead.role ? row("Role", lead.role) : ""}
+        ${lead.companySize ? row("Company size", lead.companySize) : ""}
+        ${lead.industry ? row("Industry", lead.industry) : ""}
+        ${lead.preferredContact ? row("Preferred contact", lead.preferredContact) : ""}
         ${lead.message ? row("Message", lead.message.replace(/\n/g, "<br>")) : ""}
       </table>
     </div>
@@ -92,8 +100,12 @@ export async function POST(request: Request) {
       data: {
         name: body.name,
         email: body.email,
-        phone: body.phone,
+        phone: body.phone ?? null,
         company: body.company,
+        role: body.role ?? null,
+        companySize: body.companySize ?? null,
+        industry: body.industry ?? null,
+        preferredContact: body.preferredContact ?? null,
         message: body.message ?? null,
         source: body.source,
       },
@@ -120,8 +132,12 @@ export async function POST(request: Request) {
         buildNotifyHtml({
           name: body.name,
           email: body.email,
-          phone: body.phone,
+          phone: body.phone ?? null,
           company: body.company,
+          role: body.role ?? null,
+          companySize: body.companySize ?? null,
+          industry: body.industry ?? null,
+          preferredContact: body.preferredContact ?? null,
           source: body.source,
           message: body.message ?? null,
         }),

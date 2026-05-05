@@ -7,7 +7,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { lookupAccountAction, type LookupResults, type LookupUser } from "@/lib/actions/lookup";
-import { paiseToRupees } from "@/lib/integrations/shared";
+
+function paiseToRupees(paise: number): string {
+  return (paise / 100).toFixed(2);
+}
 
 export function LookupPageClient() {
   const router = useRouter();

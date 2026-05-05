@@ -31,12 +31,12 @@ export function MetricCard({
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-1.5 text-2xl font-bold text-slate-900 tabular-nums">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+          <p className="mt-1.5 text-2xl font-bold text-slate-900 tabular-nums lg:text-3xl">
             {value}
           </p>
           {subtitle && (
-            <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
+            <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
           )}
           {trend && (
             <p

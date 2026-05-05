@@ -13,6 +13,10 @@ import {
   TrendingUp,
   Clock,
   ArrowRight,
+  FilePlus,
+  UserPlus,
+  CalendarPlus,
+  MessageSquarePlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/components/ui/MetricCard";
@@ -56,6 +60,25 @@ export default function DashboardPageClient({
         subtitle="Welcome back. Here's what needs your attention today."
       />
 
+      {/* Quick actions */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {[
+          { label: "New invoice", icon: FilePlus, href: "/invoices/new" },
+          { label: "Add customer", icon: UserPlus, href: "/customers/new" },
+          { label: "Schedule job", icon: CalendarPlus, href: "/jobs/new" },
+          { label: "Log complaint", icon: MessageSquarePlus, href: "/complaints/new" },
+        ].map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 hover:border-brand-300"
+          >
+            <action.icon className="h-4 w-4" aria-hidden="true" />
+            {action.label}
+          </Link>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
           title="Total Due"
@@ -91,39 +114,24 @@ export default function DashboardPageClient({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
-        {[
-          { icon: Users, label: "Active Customers", value: metrics.activeCustomers },
-          { icon: TrendingUp, label: "Collection Rate", value: `${metrics.collectionRate}%` },
-          { icon: Clock, label: "Avg Resolution", value: `${metrics.avgResolutionHours}h` },
-          { icon: Shield, label: "Renewal Rate", value: `${metrics.renewalRate}%` },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-sm"
-          >
-            <div className="flex items-center gap-2">
-              <item.icon className="h-4 w-4 text-slate-400" />
-              <span className="text-xs font-medium text-slate-500">
-                {item.label}
-              </span>
-            </div>
-            <p className="mt-1.5 text-xl font-bold text-slate-900 tabular-nums">
-              {item.value}
-            </p>
-          </div>
-        ))}
-      </div>
-
+      {/* Action Required — highest-value UX, above secondary stats */}
       <div className="mb-8 rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
           <AlertCircle className="h-4 w-4 text-slate-500" />
           <h3 className="font-semibold text-slate-900">Action Required</h3>
         </div>
         {actionItems.length === 0 ? (
-          <div className="flex items-center gap-3 px-5 py-6">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-            <p className="text-sm font-medium text-emerald-700">Everything is on track</p>
+          <div className="px-5 py-6">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <p className="text-sm font-medium text-emerald-700">Everything is on track</p>
+            </div>
+            <Link
+              href="/jobs"
+              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-brand-600 transition-colors"
+            >
+              View all jobs today <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -151,6 +159,30 @@ export default function DashboardPageClient({
             ))}
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
+        {[
+          { icon: Users, label: "Active Customers", value: metrics.activeCustomers },
+          { icon: TrendingUp, label: "Collection Rate", value: `${metrics.collectionRate}%` },
+          { icon: Clock, label: "Avg Resolution", value: `${metrics.avgResolutionHours}h` },
+          { icon: Shield, label: "Renewal Rate", value: `${metrics.renewalRate}%` },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="rounded-xl border border-slate-200 bg-white p-4 transition-all hover:shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <item.icon className="h-4 w-4 text-slate-400" />
+              <span className="text-xs font-medium text-slate-500">
+                {item.label}
+              </span>
+            </div>
+            <p className="mt-1.5 text-xl font-bold text-slate-900 tabular-nums">
+              {item.value}
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="mb-8 rounded-xl border border-slate-200 bg-white p-6">
@@ -182,7 +214,7 @@ export default function DashboardPageClient({
                   onClick={() => router.push(`/?period=${opt.value}`)}
                   className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                     period === opt.value
-                      ? "bg-white text-slate-900 shadow-sm"
+                      ? "bg-brand-50 text-brand-700 ring-1 ring-brand-200"
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
@@ -211,36 +243,44 @@ export default function DashboardPageClient({
             </div>
 
             <div className="flex items-end gap-3 h-48 relative z-10">
-              {revenueChartData.map((d, i) => (
-                <div
-                  key={d.monthFull}
-                  className="flex-1 flex flex-col items-center gap-1.5"
-                  onMouseEnter={() => setHoveredBar(i)}
-                  onMouseLeave={() => setHoveredBar(null)}
-                >
-                  {hoveredBar === i && (
-                    <div className="absolute -top-2 transform -translate-y-full bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg z-20 whitespace-nowrap">
-                      <p className="font-semibold">{d.monthFull}</p>
-                      <p>Billed: {formatCurrency(d.billed)}</p>
-                      <p>Collected: {formatCurrency(d.collected)}</p>
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1" />
+              {revenueChartData.map((d, i) => {
+                const pct = d.billed > 0 ? Math.round((d.collected / d.billed) * 100) : 0;
+                return (
+                  <div
+                    key={d.monthFull}
+                    className="relative flex-1 flex flex-col items-center gap-1.5"
+                    onMouseEnter={() => setHoveredBar(i)}
+                    onMouseLeave={() => setHoveredBar(null)}
+                  >
+                    {/* Vertical hairline */}
+                    {hoveredBar === i && (
+                      <div className="pointer-events-none absolute left-1/2 top-0 h-40 w-px -translate-x-1/2 bg-slate-300 z-[1]" />
+                    )}
+                    {/* Tooltip */}
+                    {hoveredBar === i && (
+                      <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg z-20 whitespace-nowrap">
+                        <p className="font-semibold">{d.monthFull}</p>
+                        <p>Billed: {formatCurrency(d.billed)}</p>
+                        <p>Collected: {formatCurrency(d.collected)} <span className="text-emerald-300">({pct}% of billed)</span></p>
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1" />
+                      </div>
+                    )}
+                    <div className="flex items-end gap-1 w-full h-40">
+                      <div
+                        className={`flex-1 rounded-t-md transition-all duration-200 ${hoveredBar === i ? "bg-brand-400" : "bg-brand-200"}`}
+                        style={{ height: `${(d.billed / maxValue) * 100}%` }}
+                      />
+                      <div
+                        className={`flex-1 rounded-t-md transition-all duration-200 ${hoveredBar === i ? "bg-emerald-400" : "bg-emerald-300"}`}
+                        style={{ height: `${(d.collected / maxValue) * 100}%` }}
+                      />
                     </div>
-                  )}
-                  <div className="flex items-end gap-1 w-full h-40">
-                    <div
-                      className={`flex-1 rounded-t-md transition-all duration-200 ${hoveredBar === i ? "bg-brand-400" : "bg-brand-200"}`}
-                      style={{ height: `${(d.billed / maxValue) * 100}%` }}
-                    />
-                    <div
-                      className={`flex-1 rounded-t-md transition-all duration-200 ${hoveredBar === i ? "bg-emerald-400" : "bg-emerald-300"}`}
-                      style={{ height: `${(d.collected / maxValue) * 100}%` }}
-                    />
+                    <span className={`text-xs transition-colors ${hoveredBar === i ? "text-slate-900 font-medium" : "text-slate-500"}`}>
+                      {d.month}
+                    </span>
                   </div>
-                  <span className={`text-xs transition-colors ${hoveredBar === i ? "text-slate-900 font-medium" : "text-slate-500"}`}>
-                    {d.month}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

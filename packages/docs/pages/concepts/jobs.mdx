@@ -1,0 +1,70 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Jobs
+
+A **Job** is a field visit or task assigned to a technician. Jobs can be planned (scheduled from a contract) or reactive (created from a complaint or ad hoc).
+
+## Job Types
+
+| Type | When Used |
+|---|---|
+| **Planned Maintenance** | Scheduled service visits from an AMC contract |
+| **Reactive** | Unplanned visits in response to a complaint or breakdown |
+| **Installation** | New equipment setup |
+| **Ad Hoc** | One-off visits not tied to a contract |
+
+## Job Lifecycle
+
+```
+Scheduled → Assigned → In Progress → Completed
+                                   ↘ Cancelled
+```
+
+| Status | Description |
+|---|---|
+| Scheduled | Job created, not yet assigned to a technician |
+| Assigned | Technician assigned, not yet started |
+| In Progress | Technician has checked in on-site |
+| Completed | Work done, report submitted |
+| Cancelled | Job will not be executed |
+
+## Creating a Job
+
+**From a contract:**
+1. Open the contract → click **Schedule Job**
+2. Select date, time, and technician
+3. Save — the technician receives a push notification
+
+**From a complaint:**
+1. Open the complaint → click **Create Job**
+2. The job is automatically linked to the complaint
+
+**Ad hoc:**
+1. Sidebar → **Jobs → New Job**
+2. Select customer, optionally link assets/contract
+
+## The Mobile Flow
+
+Technicians use the Recuring mobile app to execute jobs:
+
+1. **Receive notification** — "New job assigned: AC servicing at Acme Corp"
+2. **Check in** — Tap **Start Job**; GPS coordinates recorded
+3. **Complete work** — Update checklist items
+4. **Upload photo proof** — Take photos of the equipment before/after
+5. **Collect signature** — Customer signs on-screen to confirm completion
+6. **Submit report** — Job status changes to **Completed**
+
+See [Mobile Field Ops →](/how-tos/mobile-field-ops) for the full technician walkthrough.
+
+## Job Reports
+
+After a job is completed, a **service report** is available for download. It includes:
+- Technician name and check-in/check-out times
+- Work performed (checklist)
+- Photos uploaded
+- Customer signature
+- Asset details
+
+Reports can be emailed directly to the customer from the job detail page.

@@ -16,10 +16,16 @@ export const leadCreateSchema = z.object({
     .string()
     .trim()
     .refine(
-      (value) => value.replace(/\D/g, "").length >= 10,
+      (value) => !value || value.replace(/\D/g, "").length >= 10,
       "Enter a valid phone number.",
-    ),
+    )
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   company: z.string().trim().min(1, "Company is required."),
+  role: z.string().trim().max(100).optional().or(z.literal("").transform(() => undefined)),
+  companySize: z.string().trim().max(50).optional().or(z.literal("").transform(() => undefined)),
+  industry: z.string().trim().max(100).optional().or(z.literal("").transform(() => undefined)),
+  preferredContact: z.string().trim().max(20).optional().or(z.literal("").transform(() => undefined)),
   message: z
     .string()
     .trim()

@@ -1,0 +1,40 @@
+import { ApiReference } from "../../components/ApiReference";
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# API Reference
+
+The Recuring Mobile API is a REST API used by the technician mobile app. It is also available for integration with third-party systems.
+
+## Authentication
+
+All endpoints require a **Bearer token** obtained via the `/auth/login` endpoint. Include it in the `Authorization` header:
+
+```
+Authorization: Bearer <your_token>
+```
+
+Tokens expire after 7 days. Refresh using the `/auth/refresh` endpoint.
+
+## Base URL
+
+```
+https://app.recuring.in/api/mobile/v1
+```
+
+## Rate Limits
+
+| Tier | Limit |
+|---|---|
+| Authenticated requests | 300 requests / minute |
+| Login endpoint | 10 requests / minute per IP |
+
+Rate limit headers are included in every response:
+- `X-RateLimit-Limit` — your limit
+- `X-RateLimit-Remaining` — remaining requests in the current window
+- `X-RateLimit-Reset` — Unix timestamp when the window resets
+
+## Interactive Reference
+
+<ApiReference />

@@ -1,0 +1,42 @@
+import { PageMeta } from "../../components/PageMeta";
+
+<PageMeta lastUpdated="2026-05-04" owner="support@recuring.in" />
+
+# Assets
+
+An **Asset** is a piece of equipment or property that belongs to a customer and is under your service. Assets give technicians context about what they're working on and allow warranty and AMC tracking per unit.
+
+## Asset Fields
+
+| Field | Description |
+|---|---|
+| Name | Equipment name (e.g., "Split AC — Boardroom") |
+| Type | Category (e.g., Air Conditioner, Elevator, Fire Panel) |
+| Brand / Model | Manufacturer and model number |
+| Serial Number | Unique identifier from the equipment |
+| Installation Date | When the equipment was installed |
+| Warranty Expiry | Date after which warranty no longer applies |
+| Location | Where on the customer's premises it's installed |
+| Notes | Internal notes for technicians |
+
+## Linking Assets to Contracts
+
+When creating or editing a **Contract**, you can link one or more assets. This means:
+- The contract's scope is explicitly tied to specific equipment
+- Jobs created from the contract automatically reference the linked assets
+- Reports can show service history per asset
+
+## Warranty Tracking
+
+The **Warranty Expiry** date is used to:
+- Display a warning when creating a job for an asset past its warranty
+- Filter assets by warranty status in reports
+
+## Asset History
+
+Every asset has a full service history tab showing:
+- All jobs performed on the asset
+- Complaints linked to the asset
+- Contract periods the asset was covered under
+
+This makes it easy to audit how many times a unit has broken down and whether it should be replaced.
