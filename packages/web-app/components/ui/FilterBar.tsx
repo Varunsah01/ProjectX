@@ -49,10 +49,15 @@ export function FilterBar({
 
   return (
     <>
-      {/* ── Mobile bar ────────────────────────────────────────────────── */}
-      <div className={cn("md:hidden flex items-center gap-2 mb-4", className)}>
-        {/* Search input */}
-        <div className="relative flex-1">
+      {/* ── Always-visible bar: ONE search input, breakpoint-conditional accessories ── */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-2 md:gap-3 mb-4",
+          className,
+        )}
+      >
+        {/* Search input — single instance in the DOM */}
+        <div className="relative flex-1 min-w-[200px] md:max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -71,13 +76,13 @@ export function FilterBar({
           )}
         </div>
 
-        {/* Filters button */}
+        {/* Mobile-only Filters trigger (opens drawer) */}
         {filters && filters.length > 0 && (
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             className={cn(
-              "relative flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+              "md:hidden relative flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
               activeFilterCount > 0
                 ? "border-brand-300 bg-brand-50 text-brand-700"
                 : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
@@ -92,19 +97,47 @@ export function FilterBar({
             )}
           </button>
         )}
+
+        {/* Desktop-only inline filters + Clear all */}
+        <div className="hidden md:flex flex-wrap items-center gap-3">
+          {filters?.map((filter) => (
+            <select
+              key={filter.label}
+              value={filter.value}
+              onChange={(e) => filter.onChange(e.target.value)}
+              className={cn(
+                "rounded-lg border bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all cursor-pointer",
+                filter.value !== "all"
+                  ? "border-brand-300 text-brand-700 bg-brand-50"
+                  : "border-slate-200 text-slate-700",
+              )}
+            >
+              {filter.options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          ))}
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Mobile drawer ─────────────────────────────────────────────── */}
+      {/* ── Mobile drawer (mounts only when open) ─────────────────────── */}
       {drawerOpen && (
         <>
-          {/* Backdrop */}
           <div
             className="md:hidden fixed inset-0 z-40 bg-black/40"
             onClick={() => setDrawerOpen(false)}
           />
-          {/* Sheet */}
           <div className="md:hidden fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white pb-8 shadow-xl">
-            {/* Handle */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="h-1 w-10 rounded-full bg-slate-300" />
             </div>
@@ -170,60 +203,6 @@ export function FilterBar({
           </div>
         </>
       )}
-
-      {/* ── Desktop bar (md and above) ────────────────────────────────── */}
-      <div
-        className={cn(
-          "hidden md:flex flex-wrap items-center gap-3 mb-4",
-          className,
-        )}
-      >
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-8 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
-          />
-          {searchValue && (
-            <button
-              onClick={() => onSearchChange("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        {filters?.map((filter) => (
-          <select
-            key={filter.label}
-            value={filter.value}
-            onChange={(e) => filter.onChange(e.target.value)}
-            className={cn(
-              "rounded-lg border bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all cursor-pointer",
-              filter.value !== "all"
-                ? "border-brand-300 text-brand-700 bg-brand-50"
-                : "border-slate-200 text-slate-700",
-            )}
-          >
-            {filter.options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        ))}
-        {hasActiveFilters && (
-          <button
-            onClick={handleClearAll}
-            className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
     </>
   );
 }

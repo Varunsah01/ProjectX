@@ -9,14 +9,14 @@
  * Run: npm run docs:openapi
  */
 
-// extendZodWithOpenApi patches the Zod prototype.  All imports are hoisted by
-// the module loader, so the shared schemas already exist as Zod instances when
-// this body runs — but prototype patching is retroactive, so .openapi() works
-// on every instance created before or after the call.
+// Must be the FIRST import: it patches Zod's prototype with `.openapi()` as a
+// side effect, before any shared schemas are evaluated. Zod 4 schema instances
+// are NOT retroactively patched, so the order matters.
+import "./extend-zod";
+
 import {
   OpenAPIRegistry,
   OpenApiGeneratorV31,
-  extendZodWithOpenApi,
 } from "@asteasolutions/zod-to-openapi";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -34,8 +34,6 @@ import {
   updateJobNotesSchema,
   updateJobStatusSchema,
 } from "@project-x/shared/schemas/jobs";
-
-extendZodWithOpenApi(z);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registry
@@ -58,13 +56,17 @@ registry.registerComponent("securitySchemes", "BearerAuth", {
 const BEARER = [{ BearerAuth: [] as string[] }];
 
 /** Required header on every mutation (POST / PATCH / DELETE) */
-const CSRF_PARAM = {
-  name: "X-CSRF-Token",
-  in: "header" as const,
-  required: true,
-  schema: z.string(),
-  description: "CSRF token obtained from `GET /auth/me`.",
-};
+const CSRF_PARAM = registry.registerParameter(
+  "XCsrfToken",
+  z.string().openapi({
+    param: {
+      name: "X-CSRF-Token",
+      in: "header",
+      required: true,
+    },
+    description: "CSRF token obtained from `GET /auth/me`.",
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component schemas (generate $ref entries in components/schemas)

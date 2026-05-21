@@ -23,11 +23,13 @@ export function GrowthBookProvider({
       // fail-closed: empty features means all flags are off
     }
 
+    const clientKey = process.env.NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY;
+
     const instance = new GrowthBook({
       apiHost:
         process.env.NEXT_PUBLIC_GROWTHBOOK_API_HOST ??
         "https://cdn.growthbook.io",
-      clientKey: process.env.NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY ?? "",
+      clientKey: clientKey ?? "",
       enableDevMode: process.env.NODE_ENV !== "production",
       attributes,
     });
@@ -35,8 +37,14 @@ export function GrowthBookProvider({
     // Hydrate with SSR-fetched features immediately (no CDN call on first render)
     instance.setFeatures(features as never);
 
-    // Background re-fetch every ~30 s for live flag updates (<60 s propagation)
-    void instance.init({ streaming: false });
+    if (clientKey) {
+      // Background re-fetch every ~30 s for live flag updates (<60 s propagation)
+      void instance.init({ streaming: false });
+    } else if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        "[GrowthBook] NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY not set — feature flags will default to off.",
+      );
+    }
 
     return instance;
     // attributes object identity changes on every render; key on individual fields

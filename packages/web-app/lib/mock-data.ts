@@ -264,6 +264,87 @@ export const teamMembers: TeamMember[] = [
   { id: "TM005", name: "Rohit Saxena", email: "rohit@projectx.in", role: "agent", status: "inactive", lastActive: "2025-03-10T14:00:00" },
 ];
 
+// ── Date shifting ──────────────────────────────────────
+// Shift time-sensitive mock dates to be relative to "now" so dashboards/reports
+// render meaningful data after seeding, regardless of the current calendar year.
+
+const TODAY = new Date();
+
+function dateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function dateTimeStr(d: Date): string {
+  return `${dateStr(d)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
+
+function daysFromNow(days: number): Date {
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function monthsFromNow(months: number): Date {
+  const d = new Date(TODAY);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+// Invoices: spread issuedDate across the last 6 months; dueDate = issuedDate + 30d.
+// Interleave paid and unpaid invoices so each month has at least one of each
+// (otherwise an unlucky ordering leaves "This Month" with zero collections).
+{
+  const paid = invoices.filter((i) => i.paidAmount > 0);
+  const unpaid = invoices.filter((i) => i.paidAmount === 0);
+  const interleaved: Invoice[] = [];
+  for (let k = 0; k < Math.max(paid.length, unpaid.length); k++) {
+    if (paid[k]) interleaved.push(paid[k]);
+    if (unpaid[k]) interleaved.push(unpaid[k]);
+  }
+  interleaved.forEach((inv, i) => {
+    const issued = daysFromNow(-(15 + i * 14)); // ~15..169 days ago across 12 invoices
+    inv.issuedDate = dateStr(issued);
+    const due = new Date(issued);
+    due.setDate(due.getDate() + 30);
+    inv.dueDate = dateStr(due);
+  });
+}
+
+// Contracts: align startDate/endDate to status so "expired" is actually past, etc.
+contracts.forEach((c) => {
+  if (c.status === "expired" || c.status === "cancelled") {
+    c.startDate = dateStr(monthsFromNow(-14));
+    c.endDate = dateStr(monthsFromNow(-2));
+    c.nextServiceDate = dateStr(daysFromNow(-30));
+  } else if (c.status === "expiring_soon") {
+    c.startDate = dateStr(monthsFromNow(-11));
+    c.endDate = dateStr(monthsFromNow(1));
+    c.nextServiceDate = dateStr(daysFromNow(15));
+  } else {
+    c.startDate = dateStr(monthsFromNow(-1));
+    c.endDate = dateStr(monthsFromNow(11));
+    c.nextServiceDate = dateStr(monthsFromNow(1));
+  }
+});
+
+// Jobs: spread scheduledDate across [-90, +90] days; completed → past, pending → future.
+jobs.forEach((j, i) => {
+  const even = -90 + Math.round((i + 0.5) * (180 / jobs.length));
+  let offset = even;
+  if (j.status === "completed") offset = -Math.abs(even || 30);
+  else if (j.status === "pending") offset = Math.abs(even || 30);
+  const scheduled = daysFromNow(offset);
+  j.scheduledDate = dateStr(scheduled);
+  if (j.completedAt) {
+    const completed = new Date(scheduled);
+    completed.setHours(completed.getHours() + 8);
+    j.completedAt = dateTimeStr(completed);
+  }
+});
+
 // ── Dashboard Aggregates ───────────────────────────────
 
 export function getDashboardMetrics() {

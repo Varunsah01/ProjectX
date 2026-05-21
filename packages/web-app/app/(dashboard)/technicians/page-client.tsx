@@ -185,8 +185,25 @@ export default function TechniciansPageClient({
             {technicians.data.map((technician) => (
               <div
                 key={technician.id}
-                onClick={() => router.push(`/technicians/${technician.id}`)}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:border-slate-300 hover:shadow-md"
+                role="link"
+                tabIndex={0}
+                aria-label={`View technician ${technician.name}`}
+                onClick={(e) => {
+                  if (
+                    (e.target as HTMLElement).closest(
+                      'a, button, input, label, [role="menu"], [role="menuitem"], [role="button"]',
+                    )
+                  )
+                    return;
+                  router.push(`/technicians/${technician.id}`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  if (e.target !== e.currentTarget) return;
+                  e.preventDefault();
+                  router.push(`/technicians/${technician.id}`);
+                }}
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-6 transition-shadow duration-200 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -206,14 +223,22 @@ export default function TechniciansPageClient({
                     <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
                     <span className="truncate">{technician.territory}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <a
+                    href={`tel:${technician.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 text-sm text-slate-600 hover:text-brand-600"
+                  >
                     <Phone className="h-4 w-4 shrink-0 text-slate-400" />
                     {technician.phone}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                  </a>
+                  <a
+                    href={`mailto:${technician.email}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 text-sm text-slate-600 hover:text-brand-600"
+                  >
                     <Mail className="h-4 w-4 shrink-0 text-slate-400" />
                     <span className="truncate">{technician.email}</span>
-                  </div>
+                  </a>
                 </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4">

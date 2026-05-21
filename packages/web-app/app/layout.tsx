@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Project X - Web App",
-  description: "Project X recurring service operations platform.",
+  title: "Recuring - Web App",
+  description: "Recuring — service operations platform for recurring businesses.",
 };
 
 export default async function RootLayout({

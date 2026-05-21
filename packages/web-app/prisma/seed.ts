@@ -137,7 +137,7 @@ async function main() {
         organizationId: ORGANIZATION_ID,
         name: "Test Admin",
         email: "admin@test.com",
-        emailVerified: null,
+        emailVerified: new Date(),
         passwordHash: testAdminPasswordHash,
         role: UserRole.ADMIN,
         status: "ACTIVE",
@@ -212,7 +212,7 @@ async function main() {
         organizationId: ORGANIZATION_ID,
         name: actor.name,
         email: actor.email,
-        emailVerified: null,
+        emailVerified: new Date(),
         passwordHash: defaultPasswordHash,
         role: actor.role,
         status: "ACTIVE",
@@ -233,6 +233,32 @@ async function main() {
         createdAt: actor.createdAt,
       })),
     ],
+  });
+
+  await prisma.orgMembership.createMany({
+    data: [
+      {
+        userId: uuidFromKey("user:admin-test"),
+        organizationId: ORGANIZATION_ID,
+        role: UserRole.ADMIN,
+      },
+      ...teamMembers.map((member) => ({
+        userId: teamUserIds.get(member.id)!,
+        organizationId: ORGANIZATION_ID,
+        role: roleFromTeamMember(member.role),
+      })),
+      ...technicians.map((technician) => ({
+        userId: technicianUserIds.get(technician.id)!,
+        organizationId: ORGANIZATION_ID,
+        role: UserRole.TECHNICIAN,
+      })),
+      ...timelineActorInputs.map((actor) => ({
+        userId: actor.id,
+        organizationId: ORGANIZATION_ID,
+        role: actor.role,
+      })),
+    ],
+    skipDuplicates: true,
   });
 
   await prisma.plan.createMany({
@@ -424,8 +450,9 @@ async function main() {
     })),
   });
 
+  const totalUsers = 1 + teamMembers.length + technicians.length + timelineActorInputs.length;
   console.log(
-    `Seeded 1 organization, ${1 + teamMembers.length + technicians.length + timelineActorInputs.length} users (including admin@test.com / password123), ${customers.length} customers, ${assets.length} assets, ${contracts.length} contracts, ${invoices.length} invoices, ${tickets.length} tickets, and ${jobs.length} jobs.`,
+    `Seeded 1 organization, ${totalUsers} users (including admin@test.com / password123) and ${totalUsers} org memberships, ${customers.length} customers, ${assets.length} assets, ${contracts.length} contracts, ${invoices.length} invoices, ${tickets.length} tickets, and ${jobs.length} jobs.`,
   );
 }
 

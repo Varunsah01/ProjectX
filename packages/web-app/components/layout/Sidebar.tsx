@@ -27,6 +27,7 @@ import {
   DatabaseBackup,
   FileText,
   Webhook,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useSidebar } from "./SidebarContext";
@@ -76,6 +77,7 @@ export const navGroups: NavGroup[] = [
   {
     title: "Admin",
     items: [
+      { label: "Admin", href: "/admin", icon: ShieldAlert, adminOnly: true },
       { label: "Import", href: "/import", icon: Upload },
       { label: "Audit Log", href: "/audit-log", icon: FileText, adminOnly: true },
       { label: "Account Lookup", href: "/admin/lookup", icon: Search, supportOnly: true },
@@ -98,11 +100,11 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b border-slate-200 px-4">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-purple-600 shadow-md shadow-brand-500/20">
-          <span className="text-lg font-bold text-white">X</span>
+          <span className="text-lg font-bold text-white">R</span>
         </div>
         {!collapsed && (
           <span className="ml-3 text-lg font-bold text-slate-900">
-            Project X
+            Recuring
           </span>
         )}
         {/* Mobile close */}

@@ -516,7 +516,7 @@ export default function CustomerDetailPageClient({
                   },
                 ]}
                 data={assets}
-                onRowClick={(asset) => router.push(`/assets/${asset.id}`)}
+                rowHref={(asset) => `/assets/${asset.id}`}
               />
             ),
           },
@@ -556,7 +556,7 @@ export default function CustomerDetailPageClient({
                   },
                 ]}
                 data={invoices}
-                onRowClick={(invoice) => router.push(`/invoices/${invoice.id}`)}
+                rowHref={(invoice) => `/invoices/${invoice.id}`}
               />
             ),
           },
@@ -598,7 +598,7 @@ export default function CustomerDetailPageClient({
                   },
                 ]}
                 data={tickets}
-                onRowClick={(ticket) => router.push(`/complaints/${ticket.id}`)}
+                rowHref={(ticket) => `/complaints/${ticket.id}`}
               />
             ),
           },
@@ -645,7 +645,7 @@ export default function CustomerDetailPageClient({
                   },
                 ]}
                 data={contracts}
-                onRowClick={(contract) => router.push(`/contracts/${contract.id}`)}
+                rowHref={(contract) => `/contracts/${contract.id}`}
               />
             ),
           },

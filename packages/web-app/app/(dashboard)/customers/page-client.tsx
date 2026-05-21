@@ -271,7 +271,7 @@ export default function CustomersPageClient({
           },
         ]}
         data={customers.data}
-        onRowClick={(customer) => router.push(`/customers/${customer.id}`)}
+        rowHref={(customer) => `/customers/${customer.id}`}
       />
 
       <ImportModal

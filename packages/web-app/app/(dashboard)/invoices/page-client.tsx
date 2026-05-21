@@ -301,7 +301,7 @@ export default function InvoicesPageClient({
           },
         ]}
         data={invoices.data}
-        onRowClick={(invoice) => router.push(`/invoices/${invoice.id}`)}
+        rowHref={(invoice) => `/invoices/${invoice.id}`}
       />
 
       <ConfirmModal

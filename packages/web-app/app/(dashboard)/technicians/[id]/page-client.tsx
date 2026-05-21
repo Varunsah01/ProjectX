@@ -531,7 +531,7 @@ export default function TechnicianDetailPageClient({
                       totalCount={filteredJobs.length}
                       totalPages={totalJobPages}
                       onPageChange={setJobPage}
-                      onRowClick={(job) => router.push(`/jobs/${job.id}`)}
+                      rowHref={(job) => `/jobs/${job.id}`}
                     />
                   </div>
                 ),
@@ -573,7 +573,7 @@ export default function TechnicianDetailPageClient({
                     ]}
                     data={tickets}
                     emptyMessage="No tickets assigned to this technician."
-                    onRowClick={(t) => router.push(`/complaints/${t.id}`)}
+                    rowHref={(t) => `/complaints/${t.id}`}
                   />
                 ),
               },

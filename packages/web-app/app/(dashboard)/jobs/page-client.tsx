@@ -314,7 +314,7 @@ export default function JobsPageClient({
           },
         ]}
         data={jobs.data}
-        onRowClick={(job) => router.push(`/jobs/${job.id}`)}
+        rowHref={(job) => `/jobs/${job.id}`}
       />
 
       <Modal

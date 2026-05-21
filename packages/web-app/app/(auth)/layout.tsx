@@ -5,7 +5,7 @@ import { Lock, DatabaseBackup, ShieldCheck } from "lucide-react";
 const TESTIMONIALS = [
   {
     quote:
-      "Before Project X, I was tracking 200+ AMC customers in Excel. Last quarter, I renewed 35 contracts I would have completely missed.",
+      "Before Recuring, I was tracking 200+ AMC customers in Excel. Last quarter, I renewed 35 contracts I would have completely missed.",
     name: "Rajesh Kumar",
     role: "Owner",
     company: "KoolBreeze AC Services",
@@ -107,10 +107,10 @@ export default function AuthLayout({
         <div className="border-b border-slate-100 bg-gradient-to-r from-brand-50 to-accent-50 px-6 py-4 lg:hidden">
           <Link href="/login" className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
-              PX
+              R
             </span>
             <span className="text-sm font-semibold text-slate-900">
-              Project X
+              Recuring
             </span>
           </Link>
         </div>
@@ -121,11 +121,11 @@ export default function AuthLayout({
           <div className="mb-10 hidden lg:block">
             <Link href="/login" className="inline-flex items-center gap-2.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white shadow-sm">
-                PX
+                R
               </span>
               <span className="text-left">
                 <span className="block text-sm font-semibold text-slate-900">
-                  Project X
+                  Recuring
                 </span>
                 <span className="block text-xs text-slate-500">
                   Service Operations

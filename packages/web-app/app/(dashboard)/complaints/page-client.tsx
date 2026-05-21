@@ -299,7 +299,7 @@ export default function ComplaintsPageClient({
           },
         ]}
         data={tickets.data}
-        onRowClick={(ticket) => router.push(`/complaints/${ticket.id}`)}
+        rowHref={(ticket) => `/complaints/${ticket.id}`}
       />
 
       <Modal

@@ -811,7 +811,7 @@ export default function ContractDetailPageClient({
                 <DataTable<Invoice>
                   data={invoices}
                   emptyMessage="No invoices have been generated for this contract yet."
-                  onRowClick={(inv) => router.push(`/invoices/${inv.id}`)}
+                  rowHref={(inv) => `/invoices/${inv.id}`}
                   columns={[
                     {
                       key: "number",
@@ -863,7 +863,7 @@ export default function ContractDetailPageClient({
                 <DataTable<Job>
                   data={jobs}
                   emptyMessage="No jobs associated with this contract's asset."
-                  onRowClick={(job) => router.push(`/jobs/${job.id}`)}
+                  rowHref={(job) => `/jobs/${job.id}`}
                   columns={[
                     {
                       key: "number",

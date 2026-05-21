@@ -1,34 +1,48 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { NextResponse } from "next/server";
 import { cspHeader, applySecurityHeaders } from "@/lib/security/headers";
 
 describe("cspHeader", () => {
-  it("includes default-src self", () => {
-    expect(cspHeader).toContain("default-src 'self'");
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
-  it("does not include unsafe-eval", () => {
-    expect(cspHeader).not.toContain("unsafe-eval");
+  it("includes default-src self", () => {
+    expect(cspHeader()).toContain("default-src 'self'");
+  });
+
+  it("does not include unsafe-eval in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(cspHeader()).not.toContain("unsafe-eval");
+  });
+
+  it("includes unsafe-eval in development (required by React Refresh)", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const directive = cspHeader()
+      .split(";")
+      .map((d) => d.trim())
+      .find((d) => d.startsWith("script-src"));
+    expect(directive).toContain("'unsafe-eval'");
   });
 
   it("allows Razorpay checkout script", () => {
-    expect(cspHeader).toContain("https://checkout.razorpay.com");
+    expect(cspHeader()).toContain("https://checkout.razorpay.com");
   });
 
   it("includes Sentry in connect-src", () => {
-    expect(cspHeader).toContain("https://*.ingest.sentry.io");
+    expect(cspHeader()).toContain("https://*.ingest.sentry.io");
   });
 
   it("includes Upstash in connect-src", () => {
-    expect(cspHeader).toContain("https://*.upstash.io");
+    expect(cspHeader()).toContain("https://*.upstash.io");
   });
 
   it("blocks self-framing (frame-ancestors none)", () => {
-    expect(cspHeader).toContain("frame-ancestors 'none'");
+    expect(cspHeader()).toContain("frame-ancestors 'none'");
   });
 
   it("frame-src does not include self", () => {
-    const frameSrc = cspHeader
+    const frameSrc = cspHeader()
       .split(";")
       .map((d) => d.trim())
       .find((d) => d.startsWith("frame-src"));
@@ -37,7 +51,7 @@ describe("cspHeader", () => {
   });
 
   it("font-src does not include https: wildcard", () => {
-    const fontSrc = cspHeader
+    const fontSrc = cspHeader()
       .split(";")
       .map((d) => d.trim())
       .find((d) => d.startsWith("font-src"));
@@ -50,7 +64,7 @@ describe("applySecurityHeaders", () => {
     const response = NextResponse.json({ ok: true });
     applySecurityHeaders(response);
 
-    expect(response.headers.get("Content-Security-Policy")).toBe(cspHeader);
+    expect(response.headers.get("Content-Security-Policy")).toBe(cspHeader());
     expect(response.headers.get("Referrer-Policy")).toBe(
       "strict-origin-when-cross-origin",
     );

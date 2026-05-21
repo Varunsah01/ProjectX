@@ -175,7 +175,7 @@ export default function AssetsPageClient({
           },
         ]}
         data={assets.data}
-        onRowClick={(asset) => router.push(`/assets/${asset.id}`)}
+        rowHref={(asset) => `/assets/${asset.id}`}
       />
     </div>
   );

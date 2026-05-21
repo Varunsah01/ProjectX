@@ -1,8 +1,12 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { PaginationControls } from "@/components/ui/PaginationControls";
+
+const INTERACTIVE_CHILD_SELECTOR =
+  'a, button, input, label, [role="menu"], [role="menuitem"], [role="button"]';
 
 export type MobilePriority = "primary" | "secondary" | "meta" | "hide";
 
@@ -19,6 +23,7 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   onRowClick?: (item: T) => void;
+  rowHref?: (item: T) => string;
   className?: string;
   emptyMessage?: string;
   page?: number;
@@ -37,6 +42,7 @@ export function DataTable<T>({
   columns,
   data,
   onRowClick,
+  rowHref,
   className,
   emptyMessage = "No records found",
   page,
@@ -50,6 +56,29 @@ export function DataTable<T>({
   onSelectionChange,
   renderExpandedRow,
 }: DataTableProps<T>) {
+  const router = useRouter();
+
+  const activateRow = (item: T) => {
+    if (rowHref) {
+      router.push(rowHref(item));
+    } else if (onRowClick) {
+      onRowClick(item);
+    }
+  };
+
+  const handleRowClick = (item: T) => (e: React.MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest(INTERACTIVE_CHILD_SELECTOR)) return;
+    activateRow(item);
+  };
+
+  const handleRowKeyDown =
+    (item: T) => (e: React.KeyboardEvent<HTMLElement>) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+      activateRow(item);
+    };
+
   const hasPagination =
     totalCount !== undefined &&
     page !== undefined &&
@@ -151,30 +180,8 @@ export function DataTable<T>({
             const rowId = hasSelection ? getRowId(item) : String(i);
             const isSelected = hasSelection && selectedIds.includes(getRowId(item));
 
-            return (
-              <div
-                key={rowId}
-                onClick={() => onRowClick?.(item)}
-                className={cn(
-                  "relative px-4 py-3.5 transition-colors",
-                  onRowClick && "cursor-pointer active:bg-brand-50/60",
-                  isSelected && "bg-brand-50/30",
-                )}
-              >
-                {/* Checkbox — top-right */}
-                {hasSelection && (
-                  <div className="absolute right-4 top-3.5">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleRow(getRowId(item))}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                      aria-label="Select row"
-                    />
-                  </div>
-                )}
-
+            const cardBody = (
+              <>
                 {/* Primary — card title */}
                 {primaryCols.map((col) => (
                   <div
@@ -217,6 +224,39 @@ export function DataTable<T>({
                     ))}
                   </div>
                 )}
+              </>
+            );
+
+            const isActivatable = Boolean(rowHref || onRowClick);
+
+            return (
+              <div
+                key={rowId}
+                onClick={isActivatable ? handleRowClick(item) : undefined}
+                onKeyDown={isActivatable ? handleRowKeyDown(item) : undefined}
+                role={isActivatable ? "link" : undefined}
+                tabIndex={isActivatable ? 0 : undefined}
+                className={cn(
+                  "relative px-4 py-3.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset",
+                  isActivatable && "cursor-pointer active:bg-brand-50/60",
+                  isSelected && "bg-brand-50/30",
+                )}
+              >
+                {/* Checkbox — top-right; closest('input') in row handler skips activation */}
+                {hasSelection && (
+                  <div className="absolute right-4 top-3.5 z-10">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleRow(getRowId(item))}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      aria-label="Select row"
+                    />
+                  </div>
+                )}
+
+                {cardBody}
               </div>
             );
           })
@@ -282,13 +322,17 @@ export function DataTable<T>({
             ) : (
               data.map((item, i) => {
                 const rowKey = hasSelection ? getRowId(item) : i;
+                const isActivatable = Boolean(rowHref || onRowClick);
                 return (
                   <React.Fragment key={rowKey}>
                     <tr
-                      onClick={() => onRowClick?.(item)}
+                      onClick={isActivatable ? handleRowClick(item) : undefined}
+                      onKeyDown={isActivatable ? handleRowKeyDown(item) : undefined}
+                      role={isActivatable ? "link" : undefined}
+                      tabIndex={isActivatable ? 0 : undefined}
                       className={cn(
-                        "transition-colors",
-                        onRowClick &&
+                        "transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset",
+                        isActivatable &&
                           "cursor-pointer hover:bg-brand-50/40 active:bg-brand-50/60",
                       )}
                     >

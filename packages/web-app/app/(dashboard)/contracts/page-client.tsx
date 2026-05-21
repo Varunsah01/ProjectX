@@ -278,7 +278,7 @@ export default function ContractsPageClient({
           },
         ]}
         data={contracts.data}
-        onRowClick={(contract) => router.push(`/contracts/${contract.id}`)}
+        rowHref={(contract) => `/contracts/${contract.id}`}
       />
 
       <ConfirmModal
