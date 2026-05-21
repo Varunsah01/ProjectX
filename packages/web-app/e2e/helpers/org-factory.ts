@@ -12,7 +12,7 @@
  *   await org.teardown();
  */
 
-import { hash } from "bcrypt";
+import { hash } from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { db } from "./db";
 

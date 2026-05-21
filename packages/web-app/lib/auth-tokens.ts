@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { compare, hash } from "bcrypt";
+import { compare, hash } from "bcryptjs";
 
 const TOKEN_BYTES = 32;
 const SELECTOR_HEX_LEN = 32; // first 16 bytes → 32 hex chars

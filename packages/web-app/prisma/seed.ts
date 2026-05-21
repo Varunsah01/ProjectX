@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
-import { hash } from "bcrypt";
+import { hash } from "bcryptjs";
 import {
   AssetStatus,
   BillingCycle,

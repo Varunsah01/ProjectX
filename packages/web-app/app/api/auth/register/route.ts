@@ -1,5 +1,5 @@
 import * as React from "react";
-import { hash } from "bcrypt";
+import { hash } from "bcryptjs";
 import { UserRole } from "@prisma/client";
 import type { ConsentPurpose } from "@prisma/client";
 import { NextResponse } from "next/server";

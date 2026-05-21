@@ -3,7 +3,7 @@ import type { Adapter, AdapterUser } from "next-auth/adapters";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { compare } from "bcrypt";
+import { compare } from "bcryptjs";
 import authConfig from "./auth.config";
 import { db } from "@/lib/db";
 

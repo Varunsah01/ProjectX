@@ -1,4 +1,4 @@
-import { hash } from "bcrypt";
+import { hash } from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { splitRawToken, verifyTokenHash } from "@/lib/auth-tokens";

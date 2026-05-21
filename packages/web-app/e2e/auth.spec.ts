@@ -9,7 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
-import { hash } from "bcrypt";
+import { hash } from "bcryptjs";
 import { db, closeDb } from "./helpers/db";
 
 test.describe.configure({ mode: "serial" });

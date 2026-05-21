@@ -1,6 +1,6 @@
 "use server";
 
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireRole, UserRole } from "@/lib/auth-utils";

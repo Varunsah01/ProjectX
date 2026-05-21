@@ -32,7 +32,7 @@ vi.mock("bcrypt", () => ({
 }));
 
 import { db } from "@/lib/db";
-import { compare } from "bcrypt";
+import { compare } from "bcryptjs";
 import {
   createMobileSession,
   getMobileSession,

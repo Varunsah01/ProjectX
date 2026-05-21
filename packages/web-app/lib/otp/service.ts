@@ -1,4 +1,4 @@
-import { compare, hash } from "bcrypt";
+import { compare, hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/log";
 import { rateLimit } from "@/lib/security/rate-limit";

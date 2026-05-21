@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { compare } from "bcrypt";
+import { compare } from "bcryptjs";
 import { UserRole } from "@prisma/client";
 import { db } from "@/lib/db";
 import { generateCsrfToken } from "@/lib/csrf";
