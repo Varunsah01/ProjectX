@@ -11,7 +11,7 @@ const { auth } = NextAuth(authConfig);
 
 type AuthedRequest = NextRequest & { auth: Session | null };
 
-const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/accept-invitation"]);
+const publicRoutes = new Set(["/login", "/signup", "/signout", "/forgot-password", "/reset-password", "/verify-email", "/accept-invitation"]);
 // Routes exempt from all CSRF checks (origin + token)
 const csrfExemptPrefixes = [
   "/api/auth/",
@@ -202,7 +202,7 @@ async function handle(request: AuthedRequest): Promise<NextResponse> {
     return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  if (request.auth?.user && publicRoutes.has(pathname)) {
+  if (request.auth?.user && publicRoutes.has(pathname) && pathname !== "/signout") {
     return applySecurityHeaders(NextResponse.redirect(new URL("/", nextUrl)));
   }
 

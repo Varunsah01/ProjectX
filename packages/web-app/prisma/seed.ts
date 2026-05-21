@@ -116,11 +116,11 @@ async function main() {
   await prisma.organization.create({
     data: {
       id: ORGANIZATION_ID,
-      name: "Project X Services",
+      name: "Recuring Services Demo",
       slug: "project-x-services",
       logo: null,
       phone: "+91 90000 00000",
-      email: "hello@projectx.in",
+      email: "hello@recuring.in",
       address: "MG Road, Jaipur",
       city: "Jaipur",
       gstin: "08AABCP1234A1Z5",

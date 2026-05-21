@@ -222,13 +222,13 @@ export const jobs: Job[] = [
 ];
 
 export const technicians: Technician[] = [
-  { id: "TECH001", name: "Amit Sharma", phone: "+91 98111 22233", email: "amit.sharma@projectx.in", territory: "Jaipur", status: "on_job", activeJobs: 2, completedToday: 1, rating: 4.8, specialization: "AC & HVAC", totalJobs: 342, avgRating: 4.8, completedThisWeek: 8, completedThisMonth: 34, joinDate: "2022-06-15", skills: ["AC Installation", "HVAC Maintenance", "VRF Systems", "Gas Charging", "Compressor Repair"] },
-  { id: "TECH002", name: "Ravi Kumar", phone: "+91 98222 33344", email: "ravi.kumar@projectx.in", territory: "Bangalore", status: "on_job", activeJobs: 1, completedToday: 0, rating: 4.5, specialization: "CCTV & Security", totalJobs: 278, avgRating: 4.5, completedThisWeek: 5, completedThisMonth: 22, joinDate: "2023-01-10", skills: ["CCTV Installation", "DVR/NVR Setup", "Network Cabling", "Access Control", "IP Camera Configuration"] },
-  { id: "TECH003", name: "Suresh Menon", phone: "+91 98333 44455", email: "suresh.menon@projectx.in", territory: "Pune / Mumbai", status: "available", activeJobs: 0, completedToday: 2, rating: 4.9, specialization: "Water Purifier & Fire Safety", totalJobs: 415, avgRating: 4.9, completedThisWeek: 11, completedThisMonth: 38, joinDate: "2021-11-01", skills: ["RO Installation", "Filter Replacement", "Fire Alarm Systems", "Fire Extinguisher Servicing", "Water Quality Testing"] },
-  { id: "TECH004", name: "Deepak Rawat", phone: "+91 98444 55566", email: "deepak.rawat@projectx.in", territory: "Delhi / NCR", status: "on_job", activeJobs: 1, completedToday: 0, rating: 4.7, specialization: "Elevator & Escalator", totalJobs: 198, avgRating: 4.7, completedThisWeek: 4, completedThisMonth: 18, joinDate: "2023-05-20", skills: ["Elevator Maintenance", "Escalator Repair", "Motor Overhaul", "Safety Inspection", "Control Panel Diagnostics"] },
-  { id: "TECH005", name: "Vikram Singh", phone: "+91 98555 66677", email: "vikram.singh@projectx.in", territory: "Delhi / NCR", status: "available", activeJobs: 0, completedToday: 3, rating: 4.6, specialization: "AC & Appliance", totalJobs: 305, avgRating: 4.6, completedThisWeek: 12, completedThisMonth: 41, joinDate: "2022-03-08", skills: ["AC Servicing", "Washing Machine Repair", "Refrigerator Maintenance", "Gas Refilling", "PCB Repair"] },
-  { id: "TECH006", name: "Karthik Nair", phone: "+91 98666 77788", email: "karthik.nair@projectx.in", territory: "Hyderabad", status: "en_route", activeJobs: 1, completedToday: 1, rating: 4.4, specialization: "CCTV & Networking", totalJobs: 156, avgRating: 4.4, completedThisWeek: 6, completedThisMonth: 24, joinDate: "2023-09-12", skills: ["CCTV Installation", "Network Configuration", "Structured Cabling", "WiFi Setup", "Intercom Systems"] },
-  { id: "TECH007", name: "Manoj Tiwari", phone: "+91 98777 88899", email: "manoj.tiwari@projectx.in", territory: "Ahmedabad", status: "off_duty", activeJobs: 0, completedToday: 0, rating: 4.3, specialization: "AC & Refrigeration", totalJobs: 224, avgRating: 4.3, completedThisWeek: 7, completedThisMonth: 28, joinDate: "2022-10-25", skills: ["AC Installation", "Refrigeration Systems", "Cold Storage Maintenance", "Duct Cleaning", "Thermostat Calibration"] },
+  { id: "TECH001", name: "Amit Sharma", phone: "+91 98111 22233", email: "amit.sharma@recuring.in", territory: "Jaipur", status: "on_job", activeJobs: 2, completedToday: 1, rating: 4.8, specialization: "AC & HVAC", totalJobs: 342, avgRating: 4.8, completedThisWeek: 8, completedThisMonth: 34, joinDate: "2022-06-15", skills: ["AC Installation", "HVAC Maintenance", "VRF Systems", "Gas Charging", "Compressor Repair"] },
+  { id: "TECH002", name: "Ravi Kumar", phone: "+91 98222 33344", email: "ravi.kumar@recuring.in", territory: "Bangalore", status: "on_job", activeJobs: 1, completedToday: 0, rating: 4.5, specialization: "CCTV & Security", totalJobs: 278, avgRating: 4.5, completedThisWeek: 5, completedThisMonth: 22, joinDate: "2023-01-10", skills: ["CCTV Installation", "DVR/NVR Setup", "Network Cabling", "Access Control", "IP Camera Configuration"] },
+  { id: "TECH003", name: "Suresh Menon", phone: "+91 98333 44455", email: "suresh.menon@recuring.in", territory: "Pune / Mumbai", status: "available", activeJobs: 0, completedToday: 2, rating: 4.9, specialization: "Water Purifier & Fire Safety", totalJobs: 415, avgRating: 4.9, completedThisWeek: 11, completedThisMonth: 38, joinDate: "2021-11-01", skills: ["RO Installation", "Filter Replacement", "Fire Alarm Systems", "Fire Extinguisher Servicing", "Water Quality Testing"] },
+  { id: "TECH004", name: "Deepak Rawat", phone: "+91 98444 55566", email: "deepak.rawat@recuring.in", territory: "Delhi / NCR", status: "on_job", activeJobs: 1, completedToday: 0, rating: 4.7, specialization: "Elevator & Escalator", totalJobs: 198, avgRating: 4.7, completedThisWeek: 4, completedThisMonth: 18, joinDate: "2023-05-20", skills: ["Elevator Maintenance", "Escalator Repair", "Motor Overhaul", "Safety Inspection", "Control Panel Diagnostics"] },
+  { id: "TECH005", name: "Vikram Singh", phone: "+91 98555 66677", email: "vikram.singh@recuring.in", territory: "Delhi / NCR", status: "available", activeJobs: 0, completedToday: 3, rating: 4.6, specialization: "AC & Appliance", totalJobs: 305, avgRating: 4.6, completedThisWeek: 12, completedThisMonth: 41, joinDate: "2022-03-08", skills: ["AC Servicing", "Washing Machine Repair", "Refrigerator Maintenance", "Gas Refilling", "PCB Repair"] },
+  { id: "TECH006", name: "Karthik Nair", phone: "+91 98666 77788", email: "karthik.nair@recuring.in", territory: "Hyderabad", status: "en_route", activeJobs: 1, completedToday: 1, rating: 4.4, specialization: "CCTV & Networking", totalJobs: 156, avgRating: 4.4, completedThisWeek: 6, completedThisMonth: 24, joinDate: "2023-09-12", skills: ["CCTV Installation", "Network Configuration", "Structured Cabling", "WiFi Setup", "Intercom Systems"] },
+  { id: "TECH007", name: "Manoj Tiwari", phone: "+91 98777 88899", email: "manoj.tiwari@recuring.in", territory: "Ahmedabad", status: "off_duty", activeJobs: 0, completedToday: 0, rating: 4.3, specialization: "AC & Refrigeration", totalJobs: 224, avgRating: 4.3, completedThisWeek: 7, completedThisMonth: 28, joinDate: "2022-10-25", skills: ["AC Installation", "Refrigeration Systems", "Cold Storage Maintenance", "Duct Cleaning", "Thermostat Calibration"] },
 ];
 
 export const contracts: Contract[] = [
@@ -257,11 +257,11 @@ export const plans: Plan[] = [
 ];
 
 export const teamMembers: TeamMember[] = [
-  { id: "TM001", name: "Varun Sah", email: "varun@projectx.in", role: "admin", status: "active", lastActive: "2025-03-26T10:00:00" },
-  { id: "TM002", name: "Neha Gupta", email: "neha@projectx.in", role: "manager", status: "active", lastActive: "2025-03-26T09:45:00" },
-  { id: "TM003", name: "Arjun Reddy", email: "arjun@projectx.in", role: "agent", status: "active", lastActive: "2025-03-26T08:30:00" },
-  { id: "TM004", name: "Pooja Verma", email: "pooja@projectx.in", role: "agent", status: "active", lastActive: "2025-03-25T18:00:00" },
-  { id: "TM005", name: "Rohit Saxena", email: "rohit@projectx.in", role: "agent", status: "inactive", lastActive: "2025-03-10T14:00:00" },
+  { id: "TM001", name: "Varun Sah", email: "varun@recuring.in", role: "admin", status: "active", lastActive: "2025-03-26T10:00:00" },
+  { id: "TM002", name: "Neha Gupta", email: "neha@recuring.in", role: "manager", status: "active", lastActive: "2025-03-26T09:45:00" },
+  { id: "TM003", name: "Arjun Reddy", email: "arjun@recuring.in", role: "agent", status: "active", lastActive: "2025-03-26T08:30:00" },
+  { id: "TM004", name: "Pooja Verma", email: "pooja@recuring.in", role: "agent", status: "active", lastActive: "2025-03-25T18:00:00" },
+  { id: "TM005", name: "Rohit Saxena", email: "rohit@recuring.in", role: "agent", status: "inactive", lastActive: "2025-03-10T14:00:00" },
 ];
 
 // ── Date shifting ──────────────────────────────────────
@@ -343,6 +343,54 @@ jobs.forEach((j, i) => {
     completed.setHours(completed.getHours() + 8);
     j.completedAt = dateTimeStr(completed);
   }
+});
+
+// Tickets: createdAt spread across the last 90 days; resolvedAt = createdAt
+// + 1..7 days when present; updatedAt, slaDeadline and timeline entries follow.
+tickets.forEach((ticket, i) => {
+  const daysAgo = 1 + Math.round((i / Math.max(1, tickets.length - 1)) * 89); // 1..90
+  const createdAt = daysFromNow(-daysAgo);
+  createdAt.setHours(9 + (i % 8), (i * 13) % 60, 0, 0);
+  ticket.createdAt = dateTimeStr(createdAt);
+
+  const sla = new Date(createdAt);
+  sla.setHours(sla.getHours() + 24);
+  ticket.slaDeadline = dateTimeStr(sla);
+
+  let lastEvent = createdAt;
+  if (ticket.resolvedAt) {
+    const resolved = new Date(createdAt);
+    resolved.setDate(resolved.getDate() + 1 + (i % 7)); // 1..7 days later
+    ticket.resolvedAt = dateTimeStr(resolved);
+    lastEvent = resolved;
+  }
+  ticket.updatedAt = dateTimeStr(lastEvent);
+
+  if (ticket.timeline.length > 0) {
+    const span = lastEvent.getTime() - createdAt.getTime();
+    const step = ticket.timeline.length > 1 ? span / (ticket.timeline.length - 1) : 0;
+    ticket.timeline.forEach((event, idx) => {
+      event.date = dateTimeStr(new Date(createdAt.getTime() + step * idx));
+    });
+  }
+});
+
+// Assets: installationDate -6..-18 months, warrantyEnd +6..+18 months,
+// lastServiceDate -30..-90 days, nextServiceDate +30..+90 days. Index 0
+// gets nextServiceDate in the past to demo the "Service Overdue" banner.
+assets.forEach((asset, i) => {
+  const installMonths = 6 + ((i * 2) % 13);
+  const warrantyMonths = 6 + ((i * 3) % 13);
+  const lastServiceDays = 30 + ((i * 7) % 61);
+  const nextServiceDays = 30 + ((i * 11) % 61);
+
+  asset.installationDate = dateStr(monthsFromNow(-installMonths));
+  asset.warrantyEnd = dateStr(monthsFromNow(warrantyMonths));
+  asset.lastServiceDate = dateStr(daysFromNow(-lastServiceDays));
+  asset.nextServiceDate =
+    i === 0
+      ? dateStr(daysFromNow(-10)) // overdue exemplar
+      : dateStr(daysFromNow(nextServiceDays));
 });
 
 // ── Dashboard Aggregates ───────────────────────────────

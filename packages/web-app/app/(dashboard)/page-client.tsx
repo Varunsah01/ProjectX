@@ -86,7 +86,7 @@ export default function DashboardPageClient({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <MetricCard
-          title="Total Due"
+          title="Total Due — all time"
           value={formatCurrency(metrics.totalDue)}
           subtitle={`${metrics.overdueCount} invoices overdue`}
           icon={IndianRupee}
@@ -94,7 +94,7 @@ export default function DashboardPageClient({
           iconBg="bg-red-50"
         />
         <MetricCard
-          title="Open Complaints"
+          title="Open Complaints — now"
           value={metrics.openTickets}
           subtitle={`${metrics.criticalTickets} critical`}
           icon={AlertCircle}
@@ -102,7 +102,7 @@ export default function DashboardPageClient({
           iconBg="bg-amber-50"
         />
         <MetricCard
-          title="Expiring Contracts"
+          title="Expiring Contracts — now"
           value={metrics.expiringContracts}
           subtitle="Due for renewal"
           icon={Shield}
@@ -110,7 +110,7 @@ export default function DashboardPageClient({
           iconBg="bg-purple-50"
         />
         <MetricCard
-          title="Jobs Today"
+          title="Jobs Today — today"
           value={metrics.todayJobs}
           subtitle={`${activeTechniciansCount} technicians active`}
           icon={Briefcase}
@@ -168,10 +168,10 @@ export default function DashboardPageClient({
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
         {[
-          { icon: Users, label: "Active Customers", value: metrics.activeCustomers },
-          { icon: TrendingUp, label: "Collection Rate", value: `${metrics.collectionRate}%` },
-          { icon: Clock, label: "Avg Resolution", value: `${metrics.avgResolutionHours}h` },
-          { icon: Shield, label: "Renewal Rate", value: `${metrics.renewalRate}%` },
+          { icon: Users, label: "Active Customers — now", value: metrics.activeCustomers },
+          { icon: TrendingUp, label: "Collection Rate — this month", value: `${metrics.collectionRate}%` },
+          { icon: Clock, label: "Avg Resolution — all time", value: `${metrics.avgResolutionHours}h` },
+          { icon: Shield, label: "Renewal Rate — all time", value: `${metrics.renewalRate}%` },
         ].map((item) => (
           <div
             key={item.label}
